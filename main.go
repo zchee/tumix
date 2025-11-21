@@ -18,3 +18,9 @@
 //
 // [TUMIX: Multi-Agent Test-Time Scaling with Tool-Use Mixture]: https://arxiv.org/abs/2510.01279
 package main
+
+import (
+	"google.golang.org/adk/agent"
+)
+
+var _ agent.Agent
