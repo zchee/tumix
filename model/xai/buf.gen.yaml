@@ -1,0 +1,30 @@
+version: v2
+
+managed:
+  enabled: true
+  override:
+    - file_option: go_package_prefix
+      value: github.com/zchee/tumix/model/xai/pb
+
+plugins:
+  - remote: buf.build/protocolbuffers/go
+    out: ./pb
+    opt:
+      - paths=source_relative
+
+  - remote: buf.build/grpc/go
+    out: ./pb
+    opt:
+      - paths=source_relative
+      - require_unimplemented_servers=true
+
+  - local: ../../tools/bin/protoc-gen-go-vtproto
+    out: ./pb
+    opt:
+      - paths=source_relative
+      - features=size+equal+marshal+marshal_strict+unmarshal+unmarshal_unsafe+clone+pool
+
+inputs:
+  - git_repo: https://github.com/xai-org/xai-proto.git
+    branch: main
+    depth: 1
