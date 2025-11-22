@@ -42,6 +42,7 @@ type Client struct {
 	Auth        *AuthClient
 	Chat        *ChatClient
 	// Collections *CollectionsClient
+	Documents   *DocumentsClient
 	Embed       *EmbedClient
 	// Files       *FilesClient
 	Image       *ImageClient
@@ -87,6 +88,7 @@ func NewClient(ctx context.Context, apiKey string, optFns ...ClientOption) (*Cli
 		managementConn: mgmtConn,
 		Auth:           &AuthClient{stub: pb.NewAuthClient(apiConn)},
 		Chat:           &ChatClient{stub: pb.NewChatClient(apiConn)},
+		Documents:      &DocumentsClient{stub: pb.NewDocumentsClient(apiConn)},
 		Embed:          &EmbedClient{stub: pb.NewEmbedderClient(apiConn)},
 		// Files:          &FilesClient{stub: pb.NewFilesClient(apiConn)},
 		Image:          &ImageClient{stub: pb.NewImageClient(apiConn)},
