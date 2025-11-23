@@ -437,7 +437,7 @@ func (s *ChatSession) streamN(ctx context.Context, n int) (*ChatStream, error) {
 		resp.Outputs = make([]*xaipb.CompletionOutput, n)
 	}
 	return &ChatStream{
-		stream: stream,
+		stream:   stream,
 		response: newResponse(resp, intPtrIf(n == 1)),
 	}, nil
 }
@@ -960,7 +960,7 @@ func buildMessageFromCompletion(out *xaipb.CompletionOutput) *xaipb.Message {
 		reasoning = &rc
 	}
 	return &xaipb.Message{
-		Role:             out.Message.Role,
+		Role: out.Message.Role,
 		Content: []*xaipb.Content{
 			TextContent(out.Message.Content),
 		},
@@ -1067,7 +1067,7 @@ func appendToBuilder(m map[int]*strings.Builder, idx int, s string) {
 
 func splitResponses(resp *xaipb.GetChatCompletionResponse, n int) []*Response {
 	responses := make([]*Response, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		idx := i
 		responses[i] = newResponse(resp, &idx)
 	}

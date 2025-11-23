@@ -17,6 +17,7 @@
 package xai
 
 import (
+	"maps"
 	"runtime"
 	"time"
 
@@ -27,7 +28,7 @@ const (
 	// DefaultAPIHost is the default host for the data plane API.
 	DefaultAPIHost = "api.x.ai:443"
 	// DefaultManagementAPIHost is the default host for the management API.
-	DefaultManagementAPIHost = "management-api.x.ai:443"
+	DefaultManagementAPIHost               = "management-api.x.ai:443"
 	defaultMaxMessageBytes   int           = 20 << 20 // 20 MiB
 	defaultTimeout           time.Duration = 27 * time.Minute
 )
@@ -93,9 +94,7 @@ func WithManagementAPIHost(host string) ClientOption {
 // WithMetadata attaches static metadata to every RPC.
 func WithMetadata(md map[string]string) ClientOption {
 	return func(o *clientOptions) {
-		for k, v := range md {
-			o.metadata[k] = v
-		}
+		maps.Copy(o.metadata, md)
 	}
 }
 
