@@ -101,3 +101,11 @@ func MCPTool(serverURL string, serverLabel, serverDescription string, allowedToo
 		ExtraHeaders:      extraHeaders,
 	}}}
 }
+
+// DocumentSearchTool enables server-side document search.
+func DocumentSearchTool(limit int32) *xaipb.Tool {
+	return &xaipb.Tool{Tool: &xaipb.Tool_DocumentSearch{DocumentSearch: &xaipb.DocumentSearch{
+		Limit: &limit,
+	}}}
+}
+
