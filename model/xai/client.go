@@ -44,7 +44,6 @@ type Client struct {
 	Billing     *BillingClient
 	Chat        *ChatClient
 	Collections *CollectionsClient
-	Documents   *DocumentsClient
 	Embed       *EmbedClient
 	Image       *ImageClient
 	Models      *ModelsClient
@@ -92,9 +91,6 @@ func NewClient(ctx context.Context, apiKey string, optFns ...ClientOption) (*Cli
 		},
 		Chat: &ChatClient{
 			chat: xaipb.NewChatClient(apiConn),
-		},
-		Documents: &DocumentsClient{
-			stub: xaipb.NewDocumentsClient(apiConn),
 		},
 		Embed: &EmbedClient{
 			embedder: xaipb.NewEmbedderClient(apiConn),
