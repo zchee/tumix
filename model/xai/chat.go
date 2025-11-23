@@ -42,9 +42,6 @@ type ChatClient struct {
 	chat xaipb.ChatClient
 }
 
-// ChatOption customizes a chat request before execution.
-type ChatOption func(*xaipb.GetCompletionsRequest, *ChatSession)
-
 // Create initializes a new chat session for the specified model.
 func (c *ChatClient) Create(model string, opts ...ChatOption) *ChatSession {
 	req := &xaipb.GetCompletionsRequest{Model: model}
@@ -54,6 +51,33 @@ func (c *ChatClient) Create(model string, opts ...ChatOption) *ChatSession {
 	}
 	return session
 }
+
+// GetStoredCompletion retrieves a stored response using the response ID.
+func (c *ChatClient) GetStoredCompletion(ctx context.Context, responseID string) (*xaipb.GetChatCompletionResponse, error) {
+	req := &xaipb.GetStoredCompletionRequest{ResponseId: responseID}
+	return c.chat.GetStoredCompletion(ctx, req)
+}
+
+// DeleteStoredCompletion deletes a stored response using the response ID.
+func (c *ChatClient) DeleteStoredCompletion(ctx context.Context, responseID string) error {
+	req := &xaipb.DeleteStoredCompletionRequest{ResponseId: responseID}
+	_, err := c.chat.DeleteStoredCompletion(ctx, req)
+	return err
+}
+
+// StartDeferredCompletion starts sampling of the model and immediately returns a response containing a request id.
+func (c *ChatClient) StartDeferredCompletion(ctx context.Context, req *xaipb.GetCompletionsRequest) (*xaipb.StartDeferredResponse, error) {
+	return c.chat.StartDeferredCompletion(ctx, req)
+}
+
+// GetDeferredCompletion gets the result of a deferred completion.
+func (c *ChatClient) GetDeferredCompletion(ctx context.Context, requestID string) (*xaipb.GetDeferredCompletionResponse, error) {
+	req := &xaipb.GetDeferredRequest{RequestId: requestID}
+	return c.chat.GetDeferredCompletion(ctx, req)
+}
+
+// ChatOption customizes a chat request before execution.
+type ChatOption func(*xaipb.GetCompletionsRequest, *ChatSession)
 
 // WithConversationID stores an optional conversation identifier (client-side only).
 func WithConversationID(id string) ChatOption {
