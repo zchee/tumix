@@ -11,26 +11,26 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// XAIError provides structured access to gRPC status errors returned by xAI services.
-type XAIError struct {
+// Error provides structured access to gRPC status errors returned by xAI services.
+type Error struct {
 	Code    codes.Code
 	Message string
 	Details []any
 }
 
 // Error implements the error interface.
-func (e *XAIError) Error() string {
+func (e *Error) Error() string {
 	return e.Message
 }
 
 // GRPCStatus builds a status.Status from the structured error for interoperability.
-func (e *XAIError) GRPCStatus() *status.Status {
+func (e *Error) GRPCStatus() *status.Status {
 	st := status.New(e.Code, e.Message)
 	return st
 }
 
 // ParseError converts a gRPC status error into XAIError if possible.
-func ParseError(err error) (*XAIError, bool) {
+func ParseError(err error) (*Error, bool) {
 	if err == nil {
 		return nil, false
 	}
@@ -38,7 +38,7 @@ func ParseError(err error) (*XAIError, bool) {
 	if !ok {
 		return nil, false
 	}
-	return &XAIError{Code: st.Code(), Message: st.Message(), Details: st.Details()}, true
+	return &Error{Code: st.Code(), Message: st.Message(), Details: st.Details()}, true
 }
 
 // WrapError returns an XAIError if err is a gRPC status error; otherwise returns err unchanged.
@@ -62,13 +62,13 @@ func IsRetryable(err error) bool {
 }
 
 // Unwrap enables errors.Is/As to reach the underlying status.
-func (e *XAIError) Unwrap() error {
+func (e *Error) Unwrap() error {
 	return status.New(e.Code, e.Message).Err()
 }
 
 // AsXAIError is a helper for errors.As.
-func AsXAIError(err error) (*XAIError, bool) {
-	var target *XAIError
+func AsXAIError(err error) (*Error, bool) {
+	var target *Error
 	if errors.As(err, &target) {
 		return target, true
 	}
