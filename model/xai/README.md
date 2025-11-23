@@ -74,8 +74,12 @@ func main() {
 
 ### Generating Protos
 
-The protocol buffer definitions were reconstructed from the Python SDK's descriptors.
-To regenerate the code, you need `protoc` and the descriptor set (not included in git).
+- Public protos (the ones that exist in `xai-proto`): `buf generate` (uses `buf.gen.yaml` to pull `https://github.com/xai-org/xai-proto.git`).
+- Descriptor-only protos that ship inside the Python SDK (`xai/api/v1/{collections,shared,types}.proto`):
+  - Install [uv](https://docs.astral.sh/uv/).
+  - Run `./hack/gen-python-protos.py` (uv shebang declares `protobuf` dependency).  
+    Requirements: `git`, `protoc`, `protoc-gen-go`, `protoc-gen-go-grpc`, `protoc-gen-go-vtproto`.  
+    The script clones `xai-org/xai-sdk-python` (default tag `main`, override with `XAI_SDK_PYTHON_REF`), extracts the descriptor set, and regenerates Go bindings with the same module/import layout used in this repo.
 
 ### Building
 
