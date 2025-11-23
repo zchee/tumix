@@ -21,40 +21,40 @@ import (
 
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	pb "github.com/zchee/tumix/model/xai/pb/xai/api/v1"
+	xaipb "github.com/zchee/tumix/model/xai/api/v1"
 )
 
 // ModelsClient provides access to the Models service.
 type ModelsClient struct {
-	stub pb.ModelsClient
+	stub xaipb.ModelsClient
 }
 
 // ListLanguageModels lists available language models.
-func (c *ModelsClient) ListLanguageModels(ctx context.Context) (*pb.ListLanguageModelsResponse, error) {
+func (c *ModelsClient) ListLanguageModels(ctx context.Context) (*xaipb.ListLanguageModelsResponse, error) {
 	return c.stub.ListLanguageModels(ctx, &emptypb.Empty{})
 }
 
 // GetLanguageModel retrieves information about a specific language model.
-func (c *ModelsClient) GetLanguageModel(ctx context.Context, name string) (*pb.LanguageModel, error) {
-	return c.stub.GetLanguageModel(ctx, &pb.GetModelRequest{Name: name})
+func (c *ModelsClient) GetLanguageModel(ctx context.Context, name string) (*xaipb.LanguageModel, error) {
+	return c.stub.GetLanguageModel(ctx, &xaipb.GetModelRequest{Name: name})
 }
 
 // ListEmbeddingModels lists available embedding models.
-func (c *ModelsClient) ListEmbeddingModels(ctx context.Context) (*pb.ListEmbeddingModelsResponse, error) {
+func (c *ModelsClient) ListEmbeddingModels(ctx context.Context) (*xaipb.ListEmbeddingModelsResponse, error) {
 	return c.stub.ListEmbeddingModels(ctx, &emptypb.Empty{})
 }
 
 // GetEmbeddingModel retrieves information about a specific embedding model.
-func (c *ModelsClient) GetEmbeddingModel(ctx context.Context, name string) (*pb.EmbeddingModel, error) {
-	return c.stub.GetEmbeddingModel(ctx, &pb.GetModelRequest{Name: name})
+func (c *ModelsClient) GetEmbeddingModel(ctx context.Context, name string) (*xaipb.EmbeddingModel, error) {
+	return c.stub.GetEmbeddingModel(ctx, &xaipb.GetModelRequest{Name: name})
 }
 
 // ListImageGenerationModels lists available image generation models.
-func (c *ModelsClient) ListImageGenerationModels(ctx context.Context) (*pb.ListImageGenerationModelsResponse, error) {
+func (c *ModelsClient) ListImageGenerationModels(ctx context.Context) (*xaipb.ListImageGenerationModelsResponse, error) {
 	return c.stub.ListImageGenerationModels(ctx, &emptypb.Empty{})
 }
 
 // GetImageGenerationModel retrieves information about a specific image generation model.
-func (c *ModelsClient) GetImageGenerationModel(ctx context.Context, name string) (*pb.ImageGenerationModel, error) {
-	return c.stub.GetImageGenerationModel(ctx, &pb.GetModelRequest{Name: name})
+func (c *ModelsClient) GetImageGenerationModel(ctx context.Context, name string) (*xaipb.ImageGenerationModel, error) {
+	return c.stub.GetImageGenerationModel(ctx, &xaipb.GetModelRequest{Name: name})
 }

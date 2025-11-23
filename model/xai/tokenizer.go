@@ -19,23 +19,23 @@ package xai
 import (
 	"context"
 
-	pb "github.com/zchee/tumix/model/xai/pb/xai/api/v1"
+	xaipb "github.com/zchee/tumix/model/xai/api/v1"
 )
 
 // TokenizerClient provides access to the Tokenizer service.
 type TokenizerClient struct {
-	stub pb.TokenizeClient
+	stub xaipb.TokenizeClient
 }
 
 // Tokenize converts text into tokens using the specified model.
-func (c *TokenizerClient) Tokenize(ctx context.Context, text string, model string) (*pb.TokenizeTextResponse, error) {
-	return c.stub.TokenizeText(ctx, &pb.TokenizeTextRequest{
+func (c *TokenizerClient) Tokenize(ctx context.Context, text string, model string) (*xaipb.TokenizeTextResponse, error) {
+	return c.stub.TokenizeText(ctx, &xaipb.TokenizeTextRequest{
 		Text:  text,
 		Model: model,
 	})
 }
 
 // TokenizeText is an alias for Tokenize for parity with the Python SDK.
-func (c *TokenizerClient) TokenizeText(ctx context.Context, text, model string) (*pb.TokenizeTextResponse, error) {
+func (c *TokenizerClient) TokenizeText(ctx context.Context, text, model string) (*xaipb.TokenizeTextResponse, error) {
 	return c.Tokenize(ctx, text, model)
 }

@@ -29,7 +29,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	pb "github.com/zchee/tumix/model/xai/pb/xai/api/v1"
+	xaipb "github.com/zchee/tumix/model/xai/api/v1"
 )
 
 // Order is used for collection/document listing order.
@@ -66,7 +66,7 @@ const (
 
 // CollectionsClient provides access to the Collections and Documents services.
 type CollectionsClient struct {
-	documents pb.DocumentsClient
+	documents xaipb.DocumentsClient
 	apiKey    string
 	baseURL   string
 	client    *http.Client
@@ -75,7 +75,7 @@ type CollectionsClient struct {
 // NewCollectionsClient builds a CollectionsClient using the API connection and management API credentials.
 func NewCollectionsClient(apiConn *grpc.ClientConn, apiKey string, baseURL string) *CollectionsClient {
 	return &CollectionsClient{
-		documents: pb.NewDocumentsClient(apiConn),
+		documents: xaipb.NewDocumentsClient(apiConn),
 		apiKey:    apiKey,
 		baseURL:   baseURL,
 		client:    &http.Client{Timeout: 60 * time.Second},
@@ -196,10 +196,10 @@ func (c *CollectionsClient) Delete(ctx context.Context, collectionID string) err
 }
 
 // Search performs semantic search across specified collections.
-func (c *CollectionsClient) Search(ctx context.Context, query string, collectionIDs []string, limit int32) (*pb.SearchResponse, error) {
-	req := &pb.SearchRequest{
+func (c *CollectionsClient) Search(ctx context.Context, query string, collectionIDs []string, limit int32) (*xaipb.SearchResponse, error) {
+	req := &xaipb.SearchRequest{
 		Query:  query,
-		Source: &pb.DocumentsSource{CollectionIds: collectionIDs},
+		Source: &xaipb.DocumentsSource{CollectionIds: collectionIDs},
 	}
 	if limit > 0 {
 		req.Limit = &limit

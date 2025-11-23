@@ -29,7 +29,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 
-	pb "github.com/zchee/tumix/model/xai/pb/xai/api/v1"
+	xaipb "github.com/zchee/tumix/model/xai/api/v1"
 )
 
 const defaultServiceConfig = `{"methodConfig":[{"name":[{}],"retryPolicy":{"maxAttempts":5,"initialBackoff":"0.1s","maxBackoff":"1s","backoffMultiplier":2,"retryableStatusCodes":["UNAVAILABLE"]}}]}`
@@ -86,15 +86,15 @@ func NewClient(ctx context.Context, apiKey string, optFns ...ClientOption) (*Cli
 	client := &Client{
 		apiConn:        apiConn,
 		managementConn: mgmtConn,
-		Auth:           &AuthClient{stub: pb.NewAuthClient(apiConn)},
-		Chat:           &ChatClient{stub: pb.NewChatClient(apiConn)},
-		Documents:      &DocumentsClient{stub: pb.NewDocumentsClient(apiConn)},
-		Embed:          &EmbedClient{stub: pb.NewEmbedderClient(apiConn)},
+		Auth:           &AuthClient{stub: xaipb.NewAuthClient(apiConn)},
+		Chat:           &ChatClient{stub: xaipb.NewChatClient(apiConn)},
+		Documents:      &DocumentsClient{stub: xaipb.NewDocumentsClient(apiConn)},
+		Embed:          &EmbedClient{stub: xaipb.NewEmbedderClient(apiConn)},
 		// Files:          &FilesClient{stub: pb.NewFilesClient(apiConn)},
-		Image:     &ImageClient{stub: pb.NewImageClient(apiConn)},
-		Models:    &ModelsClient{stub: pb.NewModelsClient(apiConn)},
-		Sampler:   &SamplerClient{stub: pb.NewSampleClient(apiConn)},
-		Tokenizer: &TokenizerClient{stub: pb.NewTokenizeClient(apiConn)},
+		Image:     &ImageClient{stub: xaipb.NewImageClient(apiConn)},
+		Models:    &ModelsClient{stub: xaipb.NewModelsClient(apiConn)},
+		Sampler:   &SamplerClient{stub: xaipb.NewSampleClient(apiConn)},
+		Tokenizer: &TokenizerClient{stub: xaipb.NewTokenizeClient(apiConn)},
 	}
 
 	client.Collections = NewCollectionsClient(apiConn, opts.managementKey, "https://"+opts.managementHost)

@@ -19,20 +19,20 @@ package xai
 import (
 	"context"
 
-	pb "github.com/zchee/tumix/model/xai/pb/xai/api/v1"
+	xaipb "github.com/zchee/tumix/model/xai/api/v1"
 )
 
 // SamplerClient exposes the Sample service for low-level text sampling.
 type SamplerClient struct {
-	stub pb.SampleClient
+	stub xaipb.SampleClient
 }
 
 // SampleText performs a unary sampling request.
-func (c *SamplerClient) SampleText(ctx context.Context, req *pb.SampleTextRequest) (*pb.SampleTextResponse, error) {
+func (c *SamplerClient) SampleText(ctx context.Context, req *xaipb.SampleTextRequest) (*xaipb.SampleTextResponse, error) {
 	return c.stub.SampleText(ctx, req)
 }
 
 // SampleTextStreaming opens a server-streaming sampling request.
-func (c *SamplerClient) SampleTextStreaming(ctx context.Context, req *pb.SampleTextRequest) (pb.Sample_SampleTextStreamingClient, error) {
+func (c *SamplerClient) SampleTextStreaming(ctx context.Context, req *xaipb.SampleTextRequest) (xaipb.Sample_SampleTextStreamingClient, error) {
 	return c.stub.SampleTextStreaming(ctx, req)
 }

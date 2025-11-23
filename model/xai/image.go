@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	pb "github.com/zchee/tumix/model/xai/pb/xai/api/v1"
+	xaipb "github.com/zchee/tumix/model/xai/api/v1"
 )
 
 // ImageFormat selects the image response format.
@@ -39,21 +39,21 @@ const (
 )
 
 // ImageOption customizes image generation requests.
-type ImageOption func(*pb.GenerateImageRequest)
+type ImageOption func(*xaipb.GenerateImageRequest)
 
 // WithImageUser sets the end-user id.
 func WithImageUser(user string) ImageOption {
-	return func(req *pb.GenerateImageRequest) { req.User = user }
+	return func(req *xaipb.GenerateImageRequest) { req.User = user }
 }
 
 // WithImageFormat sets the desired return format.
 func WithImageFormat(format ImageFormat) ImageOption {
-	return func(req *pb.GenerateImageRequest) { req.Format = imageFormatToProto(format) }
+	return func(req *xaipb.GenerateImageRequest) { req.Format = imageFormatToProto(format) }
 }
 
 // ImageClient wraps the Image service.
 type ImageClient struct {
-	stub pb.ImageClient
+	stub xaipb.ImageClient
 }
 
 // Sample generates a single image.
@@ -67,11 +67,11 @@ func (c *ImageClient) Sample(ctx context.Context, prompt, model string, opts ...
 
 // SampleBatch generates n images.
 func (c *ImageClient) SampleBatch(ctx context.Context, prompt, model string, n int, opts ...ImageOption) ([]*ImageResponse, error) {
-	req := &pb.GenerateImageRequest{
+	req := &xaipb.GenerateImageRequest{
 		Prompt: prompt,
 		Model:  model,
 		N:      int32Ptr(int32(n)),
-		Format: pb.ImageFormat_IMG_FORMAT_URL,
+		Format: xaipb.ImageFormat_IMG_FORMAT_URL,
 	}
 	for _, opt := range opts {
 		opt(req)
@@ -90,7 +90,7 @@ func (c *ImageClient) SampleBatch(ctx context.Context, prompt, model string, n i
 
 // ImageResponse provides helpers around GenerateImageResponse.
 type ImageResponse struct {
-	proto *pb.ImageResponse
+	proto *xaipb.ImageResponse
 	index int
 }
 
@@ -141,16 +141,16 @@ func (r *ImageResponse) Data(ctx context.Context) ([]byte, error) {
 	return io.ReadAll(resp.Body)
 }
 
-func (r *ImageResponse) image() *pb.GeneratedImage { return r.proto.Images[r.index] }
+func (r *ImageResponse) image() *xaipb.GeneratedImage { return r.proto.Images[r.index] }
 
-func imageFormatToProto(f ImageFormat) pb.ImageFormat {
+func imageFormatToProto(f ImageFormat) xaipb.ImageFormat {
 	switch f {
 	case ImageFormatBase64:
-		return pb.ImageFormat_IMG_FORMAT_BASE64
+		return xaipb.ImageFormat_IMG_FORMAT_BASE64
 	case ImageFormatURL:
 		fallthrough
 	default:
-		return pb.ImageFormat_IMG_FORMAT_URL
+		return xaipb.ImageFormat_IMG_FORMAT_URL
 	}
 }
 

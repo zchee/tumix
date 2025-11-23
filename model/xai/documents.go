@@ -19,19 +19,19 @@ package xai
 import (
 	"context"
 
-	pb "github.com/zchee/tumix/model/xai/pb/xai/api/v1"
+	xaipb "github.com/zchee/tumix/model/xai/api/v1"
 )
 
 // DocumentsClient provides access to the Documents service.
 type DocumentsClient struct {
-	stub pb.DocumentsClient
+	stub xaipb.DocumentsClient
 }
 
 // Search performs semantic search across specified collections.
-func (c *DocumentsClient) Search(ctx context.Context, query string, collectionIDs []string, limit int32) (*pb.SearchResponse, error) {
-	req := &pb.SearchRequest{
+func (c *DocumentsClient) Search(ctx context.Context, query string, collectionIDs []string, limit int32) (*xaipb.SearchResponse, error) {
+	req := &xaipb.SearchRequest{
 		Query:  query,
-		Source: &pb.DocumentsSource{CollectionIds: collectionIDs},
+		Source: &xaipb.DocumentsSource{CollectionIds: collectionIDs},
 	}
 	if limit > 0 {
 		req.Limit = &limit

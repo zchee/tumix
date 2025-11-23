@@ -21,7 +21,7 @@ import (
 
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	xaipb "github.com/zchee/tumix/model/xai/pb/xai/api/v1"
+	xaipb "github.com/zchee/tumix/model/xai/api/v1"
 )
 
 // AuthClient provides access to Auth RPCs.

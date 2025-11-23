@@ -22,16 +22,16 @@ import (
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	pb "github.com/zchee/tumix/model/xai/pb/xai/api/v1"
+	xaipb "github.com/zchee/tumix/model/xai/api/v1"
 )
 
 // Tool builds a function-calling tool definition.
-func Tool(name, description string, parameters any) (*pb.Tool, error) {
+func Tool(name, description string, parameters any) (*xaipb.Tool, error) {
 	data, err := json.Marshal(parameters)
 	if err != nil {
 		return nil, err
 	}
-	return &pb.Tool{Tool: &pb.Tool_Function{Function: &pb.Function{
+	return &xaipb.Tool{Tool: &xaipb.Tool_Function{Function: &xaipb.Function{
 		Name:        name,
 		Description: description,
 		Parameters:  string(data),
@@ -39,14 +39,14 @@ func Tool(name, description string, parameters any) (*pb.Tool, error) {
 }
 
 // RequiredTool creates a tool choice that forces invocation of the given tool name.
-func RequiredTool(name string) *pb.ToolChoice {
-	return &pb.ToolChoice{ToolChoice: &pb.ToolChoice_FunctionName{FunctionName: name}}
+func RequiredTool(name string) *xaipb.ToolChoice {
+	return &xaipb.ToolChoice{ToolChoice: &xaipb.ToolChoice_FunctionName{FunctionName: name}}
 }
 
 // WebSearchTool defines a server-side web search tool.
-func WebSearchTool(excludedDomains, allowedDomains []string, enableImageUnderstanding bool) *pb.Tool {
+func WebSearchTool(excludedDomains, allowedDomains []string, enableImageUnderstanding bool) *xaipb.Tool {
 	enable := enableImageUnderstanding
-	return &pb.Tool{Tool: &pb.Tool_WebSearch{WebSearch: &pb.WebSearch{
+	return &xaipb.Tool{Tool: &xaipb.Tool_WebSearch{WebSearch: &xaipb.WebSearch{
 		ExcludedDomains:          excludedDomains,
 		AllowedDomains:           allowedDomains,
 		EnableImageUnderstanding: &enable,
@@ -54,7 +54,7 @@ func WebSearchTool(excludedDomains, allowedDomains []string, enableImageUndersta
 }
 
 // XSearchTool defines a server-side X (Twitter) search tool.
-func XSearchTool(fromDate, toDate *time.Time, allowedHandles, excludedHandles []string, enableImageUnderstanding, enableVideoUnderstanding bool) *pb.Tool {
+func XSearchTool(fromDate, toDate *time.Time, allowedHandles, excludedHandles []string, enableImageUnderstanding, enableVideoUnderstanding bool) *xaipb.Tool {
 	toTS := func(t *time.Time) *timestamppb.Timestamp {
 		if t == nil {
 			return nil
@@ -63,7 +63,7 @@ func XSearchTool(fromDate, toDate *time.Time, allowedHandles, excludedHandles []
 	}
 	img := enableImageUnderstanding
 	video := enableVideoUnderstanding
-	return &pb.Tool{Tool: &pb.Tool_XSearch{XSearch: &pb.XSearch{
+	return &xaipb.Tool{Tool: &xaipb.Tool_XSearch{XSearch: &xaipb.XSearch{
 		FromDate:                 toTS(fromDate),
 		ToDate:                   toTS(toDate),
 		AllowedXHandles:          allowedHandles,
@@ -74,25 +74,25 @@ func XSearchTool(fromDate, toDate *time.Time, allowedHandles, excludedHandles []
 }
 
 // CodeExecutionTool enables server-side code execution.
-func CodeExecutionTool() *pb.Tool {
-	return &pb.Tool{Tool: &pb.Tool_CodeExecution{CodeExecution: &pb.CodeExecution{}}}
+func CodeExecutionTool() *xaipb.Tool {
+	return &xaipb.Tool{Tool: &xaipb.Tool_CodeExecution{CodeExecution: &xaipb.CodeExecution{}}}
 }
 
 // CollectionsSearchTool allows querying collections from agentic responses.
-func CollectionsSearchTool(collectionIDs []string, limit int32) *pb.Tool {
-	return &pb.Tool{Tool: &pb.Tool_CollectionsSearch{CollectionsSearch: &pb.CollectionsSearch{
+func CollectionsSearchTool(collectionIDs []string, limit int32) *xaipb.Tool {
+	return &xaipb.Tool{Tool: &xaipb.Tool_CollectionsSearch{CollectionsSearch: &xaipb.CollectionsSearch{
 		CollectionIds: collectionIDs,
 		Limit:         &limit,
 	}}}
 }
 
 // MCPTool connects to a remote MCP server.
-func MCPTool(serverURL string, serverLabel, serverDescription string, allowedToolNames []string, authorization string, extraHeaders map[string]string) *pb.Tool {
+func MCPTool(serverURL string, serverLabel, serverDescription string, allowedToolNames []string, authorization string, extraHeaders map[string]string) *xaipb.Tool {
 	var auth *string
 	if authorization != "" {
 		auth = &authorization
 	}
-	return &pb.Tool{Tool: &pb.Tool_Mcp{Mcp: &pb.MCP{
+	return &xaipb.Tool{Tool: &xaipb.Tool_Mcp{Mcp: &xaipb.MCP{
 		ServerUrl:         serverURL,
 		ServerLabel:       serverLabel,
 		ServerDescription: serverDescription,

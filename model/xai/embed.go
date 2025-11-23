@@ -19,28 +19,28 @@ package xai
 import (
 	"context"
 
-	pb "github.com/zchee/tumix/model/xai/pb/xai/api/v1"
+	xaipb "github.com/zchee/tumix/model/xai/api/v1"
 )
 
 // EmbedClient provides access to the Embeddings service.
 type EmbedClient struct {
-	stub pb.EmbedderClient
+	stub xaipb.EmbedderClient
 }
 
 // Create generates embeddings for the provided inputs.
-func (c *EmbedClient) Create(ctx context.Context, req *pb.EmbedRequest) (*pb.EmbedResponse, error) {
+func (c *EmbedClient) Create(ctx context.Context, req *xaipb.EmbedRequest) (*xaipb.EmbedResponse, error) {
 	return c.stub.Embed(ctx, req)
 }
 
 // CreateStrings generates embeddings for a list of text strings.
-func (c *EmbedClient) CreateStrings(ctx context.Context, model string, texts []string) (*pb.EmbedResponse, error) {
-	inputs := make([]*pb.EmbedInput, len(texts))
+func (c *EmbedClient) CreateStrings(ctx context.Context, model string, texts []string) (*xaipb.EmbedResponse, error) {
+	inputs := make([]*xaipb.EmbedInput, len(texts))
 	for i, t := range texts {
-		inputs[i] = &pb.EmbedInput{
-			Input: &pb.EmbedInput_String_{String_: t},
+		inputs[i] = &xaipb.EmbedInput{
+			Input: &xaipb.EmbedInput_String_{String_: t},
 		}
 	}
-	return c.Create(ctx, &pb.EmbedRequest{
+	return c.Create(ctx, &xaipb.EmbedRequest{
 		Model: model,
 		Input: inputs,
 	})

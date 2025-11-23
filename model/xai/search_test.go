@@ -4,20 +4,20 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/zchee/tumix/model/xai/pb/xai/api/v1"
+	xaipb "github.com/zchee/tumix/model/xai/api/v1"
 )
 
 func TestSearchParametersProto(t *testing.T) {
 	from := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
 	params := SearchParameters{
-		Sources:          []*pb.Source{WebSource("US", []string{"example.com"}, nil, true)},
+		Sources:          []*xaipb.Source{WebSource("US", []string{"example.com"}, nil, true)},
 		Mode:             SearchModeOn,
 		FromDate:         &from,
 		ReturnCitations:  true,
 		MaxSearchResults: 7,
 	}
 	proto := params.Proto()
-	if proto.GetMode() != pb.SearchMode_ON_SEARCH_MODE {
+	if proto.GetMode() != xaipb.SearchMode_ON_SEARCH_MODE {
 		t.Fatalf("mode not converted")
 	}
 	if proto.FromDate == nil || !proto.FromDate.AsTime().Equal(from) {
