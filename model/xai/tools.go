@@ -40,17 +40,25 @@ func Tool(name, description string, parameters any) (*xaipb.Tool, error) {
 
 // RequiredTool creates a tool choice that forces invocation of the given tool name.
 func RequiredTool(name string) *xaipb.ToolChoice {
-	return &xaipb.ToolChoice{ToolChoice: &xaipb.ToolChoice_FunctionName{FunctionName: name}}
+	return &xaipb.ToolChoice{
+		ToolChoice: &xaipb.ToolChoice_FunctionName{
+			FunctionName: name,
+		},
+	}
 }
 
 // WebSearchTool defines a server-side web search tool.
 func WebSearchTool(excludedDomains, allowedDomains []string, enableImageUnderstanding bool) *xaipb.Tool {
 	enable := enableImageUnderstanding
-	return &xaipb.Tool{Tool: &xaipb.Tool_WebSearch{WebSearch: &xaipb.WebSearch{
-		ExcludedDomains:          excludedDomains,
-		AllowedDomains:           allowedDomains,
-		EnableImageUnderstanding: &enable,
-	}}}
+	return &xaipb.Tool{
+		Tool: &xaipb.Tool_WebSearch{
+			WebSearch: &xaipb.WebSearch{
+				ExcludedDomains:          excludedDomains,
+				AllowedDomains:           allowedDomains,
+				EnableImageUnderstanding: &enable,
+			},
+		},
+	}
 }
 
 // XSearchTool defines a server-side X (Twitter) search tool.
@@ -63,27 +71,39 @@ func XSearchTool(fromDate, toDate *time.Time, allowedHandles, excludedHandles []
 	}
 	img := enableImageUnderstanding
 	video := enableVideoUnderstanding
-	return &xaipb.Tool{Tool: &xaipb.Tool_XSearch{XSearch: &xaipb.XSearch{
-		FromDate:                 toTS(fromDate),
-		ToDate:                   toTS(toDate),
-		AllowedXHandles:          allowedHandles,
-		ExcludedXHandles:         excludedHandles,
-		EnableImageUnderstanding: &img,
-		EnableVideoUnderstanding: &video,
-	}}}
+	return &xaipb.Tool{
+		Tool: &xaipb.Tool_XSearch{
+			XSearch: &xaipb.XSearch{
+				FromDate:                 toTS(fromDate),
+				ToDate:                   toTS(toDate),
+				AllowedXHandles:          allowedHandles,
+				ExcludedXHandles:         excludedHandles,
+				EnableImageUnderstanding: &img,
+				EnableVideoUnderstanding: &video,
+			},
+		},
+	}
 }
 
 // CodeExecutionTool enables server-side code execution.
 func CodeExecutionTool() *xaipb.Tool {
-	return &xaipb.Tool{Tool: &xaipb.Tool_CodeExecution{CodeExecution: &xaipb.CodeExecution{}}}
+	return &xaipb.Tool{
+		Tool: &xaipb.Tool_CodeExecution{
+			CodeExecution: &xaipb.CodeExecution{},
+		},
+	}
 }
 
 // CollectionsSearchTool allows querying collections from agentic responses.
 func CollectionsSearchTool(collectionIDs []string, limit int32) *xaipb.Tool {
-	return &xaipb.Tool{Tool: &xaipb.Tool_CollectionsSearch{CollectionsSearch: &xaipb.CollectionsSearch{
-		CollectionIds: collectionIDs,
-		Limit:         &limit,
-	}}}
+	return &xaipb.Tool{
+		Tool: &xaipb.Tool_CollectionsSearch{
+			CollectionsSearch: &xaipb.CollectionsSearch{
+				CollectionIds: collectionIDs,
+				Limit:         &limit,
+			},
+		},
+	}
 }
 
 // MCPTool connects to a remote MCP server.
@@ -92,20 +112,28 @@ func MCPTool(serverURL string, serverLabel, serverDescription string, allowedToo
 	if authorization != "" {
 		auth = &authorization
 	}
-	return &xaipb.Tool{Tool: &xaipb.Tool_Mcp{Mcp: &xaipb.MCP{
-		ServerUrl:         serverURL,
-		ServerLabel:       serverLabel,
-		ServerDescription: serverDescription,
-		AllowedToolNames:  allowedToolNames,
-		Authorization:     auth,
-		ExtraHeaders:      extraHeaders,
-	}}}
+	return &xaipb.Tool{
+		Tool: &xaipb.Tool_Mcp{
+			Mcp: &xaipb.MCP{
+				ServerUrl:         serverURL,
+				ServerLabel:       serverLabel,
+				ServerDescription: serverDescription,
+				AllowedToolNames:  allowedToolNames,
+				Authorization:     auth,
+				ExtraHeaders:      extraHeaders,
+			},
+		},
+	}
 }
 
 // DocumentSearchTool enables server-side document search.
 func DocumentSearchTool(limit int32) *xaipb.Tool {
-	return &xaipb.Tool{Tool: &xaipb.Tool_DocumentSearch{DocumentSearch: &xaipb.DocumentSearch{
-		Limit: &limit,
-	}}}
+	return &xaipb.Tool{
+		Tool: &xaipb.Tool_DocumentSearch{
+			DocumentSearch: &xaipb.DocumentSearch{
+				Limit: &limit,
+			},
+		},
+	}
 }
 

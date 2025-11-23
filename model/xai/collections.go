@@ -78,7 +78,9 @@ func NewCollectionsClient(apiConn *grpc.ClientConn, apiKey string, baseURL strin
 		documents: xaipb.NewDocumentsClient(apiConn),
 		apiKey:    apiKey,
 		baseURL:   baseURL,
-		client:    &http.Client{Timeout: 60 * time.Second},
+		client: &http.Client{
+			Timeout: 60 * time.Second,
+		},
 	}
 }
 
@@ -115,7 +117,9 @@ func (c *CollectionsClient) Create(ctx context.Context, name string, modelName s
 		Name: name,
 	}
 	if modelName != "" {
-		reqBody.IndexConfiguration = &IndexConfiguration{ModelName: modelName}
+		reqBody.IndexConfiguration = &IndexConfiguration{
+			ModelName: modelName,
+		}
 	}
 
 	data, err := json.Marshal(reqBody)
@@ -199,7 +203,9 @@ func (c *CollectionsClient) Delete(ctx context.Context, collectionID string) err
 func (c *CollectionsClient) Search(ctx context.Context, query string, collectionIDs []string, limit int32) (*xaipb.SearchResponse, error) {
 	req := &xaipb.SearchRequest{
 		Query:  query,
-		Source: &xaipb.DocumentsSource{CollectionIds: collectionIDs},
+		Source: &xaipb.DocumentsSource{
+			CollectionIds: collectionIDs,
+		},
 	}
 	if limit > 0 {
 		req.Limit = &limit

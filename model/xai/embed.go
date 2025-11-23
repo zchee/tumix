@@ -37,7 +37,9 @@ func (c *EmbedClient) CreateStrings(ctx context.Context, model string, texts []s
 	inputs := make([]*xaipb.EmbedInput, len(texts))
 	for i, t := range texts {
 		inputs[i] = &xaipb.EmbedInput{
-			Input: &xaipb.EmbedInput_String_{String_: t},
+			Input: &xaipb.EmbedInput_String_{
+				String_: t,
+			},
 		}
 	}
 	return c.Create(ctx, &xaipb.EmbedRequest{

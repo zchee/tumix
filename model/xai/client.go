@@ -87,18 +87,36 @@ func NewClient(ctx context.Context, apiKey string, optFns ...ClientOption) (*Cli
 	client := &Client{
 		apiConn:        apiConn,
 		managementConn: mgmtConn,
-		Auth:           &AuthClient{auth: xaipb.NewAuthClient(apiConn)},
-		Chat:           &ChatClient{chat: xaipb.NewChatClient(apiConn)},
-		Documents:      &DocumentsClient{stub: xaipb.NewDocumentsClient(apiConn)},
-		Embed:          &EmbedClient{embedder: xaipb.NewEmbedderClient(apiConn)},
-		Image:          &ImageClient{image: xaipb.NewImageClient(apiConn)},
-		Models:         &ModelsClient{models: xaipb.NewModelsClient(apiConn)},
-		Sampler:        &SamplerClient{sample: xaipb.NewSampleClient(apiConn)},
-		Tokenizer:      &TokenizerClient{tokenize: xaipb.NewTokenizeClient(apiConn)},
+		Auth: &AuthClient{
+			auth: xaipb.NewAuthClient(apiConn),
+		},
+		Chat: &ChatClient{
+			chat: xaipb.NewChatClient(apiConn),
+		},
+		Documents: &DocumentsClient{
+			stub: xaipb.NewDocumentsClient(apiConn),
+		},
+		Embed: &EmbedClient{
+			embedder: xaipb.NewEmbedderClient(apiConn),
+		},
+		Image: &ImageClient{
+			image: xaipb.NewImageClient(apiConn),
+		},
+		Models: &ModelsClient{
+			models: xaipb.NewModelsClient(apiConn),
+		},
+		Sampler: &SamplerClient{
+			sample: xaipb.NewSampleClient(apiConn),
+		},
+		Tokenizer: &TokenizerClient{
+			tokenize: xaipb.NewTokenizeClient(apiConn),
+		},
 	}
 
 	if mgmtConn != nil {
-		client.Billing = &BillingClient{uisvc: billingpb.NewUISvcClient(mgmtConn)}
+		client.Billing = &BillingClient{
+			uisvc: billingpb.NewUISvcClient(mgmtConn),
+		}
 	}
 
 	client.Collections = NewCollectionsClient(apiConn, opts.managementKey, "https://"+opts.managementHost)

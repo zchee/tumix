@@ -111,7 +111,13 @@ func XSource(includedHandles, excludedHandles []string, favoriteCount, viewCount
 
 // RSSSource builds an RSS feed search source.
 func RSSSource(links []string) *xaipb.Source {
-	return &xaipb.Source{Source: &xaipb.Source_Rss{Rss: &xaipb.RssSource{Links: links}}}
+	return &xaipb.Source{
+		Source: &xaipb.Source_Rss{
+			Rss: &xaipb.RssSource{
+				Links: links,
+			},
+		},
+	}
 }
 
 func searchModeToProto(mode SearchMode) xaipb.SearchMode {

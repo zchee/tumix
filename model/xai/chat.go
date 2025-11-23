@@ -44,8 +44,13 @@ type ChatClient struct {
 
 // Create initializes a new chat session for the specified model.
 func (c *ChatClient) Create(model string, opts ...ChatOption) *ChatSession {
-	req := &xaipb.GetCompletionsRequest{Model: model}
-	session := &ChatSession{stub: c.chat, request: req}
+	req := &xaipb.GetCompletionsRequest{
+		Model: model,
+	}
+	session := &ChatSession{
+		stub:    c.chat,
+		request: req,
+	}
 	for _, opt := range opts {
 		opt(req, session)
 	}
@@ -54,13 +59,17 @@ func (c *ChatClient) Create(model string, opts ...ChatOption) *ChatSession {
 
 // GetStoredCompletion retrieves a stored response using the response ID.
 func (c *ChatClient) GetStoredCompletion(ctx context.Context, responseID string) (*xaipb.GetChatCompletionResponse, error) {
-	req := &xaipb.GetStoredCompletionRequest{ResponseId: responseID}
+	req := &xaipb.GetStoredCompletionRequest{
+		ResponseId: responseID,
+	}
 	return c.chat.GetStoredCompletion(ctx, req)
 }
 
 // DeleteStoredCompletion deletes a stored response using the response ID.
 func (c *ChatClient) DeleteStoredCompletion(ctx context.Context, responseID string) error {
-	req := &xaipb.DeleteStoredCompletionRequest{ResponseId: responseID}
+	req := &xaipb.DeleteStoredCompletionRequest{
+		ResponseId: responseID,
+	}
 	_, err := c.chat.DeleteStoredCompletion(ctx, req)
 	return err
 }
@@ -72,7 +81,9 @@ func (c *ChatClient) StartDeferredCompletion(ctx context.Context, req *xaipb.Get
 
 // GetDeferredCompletion gets the result of a deferred completion.
 func (c *ChatClient) GetDeferredCompletion(ctx context.Context, requestID string) (*xaipb.GetDeferredCompletionResponse, error) {
-	req := &xaipb.GetDeferredRequest{RequestId: requestID}
+	req := &xaipb.GetDeferredRequest{
+		RequestId: requestID,
+	}
 	return c.chat.GetDeferredCompletion(ctx, req)
 }
 
@@ -425,7 +436,10 @@ func (s *ChatSession) streamN(ctx context.Context, n int) (*ChatStream, error) {
 	if n > 1 {
 		resp.Outputs = make([]*xaipb.CompletionOutput, n)
 	}
-	return &ChatStream{stream: stream, response: newResponse(resp, intPtrIf(n == 1))}, nil
+	return &ChatStream{
+		stream: stream,
+		response: newResponse(resp, intPtrIf(n == 1)),
+	}, nil
 }
 
 func (s *ChatSession) deferN(ctx context.Context, n int, timeout, interval time.Duration) ([]*Response, error) {
@@ -449,7 +463,9 @@ func (s *ChatSession) deferN(ctx context.Context, n int, timeout, interval time.
 		if time.Now().After(deadline) {
 			return nil, fmt.Errorf("deferred request timed out after %s", timeout)
 		}
-		res, err := s.stub.GetDeferredCompletion(ctx, &xaipb.GetDeferredRequest{RequestId: startResp.RequestId})
+		res, err := s.stub.GetDeferredCompletion(ctx, &xaipb.GetDeferredRequest{
+			RequestId: startResp.RequestId,
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -859,7 +875,10 @@ type Chunk struct {
 }
 
 func newChunk(protoChunk *xaipb.GetChatCompletionChunk, index *int) *Chunk {
-	return &Chunk{proto: protoChunk, index: index}
+	return &Chunk{
+		proto: protoChunk,
+		index: index,
+	}
 }
 
 // Content concatenates chunk content for the tracked index (or all when multi-output).
@@ -928,7 +947,10 @@ func newMessage(role xaipb.MessageRole, parts ...any) *xaipb.Message {
 			panic("unsupported content type")
 		}
 	}
-	return &xaipb.Message{Role: role, Content: contents}
+	return &xaipb.Message{
+		Role:    role,
+		Content: contents,
+	}
 }
 
 func buildMessageFromCompletion(out *xaipb.CompletionOutput) *xaipb.Message {
@@ -939,7 +961,9 @@ func buildMessageFromCompletion(out *xaipb.CompletionOutput) *xaipb.Message {
 	}
 	return &xaipb.Message{
 		Role:             out.Message.Role,
-		Content:          []*xaipb.Content{TextContent(out.Message.Content)},
+		Content: []*xaipb.Content{
+			TextContent(out.Message.Content),
+		},
 		ReasoningContent: reasoning,
 		EncryptedContent: out.Message.EncryptedContent,
 		ToolCalls:        out.Message.ToolCalls,
@@ -948,19 +972,32 @@ func buildMessageFromCompletion(out *xaipb.CompletionOutput) *xaipb.Message {
 
 // TextContent wraps plain text into a Content message.
 func TextContent(text string) *xaipb.Content {
-	return &xaipb.Content{Content: &xaipb.Content_Text{Text: text}}
+	return &xaipb.Content{
+		Content: &xaipb.Content_Text{
+			Text: text,
+		},
+	}
 }
 
 // ImageContent creates an image content entry with optional detail.
 func ImageContent(url string, detail xaipb.ImageDetail) *xaipb.Content {
 	return &xaipb.Content{Content: &xaipb.Content_ImageUrl{
-		ImageUrl: &xaipb.ImageUrlContent{ImageUrl: url, Detail: detail},
+		ImageUrl: &xaipb.ImageUrlContent{
+			ImageUrl: url,
+			Detail:   detail,
+		},
 	}}
 }
 
 // FileContent references an uploaded file.
 func FileContent(fileID string) *xaipb.Content {
-	return &xaipb.Content{Content: &xaipb.Content_File{File: &xaipb.FileContent{FileId: fileID}}}
+	return &xaipb.Content{
+		Content: &xaipb.Content_File{
+			File: &xaipb.FileContent{
+				FileId: fileID,
+			},
+		},
+	}
 }
 
 func usesServerSideTools(tools []*xaipb.Tool) bool {

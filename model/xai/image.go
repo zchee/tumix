@@ -83,7 +83,10 @@ func (c *ImageClient) SampleBatch(ctx context.Context, prompt, model string, n i
 	}
 	images := make([]*ImageResponse, len(resp.Images))
 	for i := range resp.Images {
-		images[i] = &ImageResponse{proto: resp, index: i}
+		images[i] = &ImageResponse{
+			proto: resp,
+			index: i,
+		}
 	}
 	return images, nil
 }
@@ -132,7 +135,9 @@ func (r *ImageResponse) Data(ctx context.Context) ([]byte, error) {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", "xai-go-sdk")
-	client := &http.Client{Timeout: 5 * time.Second}
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
