@@ -24,12 +24,12 @@ import (
 
 // EmbedClient provides access to the Embeddings service.
 type EmbedClient struct {
-	stub xaipb.EmbedderClient
+	embedder xaipb.EmbedderClient
 }
 
 // Create generates embeddings for the provided inputs.
 func (c *EmbedClient) Create(ctx context.Context, req *xaipb.EmbedRequest) (*xaipb.EmbedResponse, error) {
-	return c.stub.Embed(ctx, req)
+	return c.embedder.Embed(ctx, req)
 }
 
 // CreateStrings generates embeddings for a list of text strings.

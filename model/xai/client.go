@@ -86,15 +86,15 @@ func NewClient(ctx context.Context, apiKey string, optFns ...ClientOption) (*Cli
 	client := &Client{
 		apiConn:        apiConn,
 		managementConn: mgmtConn,
-		Auth:           &AuthClient{stub: xaipb.NewAuthClient(apiConn)},
-		Chat:           &ChatClient{stub: xaipb.NewChatClient(apiConn)},
+		Auth:           &AuthClient{auth: xaipb.NewAuthClient(apiConn)},
+		Chat:           &ChatClient{chat: xaipb.NewChatClient(apiConn)},
 		Documents:      &DocumentsClient{stub: xaipb.NewDocumentsClient(apiConn)},
-		Embed:          &EmbedClient{stub: xaipb.NewEmbedderClient(apiConn)},
+		Embed:          &EmbedClient{embedder: xaipb.NewEmbedderClient(apiConn)},
 		// Files:          &FilesClient{stub: pb.NewFilesClient(apiConn)},
-		Image:     &ImageClient{stub: xaipb.NewImageClient(apiConn)},
-		Models:    &ModelsClient{stub: xaipb.NewModelsClient(apiConn)},
-		Sampler:   &SamplerClient{stub: xaipb.NewSampleClient(apiConn)},
-		Tokenizer: &TokenizerClient{stub: xaipb.NewTokenizeClient(apiConn)},
+		Image:     &ImageClient{image: xaipb.NewImageClient(apiConn)},
+		Models:    &ModelsClient{models: xaipb.NewModelsClient(apiConn)},
+		Sampler:   &SamplerClient{sample: xaipb.NewSampleClient(apiConn)},
+		Tokenizer: &TokenizerClient{tokenize: xaipb.NewTokenizeClient(apiConn)},
 	}
 
 	client.Collections = NewCollectionsClient(apiConn, opts.managementKey, "https://"+opts.managementHost)
@@ -109,7 +109,7 @@ func (c *Client) Close() error {
 	}
 	var firstErr error
 	if c.managementConn != nil {
-		if err := c.managementConn.Close(); err != nil && firstErr == nil {
+		if err := c.managementConn.Close(); err != nil {
 			firstErr = err
 		}
 	}

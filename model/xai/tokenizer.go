@@ -24,12 +24,12 @@ import (
 
 // TokenizerClient provides access to the Tokenizer service.
 type TokenizerClient struct {
-	stub xaipb.TokenizeClient
+	tokenize xaipb.TokenizeClient
 }
 
 // Tokenize converts text into tokens using the specified model.
 func (c *TokenizerClient) Tokenize(ctx context.Context, text string, model string) (*xaipb.TokenizeTextResponse, error) {
-	return c.stub.TokenizeText(ctx, &xaipb.TokenizeTextRequest{
+	return c.tokenize.TokenizeText(ctx, &xaipb.TokenizeTextRequest{
 		Text:  text,
 		Model: model,
 	})

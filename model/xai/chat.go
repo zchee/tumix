@@ -39,7 +39,7 @@ const (
 
 // ChatClient handles chat operations.
 type ChatClient struct {
-	stub xaipb.ChatClient
+	chat xaipb.ChatClient
 }
 
 // ChatOption customizes a chat request before execution.
@@ -48,7 +48,7 @@ type ChatOption func(*xaipb.GetCompletionsRequest, *ChatSession)
 // Create initializes a new chat session for the specified model.
 func (c *ChatClient) Create(model string, opts ...ChatOption) *ChatSession {
 	req := &xaipb.GetCompletionsRequest{Model: model}
-	session := &ChatSession{stub: c.stub, request: req}
+	session := &ChatSession{stub: c.chat, request: req}
 	for _, opt := range opts {
 		opt(req, session)
 	}
@@ -470,9 +470,9 @@ func (s *ChatSession) makeSpanRequestAttributes() []attribute.KeyValue {
 
 	// Optional fields
 	attrs = append(attrs,
-		attribute.Float64("gen_ai.request.frequency_penalty", float64(valueOrZero32(s.request.FrequencyPenalty))),
-		attribute.Float64("gen_ai.request.presence_penalty", float64(valueOrZero32(s.request.PresencePenalty))),
-		attribute.Float64("gen_ai.request.temperature", float64(valueOrZero32(s.request.Temperature))),
+		attribute.Float64("gen_ai.request.frequency_penalty", float64(valueOrZeroFloat32(s.request.FrequencyPenalty))),
+		attribute.Float64("gen_ai.request.presence_penalty", float64(valueOrZeroFloat32(s.request.PresencePenalty))),
+		attribute.Float64("gen_ai.request.temperature", float64(valueOrZeroFloat32(s.request.Temperature))),
 		attribute.Bool("gen_ai.request.parallel_tool_calls", valueOrZeroBool(s.request.ParallelToolCalls)),
 		attribute.Bool("gen_ai.request.store_messages", s.request.StoreMessages),
 		attribute.Bool("gen_ai.request.use_encrypted_content", s.request.UseEncryptedContent),
@@ -583,7 +583,7 @@ func (s *ChatSession) makeSpanResponseAttributes(responses []*Response) []attrib
 	return attrs
 }
 
-func valueOrZero32[T ~float32](p *T) T {
+func valueOrZeroFloat32[T ~float32](p *T) T {
 	if p == nil {
 		return 0
 	}
@@ -606,6 +606,8 @@ type ChatStream struct {
 }
 
 // Recv returns the next chunk and the aggregated response.
+//
+// Recv implements [grpc.ServerStreamingClient[xaipb.GetChatCompletionChunk]].
 func (s *ChatStream) Recv() (*Response, *Chunk, error) {
 	chunk, err := s.stream.Recv()
 	if err != nil {

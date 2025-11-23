@@ -53,7 +53,7 @@ func WithImageFormat(format ImageFormat) ImageOption {
 
 // ImageClient wraps the Image service.
 type ImageClient struct {
-	stub xaipb.ImageClient
+	image xaipb.ImageClient
 }
 
 // Sample generates a single image.
@@ -77,7 +77,7 @@ func (c *ImageClient) SampleBatch(ctx context.Context, prompt, model string, n i
 		opt(req)
 	}
 
-	resp, err := c.stub.GenerateImage(ctx, req)
+	resp, err := c.image.GenerateImage(ctx, req)
 	if err != nil {
 		return nil, err
 	}

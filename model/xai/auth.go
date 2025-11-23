@@ -26,10 +26,10 @@ import (
 
 // AuthClient provides access to Auth RPCs.
 type AuthClient struct {
-	stub xaipb.AuthClient
+	auth xaipb.AuthClient
 }
 
 // GetAPIKeyInfo returns metadata for the current API key.
 func (c *AuthClient) GetAPIKeyInfo(ctx context.Context) (*xaipb.ApiKey, error) {
-	return c.stub.GetApiKeyInfo(ctx, &emptypb.Empty{})
+	return c.auth.GetApiKeyInfo(ctx, &emptypb.Empty{})
 }

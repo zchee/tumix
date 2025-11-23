@@ -24,15 +24,15 @@ import (
 
 // SamplerClient exposes the Sample service for low-level text sampling.
 type SamplerClient struct {
-	stub xaipb.SampleClient
+	sample xaipb.SampleClient
 }
 
 // SampleText performs a unary sampling request.
 func (c *SamplerClient) SampleText(ctx context.Context, req *xaipb.SampleTextRequest) (*xaipb.SampleTextResponse, error) {
-	return c.stub.SampleText(ctx, req)
+	return c.sample.SampleText(ctx, req)
 }
 
 // SampleTextStreaming opens a server-streaming sampling request.
 func (c *SamplerClient) SampleTextStreaming(ctx context.Context, req *xaipb.SampleTextRequest) (xaipb.Sample_SampleTextStreamingClient, error) {
-	return c.stub.SampleTextStreaming(ctx, req)
+	return c.sample.SampleTextStreaming(ctx, req)
 }
