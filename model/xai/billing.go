@@ -35,7 +35,8 @@ func (c *BillingClient) SetBillingInfo(ctx context.Context, teamID string, info 
 		TeamId:      teamID,
 		BillingInfo: info,
 	}
-	return c.uisvc.SetBillingInfo(ctx, req)
+	resp, err := c.uisvc.SetBillingInfo(ctx, req)
+	return resp, WrapError(err)
 }
 
 // GetBillingInfo gets billing information of the team with given team ID.
@@ -45,7 +46,7 @@ func (c *BillingClient) GetBillingInfo(ctx context.Context, teamID string) (*bil
 	}
 	resp, err := c.uisvc.GetBillingInfo(ctx, req)
 	if err != nil {
-		return nil, err
+		return nil, WrapError(err)
 	}
 	return resp.BillingInfo, nil
 }
@@ -55,7 +56,8 @@ func (c *BillingClient) ListPaymentMethods(ctx context.Context, teamID string) (
 	req := &managementpb.ListPaymentMethodsReq{
 		TeamId: teamID,
 	}
-	return c.uisvc.ListPaymentMethods(ctx, req)
+	resp, err := c.uisvc.ListPaymentMethods(ctx, req)
+	return resp, WrapError(err)
 }
 
 // SetDefaultPaymentMethod sets default payment method to an existing payment method on file.
@@ -64,7 +66,8 @@ func (c *BillingClient) SetDefaultPaymentMethod(ctx context.Context, teamID, pay
 		TeamId:          teamID,
 		PaymentMethodId: paymentMethodID,
 	}
-	return c.uisvc.SetDefaultPaymentMethod(ctx, req)
+	resp, err := c.uisvc.SetDefaultPaymentMethod(ctx, req)
+	return resp, WrapError(err)
 }
 
 // GetAmountToPay previews the amount to pay for postpaid usage in the current billing period.
@@ -72,7 +75,8 @@ func (c *BillingClient) GetAmountToPay(ctx context.Context, teamID string) (*man
 	req := &managementpb.GetAmountToPayReq{
 		TeamId: teamID,
 	}
-	return c.uisvc.GetAmountToPay(ctx, req)
+	resp, err := c.uisvc.GetAmountToPay(ctx, req)
+	return resp, WrapError(err)
 }
 
 // AnalyzeBillingItems gets historical usage of the API over a time period, aggregated by fields.
@@ -81,12 +85,14 @@ func (c *BillingClient) AnalyzeBillingItems(ctx context.Context, teamID string, 
 		TeamId:           teamID,
 		AnalyticsRequest: analyticsReq,
 	}
-	return c.uisvc.AnalyzeBillingItems(ctx, req)
+	resp, err := c.uisvc.AnalyzeBillingItems(ctx, req)
+	return resp, WrapError(err)
 }
 
 // ListInvoices lists invoices that belong to a team.
 func (c *BillingClient) ListInvoices(ctx context.Context, req *managementpb.ListInvoicesReq) (*managementpb.ListInvoicesResp, error) {
-	return c.uisvc.ListInvoices(ctx, req)
+	resp, err := c.uisvc.ListInvoices(ctx, req)
+	return resp, WrapError(err)
 }
 
 // ListPrepaidBalanceChanges lists the prepaid credit balance and balance changes of a team.
@@ -94,7 +100,8 @@ func (c *BillingClient) ListPrepaidBalanceChanges(ctx context.Context, teamID st
 	req := &managementpb.ListPrepaidBalanceChangesReq{
 		TeamId: teamID,
 	}
-	return c.uisvc.ListPrepaidBalanceChanges(ctx, req)
+	resp, err := c.uisvc.ListPrepaidBalanceChanges(ctx, req)
+	return resp, WrapError(err)
 }
 
 // TopUpOrGetExistingPendingChange tops up prepaid credit using the default payment method.
@@ -103,7 +110,8 @@ func (c *BillingClient) TopUpOrGetExistingPendingChange(ctx context.Context, tea
 		TeamId: teamID,
 		Amount: amount,
 	}
-	return c.uisvc.TopUpOrGetExistingPendingChange(ctx, req)
+	resp, err := c.uisvc.TopUpOrGetExistingPendingChange(ctx, req)
+	return resp, WrapError(err)
 }
 
 // GetSpendingLimits gets the postpaid monthly spending limits.
@@ -111,7 +119,8 @@ func (c *BillingClient) GetSpendingLimits(ctx context.Context, teamID string) (*
 	req := &managementpb.GetSpendingLimitsReq{
 		TeamId: teamID,
 	}
-	return c.uisvc.GetSpendingLimits(ctx, req)
+	resp, err := c.uisvc.GetSpendingLimits(ctx, req)
+	return resp, WrapError(err)
 }
 
 // SetSoftSpendingLimit sets the postpaid monthly spending limit of a team.
@@ -120,5 +129,6 @@ func (c *BillingClient) SetSoftSpendingLimit(ctx context.Context, teamID string,
 		TeamId:                   teamID,
 		DesiredSoftSpendingLimit: limit,
 	}
-	return c.uisvc.SetSoftSpendingLimit(ctx, req)
+	resp, err := c.uisvc.SetSoftSpendingLimit(ctx, req)
+	return resp, WrapError(err)
 }

@@ -38,6 +38,15 @@ func Tool(name, description string, parameters any) (*xaipb.Tool, error) {
 	}}}, nil
 }
 
+// MustTool is a convenience that panics on error; useful in init paths.
+func MustTool(name, description string, parameters any) *xaipb.Tool {
+	tool, err := Tool(name, description, parameters)
+	if err != nil {
+		panic(err)
+	}
+	return tool
+}
+
 // RequiredTool creates a tool choice that forces invocation of the given tool name.
 func RequiredTool(name string) *xaipb.ToolChoice {
 	return &xaipb.ToolChoice{
@@ -100,10 +109,15 @@ func CollectionsSearchTool(collectionIDs []string, limit int32) *xaipb.Tool {
 		Tool: &xaipb.Tool_CollectionsSearch{
 			CollectionsSearch: &xaipb.CollectionsSearch{
 				CollectionIds: collectionIDs,
-				Limit:         &limit,
+				Limit:         limitPtr(limit),
 			},
 		},
 	}
+}
+
+// CollectionsSearchToolIDs is a convenience wrapper that accepts variadic IDs.
+func CollectionsSearchToolIDs(limit int32, collectionIDs ...string) *xaipb.Tool {
+	return CollectionsSearchTool(collectionIDs, limit)
 }
 
 // MCPTool connects to a remote MCP server.
@@ -126,6 +140,14 @@ func MCPTool(serverURL string, serverLabel, serverDescription string, allowedToo
 	}
 }
 
+// limitPtr returns nil if v is zero to honor proto optional semantics.
+func limitPtr(v int32) *int32 {
+	if v == 0 {
+		return nil
+	}
+	return &v
+}
+
 // DocumentSearchTool enables server-side document search.
 func DocumentSearchTool(limit int32) *xaipb.Tool {
 	return &xaipb.Tool{
@@ -136,4 +158,3 @@ func DocumentSearchTool(limit int32) *xaipb.Tool {
 		},
 	}
 }
-

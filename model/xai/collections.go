@@ -17,333 +17,479 @@
 package xai
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
-	"mime/multipart"
-	"net/http"
-	"net/textproto"
-	"time"
 
 	"google.golang.org/grpc"
 
 	xaipb "github.com/zchee/tumix/model/xai/api/v1"
+	collectionspb "github.com/zchee/tumix/model/xai/api/v1/collectionspb"
+	ragpb "github.com/zchee/tumix/model/xai/api/v1/ragpb"
+	sharedpb "github.com/zchee/tumix/model/xai/api/v1/sharedpb"
 )
 
-// Order is used for collection/document listing order.
+// Order defines sort order for collections/documents/files.
 type Order string
 
 const (
-	// OrderAscending sorts results in ascending order.
-	OrderAscending Order = "asc"
-	// OrderDescending sorts results in descending order.
+	OrderAscending  Order = "asc"
 	OrderDescending Order = "desc"
 )
 
-// CollectionSortBy defines the field to sort collections by.
+// CollectionSortBy defines collection sort fields.
 type CollectionSortBy string
 
 const (
-	// CollectionSortByName sorts collections by name.
 	CollectionSortByName CollectionSortBy = "name"
-	// CollectionSortByAge sorts collections by creation time.
-	CollectionSortByAge CollectionSortBy = "age"
+	CollectionSortByAge  CollectionSortBy = "age"
 )
 
-// DocumentSortBy defines the field to sort documents by.
+// DocumentSortBy defines document sort fields.
 type DocumentSortBy string
 
 const (
-	// DocumentSortByName sorts documents by name.
 	DocumentSortByName DocumentSortBy = "name"
-	// DocumentSortByAge sorts documents by creation time.
-	DocumentSortByAge DocumentSortBy = "age"
-	// DocumentSortBySize sorts documents by size.
+	DocumentSortByAge  DocumentSortBy = "age"
 	DocumentSortBySize DocumentSortBy = "size"
 )
 
-// CollectionsClient provides access to the Collections and Documents services.
+// CollectionsClient provides gRPC access to collections/documents.
 type CollectionsClient struct {
-	documents xaipb.DocumentsClient
-	apiKey    string
-	baseURL   string
-	client    *http.Client
+	collections collectionspb.CollectionsClient
+	documents   xaipb.DocumentsClient
 }
 
-// NewCollectionsClient builds a CollectionsClient using the API connection and management API credentials.
-func NewCollectionsClient(apiConn *grpc.ClientConn, apiKey string, baseURL string) *CollectionsClient {
-	return &CollectionsClient{
-		documents: xaipb.NewDocumentsClient(apiConn),
-		apiKey:    apiKey,
-		baseURL:   baseURL,
-		client: &http.Client{
-			Timeout: 60 * time.Second,
-		},
-	}
+type collectionsOption func(*collectionsRequest)
+
+type collectionsRequest struct {
+	teamID *string
 }
 
-// Collection represents a document collection.
-type Collection struct {
-	ID                 string              `json:"collection_id"`
-	Name               string              `json:"name"`
-	IndexConfiguration *IndexConfiguration `json:"index_configuration,omitempty"`
-	ChunkConfiguration *ChunkConfiguration `json:"chunk_configuration,omitempty"`
-	CreatedAt          int64               `json:"created_at,omitempty"`
-	UpdatedAt          int64               `json:"updated_at,omitempty"`
+// DocumentSearchOption customizes document search requests.
+type DocumentSearchOption func(*documentSearchRequest)
+
+type documentSearchRequest struct {
+	limit         *int32
+	rankingMetric *xaipb.RankingMetric
 }
 
-// IndexConfiguration defines the indexing parameters for a collection.
-type IndexConfiguration struct {
-	ModelName string `json:"model_name,omitempty"`
-}
-
-// ChunkConfiguration defines the chunking parameters for a collection.
-type ChunkConfiguration struct {
-	MinTokens int `json:"min_tokens,omitempty"`
-	MaxTokens int `json:"max_tokens,omitempty"`
-}
-
-type createCollectionRequest struct {
-	Name               string              `json:"name"`
-	IndexConfiguration *IndexConfiguration `json:"index_configuration,omitempty"`
-	ChunkConfiguration *ChunkConfiguration `json:"chunk_configuration,omitempty"`
-}
-
-// Create makes a new collection for document embeddings.
-func (c *CollectionsClient) Create(ctx context.Context, name string, modelName string) (*Collection, error) {
-	reqBody := createCollectionRequest{
-		Name: name,
-	}
-	if modelName != "" {
-		reqBody.IndexConfiguration = &IndexConfiguration{
-			ModelName: modelName,
+// WithSearchLimit sets the maximum number of results returned.
+func WithSearchLimit(limit int32) DocumentSearchOption {
+	return func(r *documentSearchRequest) {
+		if limit > 0 {
+			r.limit = &limit
 		}
 	}
-
-	data, err := json.Marshal(reqBody)
-	if err != nil {
-		return nil, err
-	}
-
-	var resp Collection
-	if err := c.doRequest(ctx, http.MethodPost, "/v1/collections", bytes.NewReader(data), &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
 }
 
-// ListCollectionsResponse is the response from listing collections.
-type ListCollectionsResponse struct {
-	Collections []Collection `json:"collections"`
-	NextToken   string       `json:"next_token,omitempty"`
+// WithRankingMetric sets the ranking metric for document search.
+func WithRankingMetric(metric xaipb.RankingMetric) DocumentSearchOption {
+	return func(r *documentSearchRequest) {
+		if metric != xaipb.RankingMetric_RANKING_METRIC_UNKNOWN {
+			r.rankingMetric = &metric
+		}
+	}
 }
 
-// List returns collections with optional pagination and ordering.
-func (c *CollectionsClient) List(ctx context.Context, limit int32, order Order, sortBy CollectionSortBy, paginationToken string) (*ListCollectionsResponse, error) {
-	query := make(map[string]string)
+// WithTeamID sets an explicit team id on management requests.
+func WithTeamID(teamID string) collectionsOption {
+	return func(r *collectionsRequest) {
+		if teamID != "" {
+			r.teamID = &teamID
+		}
+	}
+}
+
+func applyCollectionsOptions(opts []collectionsOption) collectionsRequest {
+	r := collectionsRequest{}
+	for _, opt := range opts {
+		opt(&r)
+	}
+	return r
+}
+
+func applyDocumentSearchOptions(opts []DocumentSearchOption) documentSearchRequest {
+	r := documentSearchRequest{}
+	for _, opt := range opts {
+		opt(&r)
+	}
+	return r
+}
+
+// NewCollectionsClient builds a client. managementConn is required for collection mutations.
+func NewCollectionsClient(apiConn, managementConn *grpc.ClientConn) *CollectionsClient {
+	var collections collectionspb.CollectionsClient
+	if managementConn != nil {
+		collections = collectionspb.NewCollectionsClient(managementConn)
+	}
+	return &CollectionsClient{
+		collections: collections,
+		documents:   xaipb.NewDocumentsClient(apiConn),
+	}
+}
+
+// IndexConfig builds an IndexConfiguration with the provided model name.
+func IndexConfig(modelName string) *ragpb.IndexConfiguration {
+	return &ragpb.IndexConfiguration{ModelName: modelName}
+}
+
+// ChunkConfigChars builds a character-based chunk configuration.
+func ChunkConfigChars(maxSize, overlap int32, stripWhitespace, injectName bool) *ragpb.ChunkConfiguration {
+	return &ragpb.ChunkConfiguration{
+		Config: &ragpb.ChunkConfiguration_CharsConfiguration{
+			CharsConfiguration: &ragpb.CharsConfiguration{
+				MaxChunkSizeChars: maxSize,
+				ChunkOverlapChars: overlap,
+			},
+		},
+		StripWhitespace:      stripWhitespace,
+		InjectNameIntoChunks: injectName,
+	}
+}
+
+// ChunkConfigTokens builds a token-based chunk configuration.
+func ChunkConfigTokens(maxTokens, overlapTokens int32, encoding string, stripWhitespace, injectName bool) *ragpb.ChunkConfiguration {
+	return &ragpb.ChunkConfiguration{
+		Config: &ragpb.ChunkConfiguration_TokensConfiguration{
+			TokensConfiguration: &ragpb.TokensConfiguration{
+				MaxChunkSizeTokens: maxTokens,
+				ChunkOverlapTokens: overlapTokens,
+				EncodingName:       encoding,
+			},
+		},
+		StripWhitespace:      stripWhitespace,
+		InjectNameIntoChunks: injectName,
+	}
+}
+
+func (c *CollectionsClient) requireCollectionsStub() error {
+	if c.collections == nil {
+		return errors.New("management API key required for collections operations")
+	}
+	return nil
+}
+
+// Create makes a new collection.
+func (c *CollectionsClient) Create(ctx context.Context, name string, modelName string, chunkCfg *ragpb.ChunkConfiguration, opts ...collectionsOption) (*collectionspb.CollectionMetadata, error) {
+	if err := c.requireCollectionsStub(); err != nil {
+		return nil, err
+	}
+	opt := applyCollectionsOptions(opts)
+	req := &collectionspb.CreateCollectionRequest{CollectionName: name}
+	if modelName != "" {
+		req.IndexConfiguration = &ragpb.IndexConfiguration{ModelName: modelName}
+	}
+	if chunkCfg != nil {
+		req.ChunkConfiguration = chunkCfg
+	}
+	if opt.teamID != nil {
+		req.TeamId = opt.teamID
+	}
+	resp, err := c.collections.CreateCollection(ctx, req)
+	return resp, WrapError(err)
+}
+
+// List collections with optional ordering and pagination.
+func (c *CollectionsClient) List(ctx context.Context, limit int32, order Order, sortBy CollectionSortBy, paginationToken string, opts ...collectionsOption) (*collectionspb.ListCollectionsResponse, error) {
+	if err := c.requireCollectionsStub(); err != nil {
+		return nil, err
+	}
+	opt := applyCollectionsOptions(opts)
+	req := &collectionspb.ListCollectionsRequest{}
 	if limit > 0 {
-		query["limit"] = fmt.Sprintf("%d", limit)
+		req.Limit = &limit
 	}
-	if order != "" {
-		query["order"] = string(order)
+	if ord := orderToShared(order); ord != nil {
+		req.Order = ord
 	}
-	if sortBy != "" {
-		query["sort_by"] = string(sortBy)
+	if sb := collectionSortToProto(sortBy); sb != nil {
+		req.SortBy = sb
+	}
+	if opt.teamID != nil {
+		req.TeamId = opt.teamID
 	}
 	if paginationToken != "" {
-		query["pagination_token"] = paginationToken
+		req.PaginationToken = &paginationToken
 	}
-
-	var resp ListCollectionsResponse
-	if err := c.doRequest(ctx, http.MethodGet, "/v1/collections", nil, &resp, query); err != nil {
-		return nil, err
-	}
-	return &resp, nil
+	resp, err := c.collections.ListCollections(ctx, req)
+	return resp, WrapError(err)
 }
 
 // Get returns collection metadata.
-func (c *CollectionsClient) Get(ctx context.Context, collectionID string) (*Collection, error) {
-	var resp Collection
-	if err := c.doRequest(ctx, http.MethodGet, fmt.Sprintf("/v1/collections/%s", collectionID), nil, &resp); err != nil {
+func (c *CollectionsClient) Get(ctx context.Context, collectionID string, opts ...collectionsOption) (*collectionspb.CollectionMetadata, error) {
+	if err := c.requireCollectionsStub(); err != nil {
 		return nil, err
 	}
-	return &resp, nil
+	opt := applyCollectionsOptions(opts)
+	req := &collectionspb.GetCollectionMetadataRequest{CollectionId: collectionID}
+	if opt.teamID != nil {
+		req.TeamId = opt.teamID
+	}
+	resp, err := c.collections.GetCollectionMetadata(ctx, req)
+	return resp, WrapError(err)
 }
 
-type updateCollectionRequest struct {
-	Name               string              `json:"name,omitempty"`
-	ChunkConfiguration *ChunkConfiguration `json:"chunk_configuration,omitempty"`
-}
-
-// Update changes the name and/or chunk configuration of a collection.
-func (c *CollectionsClient) Update(ctx context.Context, collectionID string, name string) (*Collection, error) {
-	reqBody := updateCollectionRequest{
-		Name: name,
-	}
-	data, err := json.Marshal(reqBody)
-	if err != nil {
+// Update changes name and/or chunk configuration.
+func (c *CollectionsClient) Update(ctx context.Context, collectionID string, name string, chunkCfg *ragpb.ChunkConfiguration, opts ...collectionsOption) (*collectionspb.CollectionMetadata, error) {
+	if err := c.requireCollectionsStub(); err != nil {
 		return nil, err
 	}
-
-	var resp Collection
-	if err := c.doRequest(ctx, http.MethodPatch, fmt.Sprintf("/v1/collections/%s", collectionID), bytes.NewReader(data), &resp); err != nil {
-		return nil, err
+	if name == "" && chunkCfg == nil {
+		return nil, errors.New("either name or chunk configuration must be provided")
 	}
-	return &resp, nil
+	opt := applyCollectionsOptions(opts)
+	req := &collectionspb.UpdateCollectionRequest{
+		CollectionId:       collectionID,
+		CollectionName:     &name,
+		ChunkConfiguration: chunkCfg,
+	}
+	if opt.teamID != nil {
+		req.TeamId = opt.teamID
+	}
+	resp, err := c.collections.UpdateCollection(ctx, req)
+	return resp, WrapError(err)
 }
 
 // Delete removes a collection.
-func (c *CollectionsClient) Delete(ctx context.Context, collectionID string) error {
-	return c.doRequest(ctx, http.MethodDelete, fmt.Sprintf("/v1/collections/%s", collectionID), nil, nil)
+func (c *CollectionsClient) Delete(ctx context.Context, collectionID string, opts ...collectionsOption) error {
+	if err := c.requireCollectionsStub(); err != nil {
+		return err
+	}
+	opt := applyCollectionsOptions(opts)
+	req := &collectionspb.DeleteCollectionRequest{CollectionId: collectionID}
+	if opt.teamID != nil {
+		req.TeamId = opt.teamID
+	}
+	_, err := c.collections.DeleteCollection(ctx, req)
+	return WrapError(err)
 }
 
-// Search performs semantic search across specified collections.
-func (c *CollectionsClient) Search(ctx context.Context, query string, collectionIDs []string, limit int32) (*xaipb.SearchResponse, error) {
+// Search performs semantic search over collections via the Documents service (data plane).
+func (c *CollectionsClient) Search(ctx context.Context, query string, collectionIDs []string, opts ...DocumentSearchOption) (*xaipb.SearchResponse, error) {
+	params := applyDocumentSearchOptions(opts)
 	req := &xaipb.SearchRequest{
-		Query:  query,
+		Query: query,
 		Source: &xaipb.DocumentsSource{
 			CollectionIds: collectionIDs,
 		},
 	}
-	if limit > 0 {
-		req.Limit = &limit
+	if params.limit != nil {
+		req.Limit = params.limit
 	}
-	return c.documents.Search(ctx, req)
+	if params.rankingMetric != nil {
+		req.RankingMetric = params.rankingMetric
+	}
+	resp, err := c.documents.Search(ctx, req)
+	return resp, WrapError(err)
 }
 
-// Document represents a file within a collection.
-type Document struct {
-	ID           string            `json:"file_id"`
-	Name         string            `json:"name"`
-	CollectionID string            `json:"collection_id"`
-	Metadata     map[string]string `json:"metadata,omitempty"`
-	SizeBytes    int64             `json:"size_bytes,omitempty"`
-	Status       string            `json:"status,omitempty"`
-	CreatedAt    int64             `json:"created_at,omitempty"`
-	UpdatedAt    int64             `json:"updated_at,omitempty"`
+// CollectionsSearchTool builds a server-side collections search tool definition for chat requests.
+// This mirrors the helper in tools.go but keeps the collections surface discoverable in one place.
+func (c *CollectionsClient) CollectionsSearchTool(collectionIDs []string, limit int32) *xaipb.Tool {
+	return CollectionsSearchTool(collectionIDs, limit)
 }
 
-// UploadDocument uploads document bytes to a collection.
-func (c *CollectionsClient) UploadDocument(ctx context.Context, collectionID, name string, data []byte, contentType string) (*Document, error) {
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-
-	// Add file
-	h := make(textproto.MIMEHeader)
-	h.Set("Content-Disposition", fmt.Sprintf(`form-data; name="file"; filename="%s"`, name))
-	h.Set("Content-Type", contentType)
-	part, err := writer.CreatePart(h)
-	if err != nil {
+// UploadDocument uploads raw bytes into a collection.
+func (c *CollectionsClient) UploadDocument(ctx context.Context, collectionID, name string, data []byte, contentType string, fields map[string]string, opts ...collectionsOption) (*collectionspb.DocumentMetadata, error) {
+	if err := c.requireCollectionsStub(); err != nil {
 		return nil, err
 	}
-	if _, err := part.Write(data); err != nil {
-		return nil, err
+	opt := applyCollectionsOptions(opts)
+	req := &collectionspb.UploadDocumentRequest{
+		CollectionId: collectionID,
+		Name:         name,
+		Data:         data,
+		ContentType:  contentType,
+		Fields:       fields,
 	}
-
-	if err := writer.Close(); err != nil {
-		return nil, err
+	if opt.teamID != nil {
+		req.TeamId = opt.teamID
 	}
-
-	var resp Document
-	if err := c.doRequestWithHeaders(ctx, http.MethodPost, fmt.Sprintf("/v1/collections/%s/documents", collectionID), body, &resp, map[string]string{
-		"Content-Type": writer.FormDataContentType(),
-	}); err != nil {
-		return nil, err
-	}
-	return &resp, nil
+	resp, err := c.collections.UploadDocument(ctx, req)
+	return resp, WrapError(err)
 }
 
-// ListDocumentsResponse is the response from listing documents in a collection.
-type ListDocumentsResponse struct {
-	Documents []Document `json:"documents"`
-	NextToken string     `json:"next_token,omitempty"`
+// AddExistingDocument attaches an existing file to a collection.
+func (c *CollectionsClient) AddExistingDocument(ctx context.Context, collectionID, fileID string, fields map[string]string, opts ...collectionsOption) error {
+	if err := c.requireCollectionsStub(); err != nil {
+		return err
+	}
+	opt := applyCollectionsOptions(opts)
+	req := &collectionspb.AddDocumentToCollectionRequest{
+		CollectionId: collectionID,
+		FileId:       fileID,
+		Fields:       fields,
+	}
+	if opt.teamID != nil {
+		req.TeamId = opt.teamID
+	}
+	_, err := c.collections.AddDocumentToCollection(ctx, req)
+	return WrapError(err)
 }
 
 // ListDocuments returns documents within a collection.
-func (c *CollectionsClient) ListDocuments(ctx context.Context, collectionID string, limit int32, order Order, sortBy DocumentSortBy, paginationToken string) (*ListDocumentsResponse, error) {
-	query := make(map[string]string)
+func (c *CollectionsClient) ListDocuments(ctx context.Context, collectionID string, limit int32, order Order, sortBy DocumentSortBy, paginationToken string, opts ...collectionsOption) (*collectionspb.ListDocumentsResponse, error) {
+	if err := c.requireCollectionsStub(); err != nil {
+		return nil, err
+	}
+	opt := applyCollectionsOptions(opts)
+	req := &collectionspb.ListDocumentsRequest{CollectionId: collectionID}
 	if limit > 0 {
-		query["limit"] = fmt.Sprintf("%d", limit)
+		req.Limit = &limit
 	}
-	if order != "" {
-		query["order"] = string(order)
+	if ord := orderToShared(order); ord != nil {
+		req.Order = ord
 	}
-	if sortBy != "" {
-		query["sort_by"] = string(sortBy)
+	if sb := documentSortToProto(sortBy); sb != nil {
+		req.SortBy = sb
+	}
+	if opt.teamID != nil {
+		req.TeamId = opt.teamID
 	}
 	if paginationToken != "" {
-		query["pagination_token"] = paginationToken
+		req.PaginationToken = &paginationToken
 	}
-
-	var resp ListDocumentsResponse
-	if err := c.doRequest(ctx, http.MethodGet, fmt.Sprintf("/v1/collections/%s/documents", collectionID), nil, &resp, query); err != nil {
-		return nil, err
-	}
-	return &resp, nil
+	resp, err := c.collections.ListDocuments(ctx, req)
+	return resp, WrapError(err)
 }
 
-// GetDocument fetches document metadata.
-func (c *CollectionsClient) GetDocument(ctx context.Context, collectionID, fileID string) (*Document, error) {
-	var resp Document
-	if err := c.doRequest(ctx, http.MethodGet, fmt.Sprintf("/v1/collections/%s/documents/%s", collectionID, fileID), nil, &resp); err != nil {
+// GetDocument returns metadata for a file within a collection.
+func (c *CollectionsClient) GetDocument(ctx context.Context, collectionID, fileID string, opts ...collectionsOption) (*collectionspb.DocumentMetadata, error) {
+	if err := c.requireCollectionsStub(); err != nil {
 		return nil, err
 	}
-	return &resp, nil
+	opt := applyCollectionsOptions(opts)
+	req := &collectionspb.GetDocumentMetadataRequest{CollectionId: collectionID, FileId: fileID}
+	if opt.teamID != nil {
+		req.TeamId = opt.teamID
+	}
+	resp, err := c.collections.GetDocumentMetadata(ctx, req)
+	return resp, WrapError(err)
+}
+
+// BatchGetDocuments fetches metadata for multiple documents.
+func (c *CollectionsClient) BatchGetDocuments(ctx context.Context, collectionID string, fileIDs []string, opts ...collectionsOption) (*collectionspb.BatchGetDocumentsResponse, error) {
+	if err := c.requireCollectionsStub(); err != nil {
+		return nil, err
+	}
+	opt := applyCollectionsOptions(opts)
+	req := &collectionspb.BatchGetDocumentsRequest{
+		CollectionId: collectionID,
+		FileIds:      fileIDs,
+	}
+	if opt.teamID != nil {
+		req.TeamId = opt.teamID
+	}
+	resp, err := c.collections.BatchGetDocuments(ctx, req)
+	return resp, WrapError(err)
 }
 
 // RemoveDocument detaches a document from a collection.
-func (c *CollectionsClient) RemoveDocument(ctx context.Context, collectionID, fileID string) error {
-	return c.doRequest(ctx, http.MethodDelete, fmt.Sprintf("/v1/collections/%s/documents/%s", collectionID, fileID), nil, nil)
-}
-
-func (c *CollectionsClient) doRequest(ctx context.Context, method, path string, body io.Reader, result any, queryParams ...map[string]string) error {
-	return c.doRequestWithHeaders(ctx, method, path, body, result, nil, queryParams...)
-}
-
-func (c *CollectionsClient) doRequestWithHeaders(ctx context.Context, method, path string, body io.Reader, result any, headers map[string]string, queryParams ...map[string]string) error {
-	url := c.baseURL + path
-	req, err := http.NewRequestWithContext(ctx, method, url, body)
-	if err != nil {
+func (c *CollectionsClient) RemoveDocument(ctx context.Context, collectionID, fileID string, opts ...collectionsOption) error {
+	if err := c.requireCollectionsStub(); err != nil {
 		return err
 	}
-
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
-	if headers != nil {
-		for k, v := range headers {
-			req.Header.Set(k, v)
-		}
-	} else if body != nil {
-		req.Header.Set("Content-Type", "application/json")
+	opt := applyCollectionsOptions(opts)
+	req := &collectionspb.RemoveDocumentFromCollectionRequest{
+		CollectionId: collectionID,
+		FileId:       fileID,
 	}
-
-	if len(queryParams) > 0 {
-		q := req.URL.Query()
-		for _, params := range queryParams {
-			for k, v := range params {
-				q.Set(k, v)
-			}
-		}
-		req.URL.RawQuery = q.Encode()
+	if opt.teamID != nil {
+		req.TeamId = opt.teamID
 	}
+	_, err := c.collections.RemoveDocumentFromCollection(ctx, req)
+	return WrapError(err)
+}
 
-	resp, err := c.client.Do(req)
-	if err != nil {
+// UpdateDocument updates a document's data/metadata.
+func (c *CollectionsClient) UpdateDocument(ctx context.Context, collectionID, fileID, name string, data []byte, contentType string, fields map[string]string, opts ...collectionsOption) (*collectionspb.DocumentMetadata, error) {
+	if err := c.requireCollectionsStub(); err != nil {
+		return nil, err
+	}
+	opt := applyCollectionsOptions(opts)
+	req := &collectionspb.UpdateDocumentRequest{
+		CollectionId: collectionID,
+		FileId:       fileID,
+		Fields:       fields,
+	}
+	if opt.teamID != nil {
+		req.TeamId = opt.teamID
+	}
+	if name != "" {
+		req.Name = &name
+	}
+	if len(data) > 0 {
+		req.Data = data
+	}
+	if contentType != "" {
+		req.ContentType = &contentType
+	}
+	resp, err := c.collections.UpdateDocument(ctx, req)
+	return resp, WrapError(err)
+}
+
+// ReindexDocument reprocesses a document after config changes.
+func (c *CollectionsClient) ReindexDocument(ctx context.Context, collectionID, fileID string, opts ...collectionsOption) error {
+	if err := c.requireCollectionsStub(); err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody))
+	opt := applyCollectionsOptions(opts)
+	req := &collectionspb.ReIndexDocumentRequest{CollectionId: collectionID, FileId: fileID}
+	if opt.teamID != nil {
+		req.TeamId = opt.teamID
 	}
+	_, err := c.collections.ReIndexDocument(ctx, req)
+	return WrapError(err)
+}
 
-	if result != nil {
-		if err := json.NewDecoder(resp.Body).Decode(result); err != nil {
-			return err
-		}
+func collectionSortToProto(sort CollectionSortBy) *collectionspb.CollectionsSortBy {
+	var v collectionspb.CollectionsSortBy
+	switch sort {
+	case CollectionSortByAge:
+		v = collectionspb.CollectionsSortBy_COLLECTIONS_SORT_BY_AGE
+	case CollectionSortByName:
+		fallthrough
+	default:
+		v = collectionspb.CollectionsSortBy_COLLECTIONS_SORT_BY_NAME
 	}
+	return &v
+}
 
-	return nil
+func documentSortToProto(sort DocumentSortBy) *collectionspb.DocumentsSortBy {
+	var v collectionspb.DocumentsSortBy
+	switch sort {
+	case DocumentSortByAge:
+		v = collectionspb.DocumentsSortBy_DOCUMENTS_SORT_BY_AGE
+	case DocumentSortBySize:
+		v = collectionspb.DocumentsSortBy_DOCUMENTS_SORT_BY_SIZE
+	case DocumentSortByName:
+		fallthrough
+	default:
+		v = collectionspb.DocumentsSortBy_DOCUMENTS_SORT_BY_NAME
+	}
+	return &v
+}
+
+func orderToShared(o Order) *sharedpb.Ordering {
+	var v sharedpb.Ordering
+	switch o {
+	case OrderAscending:
+		v = sharedpb.Ordering_ORDERING_ASCENDING
+	case OrderDescending:
+		v = sharedpb.Ordering_ORDERING_DESCENDING
+	default:
+		return nil
+	}
+	return &v
+}
+
+// ValidateOrder ensures incoming order strings match expected values.
+func ValidateOrder(order Order) error {
+	switch order {
+	case "", OrderAscending, OrderDescending:
+		return nil
+	default:
+		return fmt.Errorf("invalid order %q", order)
+	}
 }

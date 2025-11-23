@@ -49,6 +49,7 @@ type Client struct {
 	Models      *ModelsClient
 	Sampler     *SamplerClient
 	Tokenizer   *TokenizerClient
+	Files       *FilesClient
 }
 
 // NewClient creates a new xAI API client with optional configuration.
@@ -107,6 +108,9 @@ func NewClient(ctx context.Context, apiKey string, optFns ...ClientOption) (*Cli
 		Tokenizer: &TokenizerClient{
 			tokenize: xaipb.NewTokenizeClient(apiConn),
 		},
+		Files: &FilesClient{
+			files: xaipb.NewFilesClient(apiConn),
+		},
 	}
 
 	if mgmtConn != nil {
@@ -115,7 +119,7 @@ func NewClient(ctx context.Context, apiKey string, optFns ...ClientOption) (*Cli
 		}
 	}
 
-	client.Collections = NewCollectionsClient(apiConn, opts.managementKey, "https://"+opts.managementHost)
+	client.Collections = NewCollectionsClient(apiConn, mgmtConn)
 
 	return client, nil
 }

@@ -30,3 +30,11 @@ func TestSearchParametersProto(t *testing.T) {
 		t.Fatalf("web source missing")
 	}
 }
+
+func TestDocumentsSource(t *testing.T) {
+	ids := []string{"c1", "c2"}
+	s := DocumentsSource(ids)
+	if got := s.GetCollectionIds(); len(got) != 2 || got[0] != "c1" || got[1] != "c2" {
+		t.Fatalf("collection ids not set: %+v", got)
+	}
+}

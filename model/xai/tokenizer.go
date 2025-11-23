@@ -29,10 +29,14 @@ type TokenizerClient struct {
 
 // Tokenize converts text into tokens using the specified model.
 func (c *TokenizerClient) Tokenize(ctx context.Context, text string, model string) (*xaipb.TokenizeTextResponse, error) {
-	return c.tokenize.TokenizeText(ctx, &xaipb.TokenizeTextRequest{
+	resp, err := c.tokenize.TokenizeText(ctx, &xaipb.TokenizeTextRequest{
 		Text:  text,
 		Model: model,
 	})
+	if err != nil {
+		return nil, WrapError(err)
+	}
+	return resp, nil
 }
 
 // TokenizeText is an alias for Tokenize for parity with the Python SDK.

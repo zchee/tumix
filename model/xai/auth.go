@@ -31,5 +31,9 @@ type AuthClient struct {
 
 // GetAPIKeyInfo returns metadata for the current API key.
 func (c *AuthClient) GetAPIKeyInfo(ctx context.Context) (*xaipb.ApiKey, error) {
-	return c.auth.GetApiKeyInfo(ctx, &emptypb.Empty{})
+	resp, err := c.auth.GetApiKeyInfo(ctx, &emptypb.Empty{})
+	if err != nil {
+		return nil, WrapError(err)
+	}
+	return resp, nil
 }

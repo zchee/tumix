@@ -120,6 +120,11 @@ func RSSSource(links []string) *xaipb.Source {
 	}
 }
 
+// DocumentsSource builds a documents source for semantic search over collections.
+func DocumentsSource(collectionIDs []string) *xaipb.DocumentsSource {
+	return &xaipb.DocumentsSource{CollectionIds: collectionIDs}
+}
+
 func searchModeToProto(mode SearchMode) xaipb.SearchMode {
 	switch mode {
 	case SearchModeOn:

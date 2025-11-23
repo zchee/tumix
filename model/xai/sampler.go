@@ -29,7 +29,11 @@ type SamplerClient struct {
 
 // SampleText performs a unary sampling request.
 func (c *SamplerClient) SampleText(ctx context.Context, req *xaipb.SampleTextRequest) (*xaipb.SampleTextResponse, error) {
-	return c.sample.SampleText(ctx, req)
+	resp, err := c.sample.SampleText(ctx, req)
+	if err != nil {
+		return nil, WrapError(err)
+	}
+	return resp, nil
 }
 
 // SampleTextStreaming opens a server-streaming sampling request.

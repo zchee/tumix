@@ -79,7 +79,7 @@ func (c *ImageClient) SampleBatch(ctx context.Context, prompt, model string, n i
 
 	resp, err := c.image.GenerateImage(ctx, req)
 	if err != nil {
-		return nil, err
+		return nil, WrapError(err)
 	}
 	images := make([]*ImageResponse, len(resp.Images))
 	for i := range resp.Images {

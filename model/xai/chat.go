@@ -21,6 +21,7 @@ import (
 	json "encoding/json/v2"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -182,6 +183,37 @@ func WithResponseFormat(format *xaipb.ResponseFormat) ChatOption {
 	return func(req *xaipb.GetCompletionsRequest, _ *ChatSession) { req.ResponseFormat = format }
 }
 
+// WithJSONSchema sets a JSON schema string for structured outputs.
+func WithJSONSchema(schema string) ChatOption {
+	return func(req *xaipb.GetCompletionsRequest, _ *ChatSession) {
+		req.ResponseFormat = &xaipb.ResponseFormat{
+			FormatType: xaipb.FormatType_FORMAT_TYPE_JSON_SCHEMA,
+			Schema:     &schema,
+		}
+	}
+}
+
+// WithJSONStruct derives a JSON Schema from the generic type T (pointer recommended) for structured outputs.
+func WithJSONStruct[T any]() ChatOption {
+	return func(req *xaipb.GetCompletionsRequest, _ *ChatSession) {
+		var zero T
+		refl := &jsonschema.Reflector{}
+		schema := refl.Reflect(zero)
+		if schema == nil {
+			return
+		}
+		b, err := json.Marshal(schema)
+		if err != nil {
+			return
+		}
+		s := string(b)
+		req.ResponseFormat = &xaipb.ResponseFormat{
+			FormatType: xaipb.FormatType_FORMAT_TYPE_JSON_SCHEMA,
+			Schema:     &s,
+		}
+	}
+}
+
 // WithFrequencyPenalty sets the frequency penalty.
 func WithFrequencyPenalty(v float32) ChatOption {
 	return func(req *xaipb.GetCompletionsRequest, _ *ChatSession) {
@@ -254,6 +286,30 @@ func (s *ChatSession) Append(message any) *ChatSession {
 	return s
 }
 
+// AppendToolResultJSON appends a tool result message with JSON payload (string or marshalled value).
+// toolCallID is optional; if empty, it is omitted because the proto does not carry it.
+func (s *ChatSession) AppendToolResultJSON(toolCallID string, result any) *ChatSession {
+	var payload string
+	switch v := result.(type) {
+	case string:
+		payload = v
+	default:
+		b, err := json.Marshal(v)
+		if err != nil {
+			panic(err)
+		}
+		payload = string(b)
+	}
+	msg := &xaipb.Message{
+		Role:    xaipb.MessageRole_ROLE_TOOL,
+		Content: []*xaipb.Content{TextContent(payload)},
+	}
+	// toolCallID currently not represented in proto; retained parameter for forward compatibility
+	_ = toolCallID
+	return s.Append(msg)
+}
+
+
 // Messages returns the current conversation history.
 func (s *ChatSession) Messages() []*xaipb.Message { return s.request.Messages }
 
@@ -303,14 +359,15 @@ func (s *ChatSession) Stream(ctx context.Context) (*ChatStream, error) {
 	// For now, we just start it and let the user manage context or rely on garbage collection (not ideal).
 	// Better: ChatStream should hold the span and End() it when stream is exhausted or error occurs.
 
-	stream, err := s.streamN(ctx, 1)
-	if err != nil {
-		span.RecordError(err)
-		span.End()
-		return nil, err
-	}
-	stream.span = span
-	return stream, nil
+stream, err := s.streamN(ctx, 1)
+if err != nil {
+	span.RecordError(err)
+	span.End()
+	return nil, err
+}
+stream.span = span
+stream.ctx = ctx
+return stream, nil
 }
 
 // StreamBatch returns a streaming iterator for multiple responses.
@@ -320,14 +377,15 @@ func (s *ChatSession) StreamBatch(ctx context.Context, n int) (*ChatStream, erro
 		trace.WithAttributes(s.makeSpanRequestAttributes()...),
 	)
 
-	stream, err := s.streamN(ctx, n)
-	if err != nil {
-		span.RecordError(err)
-		span.End()
-		return nil, err
-	}
-	stream.span = span
-	return stream, nil
+stream, err := s.streamN(ctx, n)
+if err != nil {
+	span.RecordError(err)
+	span.End()
+	return nil, err
+}
+stream.span = span
+stream.ctx = ctx
+return stream, nil
 }
 
 // Defer executes the request using deferred polling.
@@ -373,12 +431,21 @@ func (s *ChatSession) Parse(ctx context.Context, out any) (*Response, error) {
 	if err != nil {
 		return nil, err
 	}
+	if s.request.ResponseFormat != nil && s.request.ResponseFormat.GetFormatType() == xaipb.FormatType_FORMAT_TYPE_JSON_SCHEMA {
+		// allow caller to override schema via options; don't overwrite
+		return s.parseWithRequest(ctx, out, proto.Clone(s.request).(*xaipb.GetCompletionsRequest))
+	}
 	schemaStr := string(schemaBytes)
 	req := proto.Clone(s.request).(*xaipb.GetCompletionsRequest)
 	req.ResponseFormat = &xaipb.ResponseFormat{
 		FormatType: xaipb.FormatType_FORMAT_TYPE_JSON_SCHEMA,
 		Schema:     &schemaStr,
 	}
+	return s.parseWithRequest(ctx, out, req)
+}
+
+// parseWithRequest executes a parse with the provided request.
+func (s *ChatSession) parseWithRequest(ctx context.Context, out any, req *xaipb.GetCompletionsRequest) (*Response, error) {
 
 	ctx, span := tracer.Start(ctx, fmt.Sprintf("chat.parse %s", s.request.Model),
 		trace.WithSpanKind(trace.SpanKindClient),
@@ -397,6 +464,13 @@ func (s *ChatSession) Parse(ctx context.Context, out any) (*Response, error) {
 		return resp, err
 	}
 	return resp, nil
+}
+
+// ParseInto is a generic convenience for structured outputs into type T.
+func ParseInto[T any](ctx context.Context, s *ChatSession) (*Response, *T, error) {
+	var out T
+	resp, err := s.Parse(ctx, &out)
+	return resp, &out, err
 }
 
 func (s *ChatSession) sampleN(ctx context.Context, n int) ([]*Response, error) {
@@ -456,7 +530,7 @@ func (s *ChatSession) deferN(ctx context.Context, n int, timeout, interval time.
 	}
 	startResp, err := s.stub.StartDeferredCompletion(ctx, req)
 	if err != nil {
-		return nil, err
+		return nil, WrapError(err)
 	}
 	deadline := time.Now().Add(timeout)
 	for {
@@ -467,7 +541,7 @@ func (s *ChatSession) deferN(ctx context.Context, n int, timeout, interval time.
 			RequestId: startResp.RequestId,
 		})
 		if err != nil {
-			return nil, err
+			return nil, WrapError(err)
 		}
 		switch res.Status {
 		case xaipb.DeferredStatus_DONE:
@@ -485,7 +559,7 @@ func (s *ChatSession) deferN(ctx context.Context, n int, timeout, interval time.
 func (s *ChatSession) invokeCompletion(ctx context.Context, req *xaipb.GetCompletionsRequest) (*Response, error) {
 	resp, err := s.stub.GetCompletion(ctx, req)
 	if err != nil {
-		return nil, err
+		return nil, WrapError(err)
 	}
 	index := 0
 	if usesServerSideTools(req.Tools) {
@@ -643,6 +717,22 @@ type ChatStream struct {
 	response           *Response
 	span               trace.Span
 	firstChunkReceived bool
+	ctx                context.Context
+}
+
+// Close closes the underlying stream and ends the span if present.
+// It is safe to call multiple times.
+func (s *ChatStream) Close() error {
+	var err error
+	if s.stream != nil {
+		err = s.stream.CloseSend()
+		s.stream = nil
+	}
+	if s.span != nil {
+		s.span.End()
+		s.span = nil
+	}
+	return err
 }
 
 // Recv returns the next chunk and the aggregated response.
@@ -652,31 +742,22 @@ func (s *ChatStream) Recv() (*Response, *Chunk, error) {
 	chunk, err := s.stream.Recv()
 	if err != nil {
 		if s.span != nil {
-			if err.Error() != "EOF" { // Use io.EOF check ideally, but string check for now or io package
+			if !errors.Is(err, io.EOF) {
 				s.span.RecordError(err)
 			} else {
-				// Stream finished successfully
-				if s.span != nil {
-					// We can set response attributes here if we accumulated the full response in s.response
-					// But makeSpanResponseAttributes needs access to session or just use manual logic
-					// Here we just set what we have in s.response
-					// Note: s.response is accumulating content.
-					// Replicating makeSpanResponseAttributes logic for single response:
-
-					usage := s.response.Usage()
-					if usage != nil {
-						s.span.SetAttributes(
-							attribute.Int("gen_ai.usage.input_tokens", int(usage.PromptTokens)),
-							attribute.Int("gen_ai.usage.output_tokens", int(usage.CompletionTokens)),
-							attribute.Int("gen_ai.usage.total_tokens", int(usage.TotalTokens)),
-						)
-					}
+				usage := s.response.Usage()
+				if usage != nil {
 					s.span.SetAttributes(
-						attribute.String("gen_ai.response.id", s.response.proto.Id),
-						attribute.String("gen_ai.response.model", s.response.proto.Model),
-						attribute.String("gen_ai.response.finish_reasons", s.response.FinishReason()),
+						attribute.Int("gen_ai.usage.input_tokens", int(usage.PromptTokens)),
+						attribute.Int("gen_ai.usage.output_tokens", int(usage.CompletionTokens)),
+						attribute.Int("gen_ai.usage.total_tokens", int(usage.TotalTokens)),
 					)
 				}
+				s.span.SetAttributes(
+					attribute.String("gen_ai.response.id", s.response.proto.Id),
+					attribute.String("gen_ai.response.model", s.response.proto.Model),
+					attribute.String("gen_ai.response.finish_reasons", s.response.FinishReason()),
+				)
 			}
 			s.span.End()
 		}
@@ -727,6 +808,12 @@ func (r *Response) Content() string {
 		return out.Message.Content
 	}
 	return ""
+}
+
+// DecodeJSON unmarshals the response content into the provided destination.
+// Useful when using structured outputs or JSON response_format.
+func (r *Response) DecodeJSON(out any) error {
+	return json.Unmarshal([]byte(r.Content()), out)
 }
 
 // ReasoningContent returns any reasoning trace text.
@@ -979,6 +1066,12 @@ func TextContent(text string) *xaipb.Content {
 	}
 }
 
+// FileContentWithName references an uploaded file and provides a display name.
+func FileContentWithName(fileID, name string) *xaipb.Content {
+	_ = name // name not supported in current proto; kept for parity but ignored
+	return FileContent(fileID)
+}
+
 // ImageContent creates an image content entry with optional detail.
 func ImageContent(url string, detail xaipb.ImageDetail) *xaipb.Content {
 	return &xaipb.Content{Content: &xaipb.Content_ImageUrl{
@@ -989,13 +1082,11 @@ func ImageContent(url string, detail xaipb.ImageDetail) *xaipb.Content {
 	}}
 }
 
-// FileContent references an uploaded file.
+// FileContent references an uploaded file (id only).
 func FileContent(fileID string) *xaipb.Content {
 	return &xaipb.Content{
 		Content: &xaipb.Content_File{
-			File: &xaipb.FileContent{
-				FileId: fileID,
-			},
+			File: &xaipb.FileContent{FileId: fileID},
 		},
 	}
 }
@@ -1063,6 +1154,13 @@ func appendToBuilder(m map[int]*strings.Builder, idx int, s string) {
 		m[idx] = b
 	}
 	b.WriteString(s)
+}
+
+func captionPtr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 func splitResponses(resp *xaipb.GetChatCompletionResponse, n int) []*Response {

@@ -10,10 +10,10 @@ This package is a Go language port of the [xai-org/xai-sdk-python]. It provides 
 - `client.go`: Main `Client` implementation.
 - `chat.go`: Chat API client.
 - `models.go`: Models API client.
-- `files.go`: Files API client.
+- `files.go`: Files API client (upload/download/list/delete, signed URLs, progress, batch).
 - `image.go`: Image API client.
 - `tokenizer.go`: Tokenizer API client.
-- `collections.go`: Collections/document management (management API).
+- `collections.go`: Collections/document management (management gRPC + data-plane search).
 - `tools.go`: Helpers for model/tool calling and search sources.
 
 ## Usage
@@ -90,3 +90,14 @@ go test ./...
 ```
 
 [xai-org/xai-sdk-python]: https://github.com/xai-org/xai-sdk-python
+
+### Structured Outputs
+
+Use `WithJSONStruct[T]` or `WithJSONSchema` to request JSON-formatted replies and `ParseInto[T]` / `Response.DecodeJSON` to decode them.
+
+### Telemetry
+
+Configure OTLP exporting with `InitOTLP(ctx, OTLPConfig{Endpoint: "collector:4318", Transport: xai.OTLPHTTP, Insecure: true})`; default resource attrs include `service.name=xai-sdk-go` and your build version.
+
+### Tool calling caveat
+The current chat proto does **not** include a `tool_call_id` on `ROLE_TOOL` messages, so tool results cannot be automatically threaded to a specific call. Until the proto is updated, include the tool call id in your own payload (e.g., JSON content `{"tool_call_id":..., ...}`) and handle correlation client-side. Helpers such as `ToolCallArguments` remain safe for parsing call inputs.

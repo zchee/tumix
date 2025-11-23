@@ -29,7 +29,11 @@ type EmbedClient struct {
 
 // Create generates embeddings for the provided inputs.
 func (c *EmbedClient) Create(ctx context.Context, req *xaipb.EmbedRequest) (*xaipb.EmbedResponse, error) {
-	return c.embedder.Embed(ctx, req)
+	resp, err := c.embedder.Embed(ctx, req)
+	if err != nil {
+		return nil, WrapError(err)
+	}
+	return resp, nil
 }
 
 // CreateStrings generates embeddings for a list of text strings.

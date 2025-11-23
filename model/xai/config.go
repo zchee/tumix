@@ -19,6 +19,7 @@ package xai
 import (
 	"maps"
 	"runtime"
+	"runtime/debug"
 	"time"
 
 	"google.golang.org/grpc"
@@ -30,7 +31,7 @@ const (
 	// DefaultManagementAPIHost is the default host for the management API.
 	DefaultManagementAPIHost               = "management-api.x.ai:443"
 	defaultMaxMessageBytes   int           = 20 << 20 // 20 MiB
-	defaultTimeout           time.Duration = 27 * time.Minute
+	defaultTimeout           time.Duration = 15 * time.Minute
 )
 
 // ClientOption configures the xAI client.
@@ -52,12 +53,23 @@ func defaultClientOptions() *clientOptions {
 		apiHost:        DefaultAPIHost,
 		managementHost: DefaultManagementAPIHost,
 		metadata: map[string]string{
-			"xai-sdk-version":  "go/dev", // SDK version placeholder
+			"xai-sdk-version":  "go/" + sdkVersion(),
 			"xai-sdk-language": "go/" + runtime.Version(),
 		},
 		timeout: defaultTimeout,
 	}
 }
+
+// sdkVersion attempts to infer the module version from build info; falls back to "dev".
+func sdkVersion() string {
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return info.Main.Version
+	}
+	return "dev"
+}
+
+// SDKVersion returns the detected SDK version string (without the go/ prefix).
+func SDKVersion() string { return sdkVersion() }
 
 // WithAPIKey sets the API key used for the data plane.
 func WithAPIKey(key string) ClientOption {
@@ -95,6 +107,16 @@ func WithManagementAPIHost(host string) ClientOption {
 func WithMetadata(md map[string]string) ClientOption {
 	return func(o *clientOptions) {
 		maps.Copy(o.metadata, md)
+	}
+}
+
+// WithSDKVersion overrides the reported SDK version (xai-sdk-version metadata value).
+// Useful for integration tests or custom builds.
+func WithSDKVersion(version string) ClientOption {
+	return func(o *clientOptions) {
+		if version != "" {
+			o.metadata["xai-sdk-version"] = "go/" + version
+		}
 	}
 }
 
