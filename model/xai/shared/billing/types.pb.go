@@ -724,9 +724,9 @@ const file_xai_shared_billing_types_proto_rawDesc = "" +
 	"\x12\v\n" +
 	"\aCASHAPP\x10\x14\x12\b\n" +
 	"\x04LINK\x10\x1e\x12\x13\n" +
-	"\x0fUS_BANK_ACCOUNT\x10(B\xa2\x01\n" +
+	"\x0fUS_BANK_ACCOUNT\x10(B\x9b\x01\n" +
 	"\x10com.prod_chargerB\n" +
-	"TypesProtoP\x01Z6github.com/zchee/tumix/model/xai/pb/xai/shared/billing\xa2\x02\x03PXX\xaa\x02\vProdCharger\xca\x02\vProdCharger\xe2\x02\x17ProdCharger\\GPBMetadata\xea\x02\vProdChargerb\x06proto3"
+	"TypesProtoP\x01Z/github.com/zchee/tumix/model/xai/shared/billing\xa2\x02\x03PXX\xaa\x02\vProdCharger\xca\x02\vProdCharger\xe2\x02\x17ProdCharger\\GPBMetadata\xea\x02\vProdChargerb\x06proto3"
 
 var (
 	file_xai_shared_billing_types_proto_rawDescOnce sync.Once

@@ -194,8 +194,8 @@ const file_xai_api_v1_auth_proto_rawDesc = "" +
 	"\fteam_blocked\x18\r \x01(\bR\vteamBlocked\x12\x1a\n" +
 	"\bdisabled\x18\f \x01(\bR\bdisabled2E\n" +
 	"\x04Auth\x12=\n" +
-	"\x10get_api_key_info\x12\x16.google.protobuf.Empty\x1a\x0f.xai_api.ApiKey\"\x00B\x80\x01\n" +
-	"\vcom.xai_apiB\tAuthProtoP\x01Z.github.com/zchee/tumix/model/xai/pb/xai/api/v1\xa2\x02\x03XXX\xaa\x02\x06XaiApi\xca\x02\x06XaiApi\xe2\x02\x12XaiApi\\GPBMetadata\xea\x02\x06XaiApib\x06proto3"
+	"\x10get_api_key_info\x12\x16.google.protobuf.Empty\x1a\x0f.xai_api.ApiKey\"\x00By\n" +
+	"\vcom.xai_apiB\tAuthProtoP\x01Z'github.com/zchee/tumix/model/xai/api/v1\xa2\x02\x03XXX\xaa\x02\x06XaiApi\xca\x02\x06XaiApi\xe2\x02\x12XaiApi\\GPBMetadata\xea\x02\x06XaiApib\x06proto3"
 
 var (
 	file_xai_api_v1_auth_proto_rawDescOnce sync.Once

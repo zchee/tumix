@@ -943,8 +943,8 @@ const file_xai_shared_analytics_analytics_proto_rawDesc = "" +
 	"\x10AGGREGATION_P999\x10\n" +
 	"\x12\x15\n" +
 	"\x11AGGREGATION_COUNT\x10\v\x12\x1e\n" +
-	"\x1aAGGREGATION_COUNT_DISTINCT\x10\fB\xea\x01\n" +
-	"\x1dcom.prod.clickhouse_analyticsB\x0eAnalyticsProtoP\x01Z8github.com/zchee/tumix/model/xai/pb/xai/shared/analytics\xa2\x02\x03PCX\xaa\x02\x18Prod.ClickhouseAnalytics\xca\x02\x18Prod\\ClickhouseAnalytics\xe2\x02$Prod\\ClickhouseAnalytics\\GPBMetadata\xea\x02\x19Prod::ClickhouseAnalyticsb\x06proto3"
+	"\x1aAGGREGATION_COUNT_DISTINCT\x10\fB\xe3\x01\n" +
+	"\x1dcom.prod.clickhouse_analyticsB\x0eAnalyticsProtoP\x01Z1github.com/zchee/tumix/model/xai/shared/analytics\xa2\x02\x03PCX\xaa\x02\x18Prod.ClickhouseAnalytics\xca\x02\x18Prod\\ClickhouseAnalytics\xe2\x02$Prod\\ClickhouseAnalytics\\GPBMetadata\xea\x02\x19Prod::ClickhouseAnalyticsb\x06proto3"
 
 var (
 	file_xai_shared_analytics_analytics_proto_rawDescOnce sync.Once

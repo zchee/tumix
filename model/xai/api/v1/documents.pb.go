@@ -368,8 +368,8 @@ const file_xai_api_v1_documents_proto_rawDesc = "" +
 	"\x1aRANKING_METRIC_L2_DISTANCE\x10\x01\x12$\n" +
 	" RANKING_METRIC_COSINE_SIMILARITY\x10\x022H\n" +
 	"\tDocuments\x12;\n" +
-	"\x06Search\x12\x16.xai_api.SearchRequest\x1a\x17.xai_api.SearchResponse\"\x00B\x85\x01\n" +
-	"\vcom.xai_apiB\x0eDocumentsProtoP\x01Z.github.com/zchee/tumix/model/xai/pb/xai/api/v1\xa2\x02\x03XXX\xaa\x02\x06XaiApi\xca\x02\x06XaiApi\xe2\x02\x12XaiApi\\GPBMetadata\xea\x02\x06XaiApib\x06proto3"
+	"\x06Search\x12\x16.xai_api.SearchRequest\x1a\x17.xai_api.SearchResponse\"\x00B~\n" +
+	"\vcom.xai_apiB\x0eDocumentsProtoP\x01Z'github.com/zchee/tumix/model/xai/api/v1\xa2\x02\x03XXX\xaa\x02\x06XaiApi\xca\x02\x06XaiApi\xe2\x02\x12XaiApi\\GPBMetadata\xea\x02\x06XaiApib\x06proto3"
 
 var (
 	file_xai_api_v1_documents_proto_rawDescOnce sync.Once

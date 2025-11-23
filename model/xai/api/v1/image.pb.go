@@ -489,9 +489,9 @@ const file_xai_api_v1_image_proto_rawDesc = "" +
 	"\x11IMG_FORMAT_BASE64\x10\x01\x12\x12\n" +
 	"\x0eIMG_FORMAT_URL\x10\x022Q\n" +
 	"\x05Image\x12H\n" +
-	"\rGenerateImage\x12\x1d.xai_api.GenerateImageRequest\x1a\x16.xai_api.ImageResponse\"\x00B\x81\x01\n" +
+	"\rGenerateImage\x12\x1d.xai_api.GenerateImageRequest\x1a\x16.xai_api.ImageResponse\"\x00Bz\n" +
 	"\vcom.xai_apiB\n" +
-	"ImageProtoP\x01Z.github.com/zchee/tumix/model/xai/pb/xai/api/v1\xa2\x02\x03XXX\xaa\x02\x06XaiApi\xca\x02\x06XaiApi\xe2\x02\x12XaiApi\\GPBMetadata\xea\x02\x06XaiApib\x06proto3"
+	"ImageProtoP\x01Z'github.com/zchee/tumix/model/xai/api/v1\xa2\x02\x03XXX\xaa\x02\x06XaiApi\xca\x02\x06XaiApi\xe2\x02\x12XaiApi\\GPBMetadata\xea\x02\x06XaiApib\x06proto3"
 
 var (
 	file_xai_api_v1_image_proto_rawDescOnce sync.Once

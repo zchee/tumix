@@ -496,8 +496,8 @@ const file_xai_api_v1_sample_proto_rawDesc = "" +
 	"\x06Sample\x12G\n" +
 	"\n" +
 	"SampleText\x12\x1a.xai_api.SampleTextRequest\x1a\x1b.xai_api.SampleTextResponse\"\x00\x12R\n" +
-	"\x13SampleTextStreaming\x12\x1a.xai_api.SampleTextRequest\x1a\x1b.xai_api.SampleTextResponse\"\x000\x01B\x82\x01\n" +
-	"\vcom.xai_apiB\vSampleProtoP\x01Z.github.com/zchee/tumix/model/xai/pb/xai/api/v1\xa2\x02\x03XXX\xaa\x02\x06XaiApi\xca\x02\x06XaiApi\xe2\x02\x12XaiApi\\GPBMetadata\xea\x02\x06XaiApib\x06proto3"
+	"\x13SampleTextStreaming\x12\x1a.xai_api.SampleTextRequest\x1a\x1b.xai_api.SampleTextResponse\"\x000\x01B{\n" +
+	"\vcom.xai_apiB\vSampleProtoP\x01Z'github.com/zchee/tumix/model/xai/api/v1\xa2\x02\x03XXX\xaa\x02\x06XaiApi\xca\x02\x06XaiApi\xe2\x02\x12XaiApi\\GPBMetadata\xea\x02\x06XaiApib\x06proto3"
 
 var (
 	file_xai_api_v1_sample_proto_rawDescOnce sync.Once

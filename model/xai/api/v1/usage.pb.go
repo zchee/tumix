@@ -293,9 +293,9 @@ const file_xai_api_v1_usage_proto_rawDesc = "" +
 	"\x1dSERVER_SIDE_TOOL_VIEW_X_VIDEO\x10\x05\x12'\n" +
 	"#SERVER_SIDE_TOOL_COLLECTIONS_SEARCH\x10\x06\x12\x18\n" +
 	"\x14SERVER_SIDE_TOOL_MCP\x10\a\x12$\n" +
-	" SERVER_SIDE_TOOL_DOCUMENT_SEARCH\x10\bB\x81\x01\n" +
+	" SERVER_SIDE_TOOL_DOCUMENT_SEARCH\x10\bBz\n" +
 	"\vcom.xai_apiB\n" +
-	"UsageProtoP\x01Z.github.com/zchee/tumix/model/xai/pb/xai/api/v1\xa2\x02\x03XXX\xaa\x02\x06XaiApi\xca\x02\x06XaiApi\xe2\x02\x12XaiApi\\GPBMetadata\xea\x02\x06XaiApib\x06proto3"
+	"UsageProtoP\x01Z'github.com/zchee/tumix/model/xai/api/v1\xa2\x02\x03XXX\xaa\x02\x06XaiApi\xca\x02\x06XaiApi\xe2\x02\x12XaiApi\\GPBMetadata\xea\x02\x06XaiApib\x06proto3"
 
 var (
 	file_xai_api_v1_usage_proto_rawDescOnce sync.Once

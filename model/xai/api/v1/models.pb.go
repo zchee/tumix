@@ -724,8 +724,8 @@ const file_xai_api_v1_models_proto_rawDesc = "" +
 	"\x19ListImageGenerationModels\x12\x16.google.protobuf.Empty\x1a*.xai_api.ListImageGenerationModelsResponse\"\x00\x12F\n" +
 	"\x10GetLanguageModel\x12\x18.xai_api.GetModelRequest\x1a\x16.xai_api.LanguageModel\"\x00\x12H\n" +
 	"\x11GetEmbeddingModel\x12\x18.xai_api.GetModelRequest\x1a\x17.xai_api.EmbeddingModel\"\x00\x12T\n" +
-	"\x17GetImageGenerationModel\x12\x18.xai_api.GetModelRequest\x1a\x1d.xai_api.ImageGenerationModel\"\x00B\x82\x01\n" +
-	"\vcom.xai_apiB\vModelsProtoP\x01Z.github.com/zchee/tumix/model/xai/pb/xai/api/v1\xa2\x02\x03XXX\xaa\x02\x06XaiApi\xca\x02\x06XaiApi\xe2\x02\x12XaiApi\\GPBMetadata\xea\x02\x06XaiApib\x06proto3"
+	"\x17GetImageGenerationModel\x12\x18.xai_api.GetModelRequest\x1a\x1d.xai_api.ImageGenerationModel\"\x00B{\n" +
+	"\vcom.xai_apiB\vModelsProtoP\x01Z'github.com/zchee/tumix/model/xai/api/v1\xa2\x02\x03XXX\xaa\x02\x06XaiApi\xca\x02\x06XaiApi\xe2\x02\x12XaiApi\\GPBMetadata\xea\x02\x06XaiApib\x06proto3"
 
 var (
 	file_xai_api_v1_models_proto_rawDescOnce sync.Once
