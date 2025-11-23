@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	xaipb "github.com/zchee/tumix/model/xai/api/v1"
+	billingpb "github.com/zchee/tumix/model/xai/management_api/v1"
 )
 
 const defaultServiceConfig = `{"methodConfig":[{"name":[{}],"retryPolicy":{"maxAttempts":5,"initialBackoff":"0.1s","maxBackoff":"1s","backoffMultiplier":2,"retryableStatusCodes":["UNAVAILABLE"]}}]}`
@@ -40,15 +41,15 @@ type Client struct {
 	managementConn *grpc.ClientConn
 
 	Auth        *AuthClient
+	Billing     *BillingClient
 	Chat        *ChatClient
 	Collections *CollectionsClient
 	Documents   *DocumentsClient
 	Embed       *EmbedClient
-	// Files       *FilesClient
-	Image     *ImageClient
-	Models    *ModelsClient
-	Sampler   *SamplerClient
-	Tokenizer *TokenizerClient
+	Image       *ImageClient
+	Models      *ModelsClient
+	Sampler     *SamplerClient
+	Tokenizer   *TokenizerClient
 }
 
 // NewClient creates a new xAI API client with optional configuration.
@@ -90,11 +91,14 @@ func NewClient(ctx context.Context, apiKey string, optFns ...ClientOption) (*Cli
 		Chat:           &ChatClient{chat: xaipb.NewChatClient(apiConn)},
 		Documents:      &DocumentsClient{stub: xaipb.NewDocumentsClient(apiConn)},
 		Embed:          &EmbedClient{embedder: xaipb.NewEmbedderClient(apiConn)},
-		// Files:          &FilesClient{stub: pb.NewFilesClient(apiConn)},
-		Image:     &ImageClient{image: xaipb.NewImageClient(apiConn)},
-		Models:    &ModelsClient{models: xaipb.NewModelsClient(apiConn)},
-		Sampler:   &SamplerClient{sample: xaipb.NewSampleClient(apiConn)},
-		Tokenizer: &TokenizerClient{tokenize: xaipb.NewTokenizeClient(apiConn)},
+		Image:          &ImageClient{image: xaipb.NewImageClient(apiConn)},
+		Models:         &ModelsClient{models: xaipb.NewModelsClient(apiConn)},
+		Sampler:        &SamplerClient{sample: xaipb.NewSampleClient(apiConn)},
+		Tokenizer:      &TokenizerClient{tokenize: xaipb.NewTokenizeClient(apiConn)},
+	}
+
+	if mgmtConn != nil {
+		client.Billing = &BillingClient{uisvc: billingpb.NewUISvcClient(mgmtConn)}
 	}
 
 	client.Collections = NewCollectionsClient(apiConn, opts.managementKey, "https://"+opts.managementHost)
