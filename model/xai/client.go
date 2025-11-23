@@ -41,14 +41,14 @@ type Client struct {
 
 	Auth        *AuthClient
 	Chat        *ChatClient
-	// Collections *CollectionsClient
+	Collections *CollectionsClient
 	Documents   *DocumentsClient
 	Embed       *EmbedClient
 	// Files       *FilesClient
-	Image       *ImageClient
-	Models      *ModelsClient
-	Sampler     *SamplerClient
-	Tokenizer   *TokenizerClient
+	Image     *ImageClient
+	Models    *ModelsClient
+	Sampler   *SamplerClient
+	Tokenizer *TokenizerClient
 }
 
 // NewClient creates a new xAI API client with optional configuration.
@@ -91,17 +91,13 @@ func NewClient(ctx context.Context, apiKey string, optFns ...ClientOption) (*Cli
 		Documents:      &DocumentsClient{stub: pb.NewDocumentsClient(apiConn)},
 		Embed:          &EmbedClient{stub: pb.NewEmbedderClient(apiConn)},
 		// Files:          &FilesClient{stub: pb.NewFilesClient(apiConn)},
-		Image:          &ImageClient{stub: pb.NewImageClient(apiConn)},
-		Models:         &ModelsClient{stub: pb.NewModelsClient(apiConn)},
-		Sampler:        &SamplerClient{stub: pb.NewSampleClient(apiConn)},
-		Tokenizer:      &TokenizerClient{stub: pb.NewTokenizeClient(apiConn)},
+		Image:     &ImageClient{stub: pb.NewImageClient(apiConn)},
+		Models:    &ModelsClient{stub: pb.NewModelsClient(apiConn)},
+		Sampler:   &SamplerClient{stub: pb.NewSampleClient(apiConn)},
+		Tokenizer: &TokenizerClient{stub: pb.NewTokenizeClient(apiConn)},
 	}
 
-	/*
-		if mgmtConn != nil {
-			client.Collections = NewCollectionsClient(apiConn, mgmtConn)
-		}
-	*/
+	client.Collections = NewCollectionsClient(apiConn, opts.managementKey, "https://"+opts.managementHost)
 
 	return client, nil
 }

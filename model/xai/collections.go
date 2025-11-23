@@ -16,128 +16,183 @@
 
 package xai
 
-/*
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"mime/multipart"
+	"net/http"
+	"net/textproto"
+	"time"
 
 	"google.golang.org/grpc"
 
 	pb "github.com/zchee/tumix/model/xai/pb/xai/api/v1"
-	sharedpb "github.com/zchee/tumix/model/xai/pb/xai/shared"
 )
 
 // Order is used for collection/document listing order.
 type Order string
 
-// Collection and document sorting helpers.
 const (
-	OrderAscending  Order = "asc"
+	// OrderAscending sorts results in ascending order.
+	OrderAscending Order = "asc"
+	// OrderDescending sorts results in descending order.
 	OrderDescending Order = "desc"
 )
 
+// CollectionSortBy defines the field to sort collections by.
 type CollectionSortBy string
 
 const (
+	// CollectionSortByName sorts collections by name.
 	CollectionSortByName CollectionSortBy = "name"
-	CollectionSortByAge  CollectionSortBy = "age"
+	// CollectionSortByAge sorts collections by creation time.
+	CollectionSortByAge CollectionSortBy = "age"
 )
 
+// DocumentSortBy defines the field to sort documents by.
 type DocumentSortBy string
 
 const (
+	// DocumentSortByName sorts documents by name.
 	DocumentSortByName DocumentSortBy = "name"
-	DocumentSortByAge  DocumentSortBy = "age"
+	// DocumentSortByAge sorts documents by creation time.
+	DocumentSortByAge DocumentSortBy = "age"
+	// DocumentSortBySize sorts documents by size.
 	DocumentSortBySize DocumentSortBy = "size"
 )
 
 // CollectionsClient provides access to the Collections and Documents services.
 type CollectionsClient struct {
-	collections pb.CollectionsClient
-	documents   pb.DocumentsClient
+	documents pb.DocumentsClient
+	apiKey    string
+	baseURL   string
+	client    *http.Client
 }
 
-// NewCollectionsClient builds a CollectionsClient using the API and management connections.
-func NewCollectionsClient(apiConn, managementConn *grpc.ClientConn) *CollectionsClient {
+// NewCollectionsClient builds a CollectionsClient using the API connection and management API credentials.
+func NewCollectionsClient(apiConn *grpc.ClientConn, apiKey string, baseURL string) *CollectionsClient {
 	return &CollectionsClient{
-		collections: pb.NewCollectionsClient(managementConn),
-		documents:   pb.NewDocumentsClient(apiConn),
+		documents: pb.NewDocumentsClient(apiConn),
+		apiKey:    apiKey,
+		baseURL:   baseURL,
+		client:    &http.Client{Timeout: 60 * time.Second},
 	}
+}
+
+// Collection represents a document collection.
+type Collection struct {
+	ID                 string              `json:"collection_id"`
+	Name               string              `json:"name"`
+	IndexConfiguration *IndexConfiguration `json:"index_configuration,omitempty"`
+	ChunkConfiguration *ChunkConfiguration `json:"chunk_configuration,omitempty"`
+	CreatedAt          int64               `json:"created_at,omitempty"`
+	UpdatedAt          int64               `json:"updated_at,omitempty"`
+}
+
+// IndexConfiguration defines the indexing parameters for a collection.
+type IndexConfiguration struct {
+	ModelName string `json:"model_name,omitempty"`
+}
+
+// ChunkConfiguration defines the chunking parameters for a collection.
+type ChunkConfiguration struct {
+	MinTokens int `json:"min_tokens,omitempty"`
+	MaxTokens int `json:"max_tokens,omitempty"`
+}
+
+type createCollectionRequest struct {
+	Name               string              `json:"name"`
+	IndexConfiguration *IndexConfiguration `json:"index_configuration,omitempty"`
+	ChunkConfiguration *ChunkConfiguration `json:"chunk_configuration,omitempty"`
 }
 
 // Create makes a new collection for document embeddings.
-func (c *CollectionsClient) Create(ctx context.Context, name string, modelName string, chunkConfig *pb.ChunkConfiguration) (*pb.CollectionMetadata, error) {
-	if c == nil || c.collections == nil {
-		return nil, fmt.Errorf("management API key is required for collections operations")
+func (c *CollectionsClient) Create(ctx context.Context, name string, modelName string) (*Collection, error) {
+	reqBody := createCollectionRequest{
+		Name: name,
 	}
-
-	req := &pb.CreateCollectionRequest{CollectionName: name}
 	if modelName != "" {
-		req.IndexConfiguration = &pb.IndexConfiguration{ModelName: modelName}
-	}
-	if chunkConfig != nil {
-		req.ChunkConfiguration = chunkConfig
+		reqBody.IndexConfiguration = &IndexConfiguration{ModelName: modelName}
 	}
 
-	return c.collections.CreateCollection(ctx, req)
+	data, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp Collection
+	if err := c.doRequest(ctx, http.MethodPost, "/v1/collections", bytes.NewReader(data), &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// ListCollectionsResponse is the response from listing collections.
+type ListCollectionsResponse struct {
+	Collections []Collection `json:"collections"`
+	NextToken   string       `json:"next_token,omitempty"`
 }
 
 // List returns collections with optional pagination and ordering.
-func (c *CollectionsClient) List(ctx context.Context, limit int32, order Order, sortBy CollectionSortBy, paginationToken string) (*pb.ListCollectionsResponse, error) {
-	if c == nil || c.collections == nil {
-		return nil, fmt.Errorf("management API key is required for collections operations")
-	}
-	req := &pb.ListCollectionsRequest{}
+func (c *CollectionsClient) List(ctx context.Context, limit int32, order Order, sortBy CollectionSortBy, paginationToken string) (*ListCollectionsResponse, error) {
+	query := make(map[string]string)
 	if limit > 0 {
-		req.Limit = &limit
+		query["limit"] = fmt.Sprintf("%d", limit)
 	}
 	if order != "" {
-		req.Order = orderToProto(order)
+		query["order"] = string(order)
 	}
 	if sortBy != "" {
-		req.SortBy = collectionSortByToProto(sortBy)
+		query["sort_by"] = string(sortBy)
 	}
 	if paginationToken != "" {
-		req.PaginationToken = &paginationToken
+		query["pagination_token"] = paginationToken
 	}
-	return c.collections.ListCollections(ctx, req)
+
+	var resp ListCollectionsResponse
+	if err := c.doRequest(ctx, http.MethodGet, "/v1/collections", nil, &resp, query); err != nil {
+		return nil, err
+	}
+	return &resp, nil
 }
 
 // Get returns collection metadata.
-func (c *CollectionsClient) Get(ctx context.Context, collectionID string) (*pb.CollectionMetadata, error) {
-	if c == nil || c.collections == nil {
-		return nil, fmt.Errorf("management API key is required for collections operations")
+func (c *CollectionsClient) Get(ctx context.Context, collectionID string) (*Collection, error) {
+	var resp Collection
+	if err := c.doRequest(ctx, http.MethodGet, fmt.Sprintf("/v1/collections/%s", collectionID), nil, &resp); err != nil {
+		return nil, err
 	}
-	return c.collections.GetCollectionMetadata(ctx, &pb.GetCollectionMetadataRequest{CollectionId: collectionID})
+	return &resp, nil
+}
+
+type updateCollectionRequest struct {
+	Name               string              `json:"name,omitempty"`
+	ChunkConfiguration *ChunkConfiguration `json:"chunk_configuration,omitempty"`
 }
 
 // Update changes the name and/or chunk configuration of a collection.
-func (c *CollectionsClient) Update(ctx context.Context, collectionID string, name string, chunkConfig *pb.ChunkConfiguration) (*pb.CollectionMetadata, error) {
-	if c == nil || c.collections == nil {
-		return nil, fmt.Errorf("management API key is required for collections operations")
+func (c *CollectionsClient) Update(ctx context.Context, collectionID string, name string) (*Collection, error) {
+	reqBody := updateCollectionRequest{
+		Name: name,
 	}
-	if name == "" && chunkConfig == nil {
-		return nil, fmt.Errorf("at least one of name or chunk configuration must be provided")
-	}
-
-	req := &pb.UpdateCollectionRequest{CollectionId: collectionID}
-	if name != "" {
-		req.CollectionName = &name
-	}
-	if chunkConfig != nil {
-		req.ChunkConfiguration = chunkConfig
+	data, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, err
 	}
 
-	return c.collections.UpdateCollection(ctx, req)
+	var resp Collection
+	if err := c.doRequest(ctx, http.MethodPatch, fmt.Sprintf("/v1/collections/%s", collectionID), bytes.NewReader(data), &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
 }
 
 // Delete removes a collection.
 func (c *CollectionsClient) Delete(ctx context.Context, collectionID string) error {
-	if c == nil || c.collections == nil {
-		return fmt.Errorf("management API key is required for collections operations")
-	}
-	_, err := c.collections.DeleteCollection(ctx, &pb.DeleteCollectionRequest{CollectionId: collectionID})
-	return err
+	return c.doRequest(ctx, http.MethodDelete, fmt.Sprintf("/v1/collections/%s", collectionID), nil, nil)
 }
 
 // Search performs semantic search across specified collections.
@@ -152,144 +207,137 @@ func (c *CollectionsClient) Search(ctx context.Context, query string, collection
 	return c.documents.Search(ctx, req)
 }
 
-// UploadDocument uploads document bytes to a collection.
-func (c *CollectionsClient) UploadDocument(ctx context.Context, collectionID, name string, data []byte, contentType string, fields map[string]string) (*pb.DocumentMetadata, error) {
-	if c == nil || c.collections == nil {
-		return nil, fmt.Errorf("management API key is required for collections operations")
-	}
-	return c.collections.UploadDocument(ctx, &pb.UploadDocumentRequest{
-		CollectionId: collectionID,
-		Name:         name,
-		Data:         data,
-		ContentType:  contentType,
-		Fields:       fields,
-	})
+// Document represents a file within a collection.
+type Document struct {
+	ID           string            `json:"file_id"`
+	Name         string            `json:"name"`
+	CollectionID string            `json:"collection_id"`
+	Metadata     map[string]string `json:"metadata,omitempty"`
+	SizeBytes    int64             `json:"size_bytes,omitempty"`
+	Status       string            `json:"status,omitempty"`
+	CreatedAt    int64             `json:"created_at,omitempty"`
+	UpdatedAt    int64             `json:"updated_at,omitempty"`
 }
 
-// AddExistingDocument attaches an existing file to a collection.
-func (c *CollectionsClient) AddExistingDocument(ctx context.Context, collectionID, fileID string, fields map[string]string) error {
-	if c == nil || c.collections == nil {
-		return fmt.Errorf("management API key is required for collections operations")
+// UploadDocument uploads document bytes to a collection.
+func (c *CollectionsClient) UploadDocument(ctx context.Context, collectionID, name string, data []byte, contentType string) (*Document, error) {
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	// Add file
+	h := make(textproto.MIMEHeader)
+	h.Set("Content-Disposition", fmt.Sprintf(`form-data; name="file"; filename="%s"`, name))
+	h.Set("Content-Type", contentType)
+	part, err := writer.CreatePart(h)
+	if err != nil {
+		return nil, err
 	}
-	_, err := c.collections.AddDocumentToCollection(ctx, &pb.AddDocumentToCollectionRequest{
-		CollectionId: collectionID,
-		FileId:       fileID,
-		Fields:       fields,
-	})
-	return err
+	if _, err := part.Write(data); err != nil {
+		return nil, err
+	}
+
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+
+	var resp Document
+	if err := c.doRequestWithHeaders(ctx, http.MethodPost, fmt.Sprintf("/v1/collections/%s/documents", collectionID), body, &resp, map[string]string{
+		"Content-Type": writer.FormDataContentType(),
+	}); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// ListDocumentsResponse is the response from listing documents in a collection.
+type ListDocumentsResponse struct {
+	Documents []Document `json:"documents"`
+	NextToken string     `json:"next_token,omitempty"`
 }
 
 // ListDocuments returns documents within a collection.
-func (c *CollectionsClient) ListDocuments(ctx context.Context, collectionID string, limit int32, order Order, sortBy DocumentSortBy, paginationToken string) (*pb.ListDocumentsResponse, error) {
-	if c == nil || c.collections == nil {
-		return nil, fmt.Errorf("management API key is required for collections operations")
-	}
-	req := &pb.ListDocumentsRequest{CollectionId: collectionID}
+func (c *CollectionsClient) ListDocuments(ctx context.Context, collectionID string, limit int32, order Order, sortBy DocumentSortBy, paginationToken string) (*ListDocumentsResponse, error) {
+	query := make(map[string]string)
 	if limit > 0 {
-		req.Limit = &limit
+		query["limit"] = fmt.Sprintf("%d", limit)
 	}
 	if order != "" {
-		req.Order = orderToProto(order)
+		query["order"] = string(order)
 	}
 	if sortBy != "" {
-		req.SortBy = documentSortByToProto(sortBy)
+		query["sort_by"] = string(sortBy)
 	}
 	if paginationToken != "" {
-		req.PaginationToken = &paginationToken
+		query["pagination_token"] = paginationToken
 	}
-	return c.collections.ListDocuments(ctx, req)
+
+	var resp ListDocumentsResponse
+	if err := c.doRequest(ctx, http.MethodGet, fmt.Sprintf("/v1/collections/%s/documents", collectionID), nil, &resp, query); err != nil {
+		return nil, err
+	}
+	return &resp, nil
 }
 
 // GetDocument fetches document metadata.
-func (c *CollectionsClient) GetDocument(ctx context.Context, collectionID, fileID string) (*pb.DocumentMetadata, error) {
-	if c == nil || c.collections == nil {
-		return nil, fmt.Errorf("management API key is required for collections operations")
+func (c *CollectionsClient) GetDocument(ctx context.Context, collectionID, fileID string) (*Document, error) {
+	var resp Document
+	if err := c.doRequest(ctx, http.MethodGet, fmt.Sprintf("/v1/collections/%s/documents/%s", collectionID, fileID), nil, &resp); err != nil {
+		return nil, err
 	}
-	return c.collections.GetDocumentMetadata(ctx, &pb.GetDocumentMetadataRequest{
-		CollectionId: collectionID,
-		FileId:       fileID,
-	})
-}
-
-// BatchGetDocuments fetches multiple document metadata entries by ID.
-func (c *CollectionsClient) BatchGetDocuments(ctx context.Context, collectionID string, fileIDs []string) (*pb.BatchGetDocumentsResponse, error) {
-	if c == nil || c.collections == nil {
-		return nil, fmt.Errorf("management API key is required for collections operations")
-	}
-	return c.collections.BatchGetDocuments(ctx, &pb.BatchGetDocumentsRequest{CollectionId: collectionID, FileIds: fileIDs})
+	return &resp, nil
 }
 
 // RemoveDocument detaches a document from a collection.
 func (c *CollectionsClient) RemoveDocument(ctx context.Context, collectionID, fileID string) error {
-	if c == nil || c.collections == nil {
-		return fmt.Errorf("management API key is required for collections operations")
-	}
-	_, err := c.collections.RemoveDocumentFromCollection(ctx, &pb.RemoveDocumentFromCollectionRequest{CollectionId: collectionID, FileId: fileID})
-	return err
+	return c.doRequest(ctx, http.MethodDelete, fmt.Sprintf("/v1/collections/%s/documents/%s", collectionID, fileID), nil, nil)
 }
 
-// UpdateDocument updates document metadata and optionally data.
-func (c *CollectionsClient) UpdateDocument(ctx context.Context, collectionID, fileID, name string, data []byte, contentType string, fields map[string]string) (*pb.DocumentMetadata, error) {
-	if c == nil || c.collections == nil {
-		return nil, fmt.Errorf("management API key is required for collections operations")
-	}
-	req := &pb.UpdateDocumentRequest{CollectionId: collectionID, FileId: fileID}
-	if name != "" {
-		req.Name = &name
-	}
-	if data != nil {
-		req.Data = data
-	}
-	if contentType != "" {
-		req.ContentType = &contentType
-	}
-	if fields != nil {
-		req.Fields = fields
-	}
-	return c.collections.UpdateDocument(ctx, req)
+func (c *CollectionsClient) doRequest(ctx context.Context, method, path string, body io.Reader, result any, queryParams ...map[string]string) error {
+	return c.doRequestWithHeaders(ctx, method, path, body, result, nil, queryParams...)
 }
 
-// ReindexDocument regenerates indices for a document after config changes.
-func (c *CollectionsClient) ReindexDocument(ctx context.Context, collectionID, fileID string) error {
-	if c == nil || c.collections == nil {
-		return fmt.Errorf("management API key is required for collections operations")
+func (c *CollectionsClient) doRequestWithHeaders(ctx context.Context, method, path string, body io.Reader, result any, headers map[string]string, queryParams ...map[string]string) error {
+	url := c.baseURL + path
+	req, err := http.NewRequestWithContext(ctx, method, url, body)
+	if err != nil {
+		return err
 	}
-	_, err := c.collections.ReIndexDocument(ctx, &pb.ReIndexDocumentRequest{CollectionId: collectionID, FileId: fileID})
-	return err
-}
 
-func orderToProto(order Order) *sharedpb.Ordering {
-	var v sharedpb.Ordering
-	switch order {
-	case OrderDescending:
-		v = sharedpb.Ordering_ORDERING_DESCENDING
-	default:
-		v = sharedpb.Ordering_ORDERING_ASCENDING
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	if headers != nil {
+		for k, v := range headers {
+			req.Header.Set(k, v)
+		}
+	} else if body != nil {
+		req.Header.Set("Content-Type", "application/json")
 	}
-	return &v
-}
 
-func collectionSortByToProto(sortBy CollectionSortBy) *pb.CollectionsSortBy {
-	var v pb.CollectionsSortBy
-	switch sortBy {
-	case CollectionSortByAge:
-		v = pb.CollectionsSortBy_COLLECTIONS_SORT_BY_AGE
-	default:
-		v = pb.CollectionsSortBy_COLLECTIONS_SORT_BY_NAME
+	if len(queryParams) > 0 {
+		q := req.URL.Query()
+		for _, params := range queryParams {
+			for k, v := range params {
+				q.Set(k, v)
+			}
+		}
+		req.URL.RawQuery = q.Encode()
 	}
-	return &v
-}
 
-func documentSortByToProto(sortBy DocumentSortBy) *pb.DocumentsSortBy {
-	var v pb.DocumentsSortBy
-	switch sortBy {
-	case DocumentSortByAge:
-		v = pb.DocumentsSortBy_DOCUMENTS_SORT_BY_AGE
-	case DocumentSortBySize:
-		v = pb.DocumentsSortBy_DOCUMENTS_SORT_BY_SIZE
-	default:
-		v = pb.DocumentsSortBy_DOCUMENTS_SORT_BY_NAME
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return err
 	}
-	return &v
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	if result != nil {
+		if err := json.NewDecoder(resp.Body).Decode(result); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
-*/
