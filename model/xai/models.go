@@ -31,36 +31,45 @@ type ModelsClient struct {
 
 // ListLanguageModels lists available language models.
 func (c *ModelsClient) ListLanguageModels(ctx context.Context) (*xaipb.ListLanguageModelsResponse, error) {
-	return c.models.ListLanguageModels(ctx, &emptypb.Empty{})
+	resp, err := c.models.ListLanguageModels(ctx, &emptypb.Empty{})
+	if err != nil {
+		return nil, WrapError(err)
+	}
+	return resp, nil
 }
 
 // GetLanguageModel retrieves information about a specific language model.
 func (c *ModelsClient) GetLanguageModel(ctx context.Context, name string) (*xaipb.LanguageModel, error) {
-	return c.models.GetLanguageModel(ctx, &xaipb.GetModelRequest{
+	resp, err := c.models.GetLanguageModel(ctx, &xaipb.GetModelRequest{
 		Name: name,
 	})
+	return resp, WrapError(err)
 }
 
 // ListEmbeddingModels lists available embedding models.
 func (c *ModelsClient) ListEmbeddingModels(ctx context.Context) (*xaipb.ListEmbeddingModelsResponse, error) {
-	return c.models.ListEmbeddingModels(ctx, &emptypb.Empty{})
+	resp, err := c.models.ListEmbeddingModels(ctx, &emptypb.Empty{})
+	return resp, WrapError(err)
 }
 
 // GetEmbeddingModel retrieves information about a specific embedding model.
 func (c *ModelsClient) GetEmbeddingModel(ctx context.Context, name string) (*xaipb.EmbeddingModel, error) {
-	return c.models.GetEmbeddingModel(ctx, &xaipb.GetModelRequest{
+	resp, err := c.models.GetEmbeddingModel(ctx, &xaipb.GetModelRequest{
 		Name: name,
 	})
+	return resp, WrapError(err)
 }
 
 // ListImageGenerationModels lists available image generation models.
 func (c *ModelsClient) ListImageGenerationModels(ctx context.Context) (*xaipb.ListImageGenerationModelsResponse, error) {
-	return c.models.ListImageGenerationModels(ctx, &emptypb.Empty{})
+	resp, err := c.models.ListImageGenerationModels(ctx, &emptypb.Empty{})
+	return resp, WrapError(err)
 }
 
 // GetImageGenerationModel retrieves information about a specific image generation model.
 func (c *ModelsClient) GetImageGenerationModel(ctx context.Context, name string) (*xaipb.ImageGenerationModel, error) {
-	return c.models.GetImageGenerationModel(ctx, &xaipb.GetModelRequest{
+	resp, err := c.models.GetImageGenerationModel(ctx, &xaipb.GetModelRequest{
 		Name: name,
 	})
+	return resp, WrapError(err)
 }
