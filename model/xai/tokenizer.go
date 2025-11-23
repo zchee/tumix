@@ -22,10 +22,12 @@ import (
 	pb "github.com/zchee/tumix/model/xai/pb/xai/api/v1"
 )
 
+// TokenizerClient provides access to the Tokenizer service.
 type TokenizerClient struct {
 	stub pb.TokenizeClient
 }
 
+// Tokenize converts text into tokens using the specified model.
 func (c *TokenizerClient) Tokenize(ctx context.Context, text string, model string) (*pb.TokenizeTextResponse, error) {
 	return c.stub.TokenizeText(ctx, &pb.TokenizeTextRequest{
 		Text:  text,

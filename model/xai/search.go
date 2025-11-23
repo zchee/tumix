@@ -28,9 +28,12 @@ import (
 type SearchMode string
 
 const (
+	// SearchModeAuto lets the model decide whether to search.
 	SearchModeAuto SearchMode = "auto"
-	SearchModeOn   SearchMode = "on"
-	SearchModeOff  SearchMode = "off"
+	// SearchModeOn forces the model to search.
+	SearchModeOn SearchMode = "on"
+	// SearchModeOff disables search.
+	SearchModeOff SearchMode = "off"
 )
 
 // SearchParameters mirrors the Python SDK configuration for search.

@@ -69,10 +69,12 @@ func WithMessages(msgs ...*pb.Message) ChatOption {
 	}
 }
 
+// WithUser sets the user identifier for the request.
 func WithUser(user string) ChatOption {
 	return func(req *pb.GetCompletionsRequest, _ *ChatSession) { req.User = user }
 }
 
+// WithMaxTokens sets the maximum number of tokens to generate.
 func WithMaxTokens(max int) ChatOption {
 	return func(req *pb.GetCompletionsRequest, _ *ChatSession) {
 		v := int32(max)
@@ -80,6 +82,7 @@ func WithMaxTokens(max int) ChatOption {
 	}
 }
 
+// WithSeed sets the random seed for deterministic generation.
 func WithSeed(seed int) ChatOption {
 	return func(req *pb.GetCompletionsRequest, _ *ChatSession) {
 		v := int32(seed)
@@ -87,10 +90,12 @@ func WithSeed(seed int) ChatOption {
 	}
 }
 
+// WithStop sets the stop sequences.
 func WithStop(stop ...string) ChatOption {
 	return func(req *pb.GetCompletionsRequest, _ *ChatSession) { req.Stop = append(req.Stop, stop...) }
 }
 
+// WithTemperature sets the sampling temperature.
 func WithTemperature(t float32) ChatOption {
 	return func(req *pb.GetCompletionsRequest, _ *ChatSession) {
 		v := t
@@ -98,6 +103,7 @@ func WithTemperature(t float32) ChatOption {
 	}
 }
 
+// WithTopP sets the nucleus sampling probability.
 func WithTopP(p float32) ChatOption {
 	return func(req *pb.GetCompletionsRequest, _ *ChatSession) {
 		v := p
@@ -105,10 +111,12 @@ func WithTopP(p float32) ChatOption {
 	}
 }
 
+// WithLogprobs enables log probabilities return.
 func WithLogprobs(enabled bool) ChatOption {
 	return func(req *pb.GetCompletionsRequest, _ *ChatSession) { req.Logprobs = enabled }
 }
 
+// WithTopLogprobs sets the number of top log probabilities to return.
 func WithTopLogprobs(v int) ChatOption {
 	return func(req *pb.GetCompletionsRequest, _ *ChatSession) {
 		vv := int32(v)
@@ -116,14 +124,17 @@ func WithTopLogprobs(v int) ChatOption {
 	}
 }
 
+// WithTools sets the tools available to the model.
 func WithTools(tools ...*pb.Tool) ChatOption {
 	return func(req *pb.GetCompletionsRequest, _ *ChatSession) { req.Tools = append(req.Tools, tools...) }
 }
 
+// WithToolChoice sets the tool choice strategy.
 func WithToolChoice(choice *pb.ToolChoice) ChatOption {
 	return func(req *pb.GetCompletionsRequest, _ *ChatSession) { req.ToolChoice = choice }
 }
 
+// WithParallelToolCalls enables or disables parallel tool calls.
 func WithParallelToolCalls(enabled bool) ChatOption {
 	return func(req *pb.GetCompletionsRequest, _ *ChatSession) {
 		v := enabled
@@ -131,10 +142,12 @@ func WithParallelToolCalls(enabled bool) ChatOption {
 	}
 }
 
+// WithResponseFormat sets the desired response format (e.g. JSON).
 func WithResponseFormat(format *pb.ResponseFormat) ChatOption {
 	return func(req *pb.GetCompletionsRequest, _ *ChatSession) { req.ResponseFormat = format }
 }
 
+// WithFrequencyPenalty sets the frequency penalty.
 func WithFrequencyPenalty(v float32) ChatOption {
 	return func(req *pb.GetCompletionsRequest, _ *ChatSession) {
 		vv := v
@@ -142,6 +155,7 @@ func WithFrequencyPenalty(v float32) ChatOption {
 	}
 }
 
+// WithPresencePenalty sets the presence penalty.
 func WithPresencePenalty(v float32) ChatOption {
 	return func(req *pb.GetCompletionsRequest, _ *ChatSession) {
 		vv := v
@@ -149,10 +163,12 @@ func WithPresencePenalty(v float32) ChatOption {
 	}
 }
 
+// WithReasoningEffort sets the reasoning effort level.
 func WithReasoningEffort(effort pb.ReasoningEffort) ChatOption {
 	return func(req *pb.GetCompletionsRequest, _ *ChatSession) { req.ReasoningEffort = &effort }
 }
 
+// WithSearchParameters sets the search parameters for the request.
 func WithSearchParameters(params *pb.SearchParameters) ChatOption {
 	return func(req *pb.GetCompletionsRequest, _ *ChatSession) { req.SearchParameters = params }
 }
@@ -162,14 +178,17 @@ func WithSearch(params SearchParameters) ChatOption {
 	return func(req *pb.GetCompletionsRequest, _ *ChatSession) { req.SearchParameters = params.Proto() }
 }
 
+// WithStoreMessages enables message storage.
 func WithStoreMessages(store bool) ChatOption {
 	return func(req *pb.GetCompletionsRequest, _ *ChatSession) { req.StoreMessages = store }
 }
 
+// WithPreviousResponse sets the previous response ID for context.
 func WithPreviousResponse(id string) ChatOption {
 	return func(req *pb.GetCompletionsRequest, _ *ChatSession) { req.PreviousResponseId = &id }
 }
 
+// WithEncryptedContent enables encrypted content in the response.
 func WithEncryptedContent(enabled bool) ChatOption {
 	return func(req *pb.GetCompletionsRequest, _ *ChatSession) { req.UseEncryptedContent = enabled }
 }
@@ -500,7 +519,7 @@ func (s *ChatSession) makeSpanRequestAttributes() []attribute.KeyValue {
 		prefix := fmt.Sprintf("gen_ai.prompt.%d", i)
 		role := strings.ToLower(strings.TrimPrefix(msg.Role.String(), "ROLE_"))
 		attrs = append(attrs, attribute.String(prefix+".role", role))
-		
+
 		var contentStr strings.Builder
 		for _, c := range msg.Content {
 			if txt := c.GetText(); txt != "" {
@@ -508,7 +527,7 @@ func (s *ChatSession) makeSpanRequestAttributes() []attribute.KeyValue {
 			}
 		}
 		attrs = append(attrs, attribute.String(prefix+".content", contentStr.String()))
-		
+
 		if len(msg.ToolCalls) > 0 {
 			// Serialize tool calls mostly for debug, simplified here
 			// Python does full JSON serialization
@@ -546,7 +565,7 @@ func (s *ChatSession) makeSpanResponseAttributes(responses []*Response) []attrib
 	var finishReasons []string
 	for i, resp := range responses {
 		finishReasons = append(finishReasons, resp.FinishReason())
-		
+
 		prefix := fmt.Sprintf("gen_ai.completion.%d", i)
 		attrs = append(attrs, attribute.String(prefix+".role", strings.ToLower(strings.TrimPrefix(resp.Role(), "ROLE_"))))
 		attrs = append(attrs, attribute.String(prefix+".content", resp.Content()))
@@ -580,9 +599,9 @@ func valueOrZeroBool(p *bool) bool {
 
 // ChatStream wraps the streaming completion response.
 type ChatStream struct {
-	stream   pb.Chat_GetCompletionChunkClient
-	response *Response
-	span     trace.Span
+	stream             pb.Chat_GetCompletionChunkClient
+	response           *Response
+	span               trace.Span
 	firstChunkReceived bool
 }
 
@@ -601,7 +620,7 @@ func (s *ChatStream) Recv() (*Response, *Chunk, error) {
 					// Here we just set what we have in s.response
 					// Note: s.response is accumulating content.
 					// Replicating makeSpanResponseAttributes logic for single response:
-					
+
 					usage := s.response.Usage()
 					if usage != nil {
 						s.span.SetAttributes(

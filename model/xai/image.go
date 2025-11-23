@@ -32,7 +32,9 @@ import (
 type ImageFormat string
 
 const (
-	ImageFormatURL    ImageFormat = "url"
+	// ImageFormatURL returns the image as a URL.
+	ImageFormatURL ImageFormat = "url"
+	// ImageFormatBase64 returns the image as a base64-encoded string.
 	ImageFormatBase64 ImageFormat = "base64"
 )
 
