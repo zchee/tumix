@@ -70,7 +70,7 @@ func (c *ImageClient) SampleBatch(ctx context.Context, prompt, model string, n i
 	req := &xaipb.GenerateImageRequest{
 		Prompt: prompt,
 		Model:  model,
-		N:      int32Ptr(int32(n)),
+		N:      ptr(int32(n)),
 		Format: xaipb.ImageFormat_IMG_FORMAT_URL,
 	}
 	for _, opt := range opts {
@@ -158,5 +158,3 @@ func imageFormatToProto(f ImageFormat) xaipb.ImageFormat {
 		return xaipb.ImageFormat_IMG_FORMAT_URL
 	}
 }
-
-func int32Ptr(v int32) *int32 { return &v }

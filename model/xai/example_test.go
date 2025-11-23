@@ -8,8 +8,10 @@ import (
 
 // ExampleWithJSONStruct shows how to request structured output without hitting the network.
 func ExampleWithJSONStruct() {
-	req := &xaipb.GetCompletionsRequest{Model: "grok-4"}
-	WithJSONStruct[struct{
+	req := &xaipb.GetCompletionsRequest{
+		Model: "grok-4",
+	}
+	WithJSONStruct[struct {
 		Name string `json:"name"`
 	}]()(req, nil)
 
@@ -22,10 +24,14 @@ func ExampleWithJSONStruct() {
 
 // ExampleToolCallArguments demonstrates decoding tool call arguments locally.
 func ExampleToolCallArguments() {
-	tc := &xaipb.ToolCall{Tool: &xaipb.ToolCall_Function{Function: &xaipb.FunctionCall{
-		Name:      "sum",
-		Arguments: `{"a":1,"b":2}`,
-	}}}
+	tc := &xaipb.ToolCall{
+		Tool: &xaipb.ToolCall_Function{
+			Function: &xaipb.FunctionCall{
+				Name:      "sum",
+				Arguments: `{"a":1,"b":2}`,
+			},
+		},
+	}
 	var args struct {
 		A int `json:"a"`
 		B int `json:"b"`

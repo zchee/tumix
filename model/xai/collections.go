@@ -131,7 +131,9 @@ func NewCollectionsClient(apiConn, managementConn *grpc.ClientConn) *Collections
 
 // IndexConfig builds an IndexConfiguration with the provided model name.
 func IndexConfig(modelName string) *ragpb.IndexConfiguration {
-	return &ragpb.IndexConfiguration{ModelName: modelName}
+	return &ragpb.IndexConfiguration{
+		ModelName: modelName,
+	}
 }
 
 // ChunkConfigChars builds a character-based chunk configuration.
@@ -176,9 +178,13 @@ func (c *CollectionsClient) Create(ctx context.Context, name string, modelName s
 		return nil, err
 	}
 	opt := applyCollectionsOptions(opts)
-	req := &collectionspb.CreateCollectionRequest{CollectionName: name}
+	req := &collectionspb.CreateCollectionRequest{
+		CollectionName: name,
+	}
 	if modelName != "" {
-		req.IndexConfiguration = &ragpb.IndexConfiguration{ModelName: modelName}
+		req.IndexConfiguration = &ragpb.IndexConfiguration{
+			ModelName: modelName,
+		}
 	}
 	if chunkCfg != nil {
 		req.ChunkConfiguration = chunkCfg
@@ -222,7 +228,9 @@ func (c *CollectionsClient) Get(ctx context.Context, collectionID string, opts .
 		return nil, err
 	}
 	opt := applyCollectionsOptions(opts)
-	req := &collectionspb.GetCollectionMetadataRequest{CollectionId: collectionID}
+	req := &collectionspb.GetCollectionMetadataRequest{
+		CollectionId: collectionID,
+	}
 	if opt.teamID != nil {
 		req.TeamId = opt.teamID
 	}
@@ -257,7 +265,9 @@ func (c *CollectionsClient) Delete(ctx context.Context, collectionID string, opt
 		return err
 	}
 	opt := applyCollectionsOptions(opts)
-	req := &collectionspb.DeleteCollectionRequest{CollectionId: collectionID}
+	req := &collectionspb.DeleteCollectionRequest{
+		CollectionId: collectionID,
+	}
 	if opt.teamID != nil {
 		req.TeamId = opt.teamID
 	}
@@ -334,7 +344,9 @@ func (c *CollectionsClient) ListDocuments(ctx context.Context, collectionID stri
 		return nil, err
 	}
 	opt := applyCollectionsOptions(opts)
-	req := &collectionspb.ListDocumentsRequest{CollectionId: collectionID}
+	req := &collectionspb.ListDocumentsRequest{
+		CollectionId: collectionID,
+	}
 	if limit > 0 {
 		req.Limit = &limit
 	}
@@ -360,7 +372,10 @@ func (c *CollectionsClient) GetDocument(ctx context.Context, collectionID, fileI
 		return nil, err
 	}
 	opt := applyCollectionsOptions(opts)
-	req := &collectionspb.GetDocumentMetadataRequest{CollectionId: collectionID, FileId: fileID}
+	req := &collectionspb.GetDocumentMetadataRequest{
+		CollectionId: collectionID,
+		FileId:       fileID,
+	}
 	if opt.teamID != nil {
 		req.TeamId = opt.teamID
 	}
@@ -435,7 +450,10 @@ func (c *CollectionsClient) ReindexDocument(ctx context.Context, collectionID, f
 		return err
 	}
 	opt := applyCollectionsOptions(opts)
-	req := &collectionspb.ReIndexDocumentRequest{CollectionId: collectionID, FileId: fileID}
+	req := &collectionspb.ReIndexDocumentRequest{
+		CollectionId: collectionID,
+		FileId:       fileID,
+	}
 	if opt.teamID != nil {
 		req.TeamId = opt.teamID
 	}

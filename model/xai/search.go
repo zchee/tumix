@@ -85,11 +85,15 @@ func NewsSource(country string, excludedWebsites []string, safeSearch bool) *xai
 	if country != "" {
 		countryPtr = &country
 	}
-	return &xaipb.Source{Source: &xaipb.Source_News{News: &xaipb.NewsSource{
-		Country:          countryPtr,
-		ExcludedWebsites: excludedWebsites,
-		SafeSearch:       safeSearch,
-	}}}
+	return &xaipb.Source{
+		Source: &xaipb.Source_News{
+			News: &xaipb.NewsSource{
+				Country:          countryPtr,
+				ExcludedWebsites: excludedWebsites,
+				SafeSearch:       safeSearch,
+			},
+		},
+	}
 }
 
 // XSource builds an X (Twitter) search source.
@@ -101,12 +105,16 @@ func XSource(includedHandles, excludedHandles []string, favoriteCount, viewCount
 	if viewCount > 0 {
 		viewPtr = &viewCount
 	}
-	return &xaipb.Source{Source: &xaipb.Source_X{X: &xaipb.XSource{
-		IncludedXHandles:  includedHandles,
-		ExcludedXHandles:  excludedHandles,
-		PostFavoriteCount: favPtr,
-		PostViewCount:     viewPtr,
-	}}}
+	return &xaipb.Source{
+		Source: &xaipb.Source_X{
+			X: &xaipb.XSource{
+				IncludedXHandles:  includedHandles,
+				ExcludedXHandles:  excludedHandles,
+				PostFavoriteCount: favPtr,
+				PostViewCount:     viewPtr,
+			},
+		},
+	}
 }
 
 // RSSSource builds an RSS feed search source.
@@ -122,7 +130,9 @@ func RSSSource(links []string) *xaipb.Source {
 
 // DocumentsSource builds a documents source for semantic search over collections.
 func DocumentsSource(collectionIDs []string) *xaipb.DocumentsSource {
-	return &xaipb.DocumentsSource{CollectionIds: collectionIDs}
+	return &xaipb.DocumentsSource{
+		CollectionIds: collectionIDs,
+	}
 }
 
 func searchModeToProto(mode SearchMode) xaipb.SearchMode {

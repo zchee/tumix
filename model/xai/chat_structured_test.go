@@ -22,7 +22,9 @@ func TestWithJSONStruct(t *testing.T) {
 // chatSessionForTest builds a minimal ChatSession with a dummy request.
 func chatSessionForTest() *ChatSession {
 	return &ChatSession{
-		request: &xaipb.GetCompletionsRequest{Model: "grok"},
+		request: &xaipb.GetCompletionsRequest{
+			Model: "grok",
+		},
 	}
 }
 

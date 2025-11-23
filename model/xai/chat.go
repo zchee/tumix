@@ -309,7 +309,6 @@ func (s *ChatSession) AppendToolResultJSON(toolCallID string, result any) *ChatS
 	return s.Append(msg)
 }
 
-
 // Messages returns the current conversation history.
 func (s *ChatSession) Messages() []*xaipb.Message { return s.request.Messages }
 
@@ -359,15 +358,15 @@ func (s *ChatSession) Stream(ctx context.Context) (*ChatStream, error) {
 	// For now, we just start it and let the user manage context or rely on garbage collection (not ideal).
 	// Better: ChatStream should hold the span and End() it when stream is exhausted or error occurs.
 
-stream, err := s.streamN(ctx, 1)
-if err != nil {
-	span.RecordError(err)
-	span.End()
-	return nil, err
-}
-stream.span = span
-stream.ctx = ctx
-return stream, nil
+	stream, err := s.streamN(ctx, 1)
+	if err != nil {
+		span.RecordError(err)
+		span.End()
+		return nil, err
+	}
+	stream.span = span
+	stream.ctx = ctx
+	return stream, nil
 }
 
 // StreamBatch returns a streaming iterator for multiple responses.
@@ -377,15 +376,15 @@ func (s *ChatSession) StreamBatch(ctx context.Context, n int) (*ChatStream, erro
 		trace.WithAttributes(s.makeSpanRequestAttributes()...),
 	)
 
-stream, err := s.streamN(ctx, n)
-if err != nil {
-	span.RecordError(err)
-	span.End()
-	return nil, err
-}
-stream.span = span
-stream.ctx = ctx
-return stream, nil
+	stream, err := s.streamN(ctx, n)
+	if err != nil {
+		span.RecordError(err)
+		span.End()
+		return nil, err
+	}
+	stream.span = span
+	stream.ctx = ctx
+	return stream, nil
 }
 
 // Defer executes the request using deferred polling.
@@ -446,7 +445,6 @@ func (s *ChatSession) Parse(ctx context.Context, out any) (*Response, error) {
 
 // parseWithRequest executes a parse with the provided request.
 func (s *ChatSession) parseWithRequest(ctx context.Context, out any, req *xaipb.GetCompletionsRequest) (*Response, error) {
-
 	ctx, span := tracer.Start(ctx, fmt.Sprintf("chat.parse %s", s.request.Model),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(s.makeSpanRequestAttributes()...),
@@ -1086,7 +1084,9 @@ func ImageContent(url string, detail xaipb.ImageDetail) *xaipb.Content {
 func FileContent(fileID string) *xaipb.Content {
 	return &xaipb.Content{
 		Content: &xaipb.Content_File{
-			File: &xaipb.FileContent{FileId: fileID},
+			File: &xaipb.FileContent{
+				FileId: fileID,
+			},
 		},
 	}
 }
@@ -1154,13 +1154,6 @@ func appendToBuilder(m map[int]*strings.Builder, idx int, s string) {
 		m[idx] = b
 	}
 	b.WriteString(s)
-}
-
-func captionPtr(s string) *string {
-	if s == "" {
-		return nil
-	}
-	return &s
 }
 
 func splitResponses(resp *xaipb.GetChatCompletionResponse, n int) []*Response {

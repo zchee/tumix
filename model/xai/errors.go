@@ -23,13 +23,13 @@ func (e *Error) Error() string {
 	return e.Message
 }
 
-// GRPCStatus builds a status.Status from the structured error for interoperability.
+// GRPCStatus builds a [status.Status] from the structured error for interoperability.
 func (e *Error) GRPCStatus() *status.Status {
 	st := status.New(e.Code, e.Message)
 	return st
 }
 
-// ParseError converts a gRPC status error into XAIError if possible.
+// ParseError converts a gRPC status error into [Error] if possible.
 func ParseError(err error) (*Error, bool) {
 	if err == nil {
 		return nil, false
@@ -38,10 +38,14 @@ func ParseError(err error) (*Error, bool) {
 	if !ok {
 		return nil, false
 	}
-	return &Error{Code: st.Code(), Message: st.Message(), Details: st.Details()}, true
+	return &Error{
+		Code:    st.Code(),
+		Message: st.Message(),
+		Details: st.Details(),
+	}, true
 }
 
-// WrapError returns an XAIError if err is a gRPC status error; otherwise returns err unchanged.
+// WrapError returns an [Error] if err is a gRPC status error; otherwise returns err unchanged.
 func WrapError(err error) error {
 	if xe, ok := ParseError(err); ok {
 		return xe
@@ -50,6 +54,7 @@ func WrapError(err error) error {
 }
 
 // IsRetryable reports whether an error is retryable (currently UNAVAILABLE or DEADLINE_EXCEEDED).
+//
 // This mirrors the retryable set used in the client service config.
 func IsRetryable(err error) bool {
 	if xe, ok := ParseError(err); ok {
@@ -61,13 +66,13 @@ func IsRetryable(err error) bool {
 	return false
 }
 
-// Unwrap enables errors.Is/As to reach the underlying status.
+// Unwrap enables [errors.Is] and [errors.As] to reach the underlying status.
 func (e *Error) Unwrap() error {
 	return status.New(e.Code, e.Message).Err()
 }
 
-// AsXAIError is a helper for errors.As.
-func AsXAIError(err error) (*Error, bool) {
+// AsError is a helper for [errors.As].
+func AsError(err error) (*Error, bool) {
 	var target *Error
 	if errors.As(err, &target) {
 		return target, true

@@ -134,7 +134,11 @@ func (c *FilesClient) Upload(ctx context.Context, src any, opts ...FileOption) (
 	for {
 		n, readErr := reader.Read(buf)
 		if n > 0 {
-			chunk := &xaipb.UploadFileChunk{Chunk: &xaipb.UploadFileChunk_Data{Data: buf[:n]}}
+			chunk := &xaipb.UploadFileChunk{
+				Chunk: &xaipb.UploadFileChunk_Data{
+					Data: buf[:n],
+				},
+			}
 			if err := stream.Send(chunk); err != nil {
 				return nil, err
 			}
@@ -201,17 +205,23 @@ func (c *FilesClient) List(ctx context.Context, limit int32, order Order, sortBy
 
 // Get retrieves metadata for a file.
 func (c *FilesClient) Get(ctx context.Context, fileID string) (*xaipb.File, error) {
-	return c.files.RetrieveFile(ctx, &xaipb.RetrieveFileRequest{FileId: fileID})
+	return c.files.RetrieveFile(ctx, &xaipb.RetrieveFileRequest{
+		FileId: fileID,
+	})
 }
 
 // Delete removes a file by ID.
 func (c *FilesClient) Delete(ctx context.Context, fileID string) (*xaipb.DeleteFileResponse, error) {
-	return c.files.DeleteFile(ctx, &xaipb.DeleteFileRequest{FileId: fileID})
+	return c.files.DeleteFile(ctx, &xaipb.DeleteFileRequest{
+		FileId: fileID,
+	})
 }
 
 // Content downloads the full file content.
 func (c *FilesClient) Content(ctx context.Context, fileID string) ([]byte, error) {
-	stream, err := c.files.RetrieveFileContent(ctx, &xaipb.RetrieveFileContentRequest{FileId: fileID})
+	stream, err := c.files.RetrieveFileContent(ctx, &xaipb.RetrieveFileContentRequest{
+		FileId: fileID,
+	})
 	if err != nil {
 		return nil, WrapError(err)
 	}
@@ -231,7 +241,9 @@ func (c *FilesClient) Content(ctx context.Context, fileID string) ([]byte, error
 
 // URL retrieves a signed URL for file download when available.
 func (c *FilesClient) URL(ctx context.Context, fileID string) (string, error) {
-	resp, err := c.files.RetrieveFileURL(ctx, &xaipb.RetrieveFileURLRequest{FileId: fileID})
+	resp, err := c.files.RetrieveFileURL(ctx, &xaipb.RetrieveFileURLRequest{
+		FileId: fileID,
+	})
 	if err != nil {
 		return "", WrapError(err)
 	}

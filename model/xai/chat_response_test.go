@@ -9,10 +9,15 @@ import (
 func TestResponseDecodeJSON(t *testing.T) {
 	resp := newResponse(&xaipb.GetChatCompletionResponse{
 		Outputs: []*xaipb.CompletionOutput{{
-			Message: &xaipb.CompletionMessage{Role: xaipb.MessageRole_ROLE_ASSISTANT, Content: `{"foo":123}`},
+			Message: &xaipb.CompletionMessage{
+				Role:    xaipb.MessageRole_ROLE_ASSISTANT,
+				Content: `{"foo":123}`,
+			},
 		}},
 	}, nil)
-	var out struct{ Foo int `json:"foo"` }
+	var out struct {
+		Foo int `json:"foo"`
+	}
 	if err := resp.DecodeJSON(&out); err != nil {
 		t.Fatalf("decode failed: %v", err)
 	}
@@ -20,4 +25,3 @@ func TestResponseDecodeJSON(t *testing.T) {
 		t.Fatalf("unexpected value: %+v", out)
 	}
 }
-

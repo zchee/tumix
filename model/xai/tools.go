@@ -109,7 +109,7 @@ func CollectionsSearchTool(collectionIDs []string, limit int32) *xaipb.Tool {
 		Tool: &xaipb.Tool_CollectionsSearch{
 			CollectionsSearch: &xaipb.CollectionsSearch{
 				CollectionIds: collectionIDs,
-				Limit:         limitPtr(limit),
+				Limit:         ptr(limit),
 			},
 		},
 	}
@@ -138,14 +138,6 @@ func MCPTool(serverURL string, serverLabel, serverDescription string, allowedToo
 			},
 		},
 	}
-}
-
-// limitPtr returns nil if v is zero to honor proto optional semantics.
-func limitPtr(v int32) *int32 {
-	if v == 0 {
-		return nil
-	}
-	return &v
 }
 
 // DocumentSearchTool enables server-side document search.

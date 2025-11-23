@@ -44,12 +44,12 @@ type Client struct {
 	Billing     *BillingClient
 	Chat        *ChatClient
 	Collections *CollectionsClient
+	Files       *FilesClient
 	Embed       *EmbedClient
 	Image       *ImageClient
 	Models      *ModelsClient
 	Sampler     *SamplerClient
 	Tokenizer   *TokenizerClient
-	Files       *FilesClient
 }
 
 // NewClient creates a new xAI API client with optional configuration.
@@ -93,6 +93,9 @@ func NewClient(ctx context.Context, apiKey string, optFns ...ClientOption) (*Cli
 		Chat: &ChatClient{
 			chat: xaipb.NewChatClient(apiConn),
 		},
+		Files: &FilesClient{
+			files: xaipb.NewFilesClient(apiConn),
+		},
 		Embed: &EmbedClient{
 			embedder: xaipb.NewEmbedderClient(apiConn),
 		},
@@ -107,9 +110,6 @@ func NewClient(ctx context.Context, apiKey string, optFns ...ClientOption) (*Cli
 		},
 		Tokenizer: &TokenizerClient{
 			tokenize: xaipb.NewTokenizeClient(apiConn),
-		},
-		Files: &FilesClient{
-			files: xaipb.NewFilesClient(apiConn),
 		},
 	}
 
