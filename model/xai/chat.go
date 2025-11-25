@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"time"
 
@@ -572,13 +573,14 @@ func (s *ChatSession) invokeCompletion(ctx context.Context, req *xaipb.GetComple
 }
 
 func (s *ChatSession) makeSpanRequestAttributes() []attribute.KeyValue {
-	attrs := []attribute.KeyValue{
+	attrs := make([]attribute.KeyValue, 0, 16+len(s.request.Messages)*3)
+	attrs = append(attrs,
 		attribute.String("gen_ai.operation.name", "chat"),
 		attribute.String("gen_ai.system", "xai"),
 		attribute.String("gen_ai.output.type", "text"),
 		attribute.String("gen_ai.request.model", s.request.Model),
 		attribute.Int("server.port", 443),
-	}
+	)
 
 	// Optional fields
 	attrs = append(attrs,
@@ -659,11 +661,12 @@ func (s *ChatSession) makeSpanResponseAttributes(responses []*Response) []attrib
 	first := responses[0]
 	usage := first.Usage()
 
-	attrs := []attribute.KeyValue{
+	attrs := make([]attribute.KeyValue, 0, 12+len(responses)*4)
+	attrs = append(attrs,
 		attribute.String("gen_ai.response.id", first.proto.Id),
 		attribute.String("gen_ai.response.model", first.proto.Model),
 		attribute.String("gen_ai.response.system_fingerprint", first.proto.SystemFingerprint),
-	}
+	)
 
 	if usage != nil {
 		attrs = append(attrs,
@@ -776,9 +779,9 @@ func (s *ChatStream) Recv() (*Response, *Chunk, error) {
 type Response struct {
 	proto             *xaipb.GetChatCompletionResponse
 	index             *int
-	contentBuffers    map[int]*strings.Builder
-	reasoningBuffers  map[int]*strings.Builder
-	encryptedBuffers  map[int]*strings.Builder
+	contentBuffers    []*strings.Builder
+	reasoningBuffers  []*strings.Builder
+	encryptedBuffers  []*strings.Builder
 	buffersAreInProto bool
 }
 
@@ -786,9 +789,9 @@ func newResponse(protoResp *xaipb.GetChatCompletionResponse, index *int) *Respon
 	return &Response{
 		proto:             protoResp,
 		index:             index,
-		contentBuffers:    map[int]*strings.Builder{},
-		reasoningBuffers:  map[int]*strings.Builder{},
-		encryptedBuffers:  map[int]*strings.Builder{},
+		contentBuffers:    nil,
+		reasoningBuffers:  nil,
+		encryptedBuffers:  nil,
 		buffersAreInProto: true,
 	}
 }
@@ -844,8 +847,8 @@ func (r *Response) Role() string {
 // ToolCalls returns tool calls from all assistant outputs.
 func (r *Response) ToolCalls() []*xaipb.ToolCall {
 	r.flushBuffers()
-	var calls []*xaipb.ToolCall
-	for _, out := range r.proto.Outputs {
+	calls := make([]*xaipb.ToolCall, 0, len(r.proto.Outputs))
+	for out := range slices.Values(r.proto.Outputs) {
 		if out.Message.Role == xaipb.MessageRole_ROLE_ASSISTANT {
 			calls = append(calls, out.Message.ToolCalls...)
 		}
@@ -878,6 +881,9 @@ func (r *Response) output() *xaipb.CompletionOutput {
 func (r *Response) outputNoFlush() *xaipb.CompletionOutput {
 	var outputs []*xaipb.CompletionOutput
 	for _, out := range r.proto.Outputs {
+		if out == nil || out.Message == nil {
+			continue
+		}
 		if out.Message.Role == xaipb.MessageRole_ROLE_ASSISTANT && (r.index == nil || int32(out.Index) == int32(valueOrZero(r.index))) {
 			outputs = append(outputs, out)
 		}
@@ -893,17 +899,17 @@ func (r *Response) flushBuffers() {
 		return
 	}
 	for idx, b := range r.contentBuffers {
-		if idx < len(r.proto.Outputs) {
+		if b != nil && idx < len(r.proto.Outputs) {
 			r.proto.Outputs[idx].Message.Content = b.String()
 		}
 	}
 	for idx, b := range r.reasoningBuffers {
-		if idx < len(r.proto.Outputs) {
+		if b != nil && idx < len(r.proto.Outputs) {
 			r.proto.Outputs[idx].Message.ReasoningContent = b.String()
 		}
 	}
 	for idx, b := range r.encryptedBuffers {
-		if idx < len(r.proto.Outputs) {
+		if b != nil && idx < len(r.proto.Outputs) {
 			r.proto.Outputs[idx].Message.EncryptedContent = b.String()
 		}
 	}
@@ -919,17 +925,43 @@ func (r *Response) processChunk(chunk *xaipb.GetChatCompletionChunk) {
 	r.proto.Citations = append(r.proto.Citations, chunk.Citations...)
 
 	maxIndex := 0
+	hasContent := false
+	hasReasoning := false
+	hasEncrypted := false
 	for _, out := range chunk.Outputs {
-		if int(out.Index) > maxIndex {
-			maxIndex = int(out.Index)
+		if idx := int(out.Index); idx > maxIndex {
+			maxIndex = idx
+		}
+		hasContent = hasContent || out.Delta.Content != ""
+		hasReasoning = hasReasoning || out.Delta.ReasoningContent != ""
+		hasEncrypted = hasEncrypted || out.Delta.EncryptedContent != ""
+	}
+	if needed := maxIndex + 1 - len(r.proto.Outputs); needed > 0 {
+		start := len(r.proto.Outputs)
+		r.proto.Outputs = append(r.proto.Outputs, make([]*xaipb.CompletionOutput, needed)...)
+		for i := start; i < len(r.proto.Outputs); i++ {
+			r.proto.Outputs[i] = nil
 		}
 	}
-	for len(r.proto.Outputs) <= maxIndex {
-		r.proto.Outputs = append(r.proto.Outputs, &xaipb.CompletionOutput{})
+
+	if size := maxIndex + 1; size > 0 {
+		if hasContent {
+			growBuilders(&r.contentBuffers, size)
+		}
+		if hasReasoning {
+			growBuilders(&r.reasoningBuffers, size)
+		}
+		if hasEncrypted {
+			growBuilders(&r.encryptedBuffers, size)
+		}
 	}
 
 	for _, c := range chunk.Outputs {
 		target := r.proto.Outputs[c.Index]
+		if target == nil {
+			target = &xaipb.CompletionOutput{}
+			r.proto.Outputs[c.Index] = target
+		}
 		target.Index = c.Index
 		if target.Message == nil {
 			target.Message = &xaipb.CompletionMessage{}
@@ -939,15 +971,15 @@ func (r *Response) processChunk(chunk *xaipb.GetChatCompletionChunk) {
 		target.FinishReason = c.FinishReason
 
 		if c.Delta.Content != "" {
-			appendToBuilder(r.contentBuffers, int(c.Index), c.Delta.Content)
+			ensureBuilder(&r.contentBuffers, int(c.Index)).WriteString(c.Delta.Content)
 			r.buffersAreInProto = false
 		}
 		if c.Delta.ReasoningContent != "" {
-			appendToBuilder(r.reasoningBuffers, int(c.Index), c.Delta.ReasoningContent)
+			ensureBuilder(&r.reasoningBuffers, int(c.Index)).WriteString(c.Delta.ReasoningContent)
 			r.buffersAreInProto = false
 		}
 		if c.Delta.EncryptedContent != "" {
-			appendToBuilder(r.encryptedBuffers, int(c.Index), c.Delta.EncryptedContent)
+			ensureBuilder(&r.encryptedBuffers, int(c.Index)).WriteString(c.Delta.EncryptedContent)
 			r.buffersAreInProto = false
 		}
 	}
@@ -1147,13 +1179,28 @@ func intPtrIf(condition bool) *int {
 	return &zero
 }
 
-func appendToBuilder(m map[int]*strings.Builder, idx int, s string) {
-	b, ok := m[idx]
-	if !ok {
-		b = &strings.Builder{}
-		m[idx] = b
+func ensureBuilder(bufs *[]*strings.Builder, idx int) *strings.Builder {
+	if idx < 0 {
+		return nil
 	}
-	b.WriteString(s)
+	if idx >= len(*bufs) {
+		extra := idx + 1 - len(*bufs)
+		*bufs = slices.Grow(*bufs, extra)
+		*bufs = (*bufs)[:idx+1]
+	}
+	if (*bufs)[idx] == nil {
+		(*bufs)[idx] = &strings.Builder{}
+	}
+	return (*bufs)[idx]
+}
+
+func growBuilders(bufs *[]*strings.Builder, size int) {
+	if size <= len(*bufs) {
+		return
+	}
+	extra := size - len(*bufs)
+	*bufs = slices.Grow(*bufs, extra)
+	*bufs = (*bufs)[:size]
 }
 
 func splitResponses(resp *xaipb.GetChatCompletionResponse, n int) []*Response {
