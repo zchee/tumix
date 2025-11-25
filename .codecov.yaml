@@ -34,11 +34,13 @@ coverage:
 
 # https://docs.codecov.com/docs/ignoring-paths
 # prettier-ignore
-# ignore:
+ignore:
+  - "**/*.pb.go" # pb files
+  - model/xai/examples/**/* # examples
 
 # https://docs.codecov.com/docs/codecovyml-reference#comment
 comment:
-  layout: "newheader, diff, flags, files, betaprofiling"
+  layout: "header, diff, flags, files"
   behavior: default
   require_changes: false
   show_carryforward_flags: true
