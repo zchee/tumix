@@ -2,7 +2,7 @@ module github.com/zchee/tumix
 
 go 1.25
 
-require google.golang.org/adk v0.1.1-0.20251120170031-02612386edef // @main
+require google.golang.org/adk v0.2.1-0.20251124114330-f5e8b6d18dee // @main
 
 require (
 	cloud.google.com/go v0.123.0 // indirect
