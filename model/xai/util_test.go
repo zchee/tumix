@@ -1,6 +1,8 @@
 package xai
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestPtrAndDeref(t *testing.T) {
 	v := 42

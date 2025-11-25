@@ -25,10 +25,14 @@ func TestImageOptions(t *testing.T) {
 func TestImageResponseHelpers(t *testing.T) {
 	raw := []byte("pngdata")
 	b64 := "data:image/png;base64," + base64.StdEncoding.EncodeToString(raw)
-	proto := &xaipb.ImageResponse{Images: []*xaipb.GeneratedImage{{
-		Image:           &xaipb.GeneratedImage_Base64{Base64: b64},
-		UpSampledPrompt: "refined",
-	}}}
+	proto := &xaipb.ImageResponse{
+		Images: []*xaipb.GeneratedImage{
+			{
+				Image:           &xaipb.GeneratedImage_Base64{Base64: b64},
+				UpSampledPrompt: "refined",
+			},
+		},
+	}
 
 	resp := &ImageResponse{proto: proto, index: 0}
 

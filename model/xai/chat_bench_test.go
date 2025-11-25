@@ -31,7 +31,7 @@ func BenchmarkResponseProcessChunkMulti(b *testing.B) {
 	}
 
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		resp := newResponse(&xaipb.GetChatCompletionResponse{}, nil)
 		resp.processChunk(chunk)
 		_ = resp.Content()
@@ -48,7 +48,7 @@ func BenchmarkResponseProcessChunkReuse(b *testing.B) {
 	resp := newResponse(&xaipb.GetChatCompletionResponse{}, nil)
 
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		resp.processChunk(chunk)
 		_ = resp.Content()
 		resp.contentBuffers = resp.contentBuffers[:0]

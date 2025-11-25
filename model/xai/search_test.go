@@ -10,7 +10,9 @@ import (
 func TestSearchParametersProto(t *testing.T) {
 	from := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
 	params := SearchParameters{
-		Sources:          []*xaipb.Source{WebSource("US", []string{"example.com"}, nil, true)},
+		Sources: []*xaipb.Source{
+			WebSource("US", []string{"example.com"}, nil, true),
+		},
 		Mode:             SearchModeOn,
 		FromDate:         &from,
 		ReturnCitations:  true,
