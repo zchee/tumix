@@ -82,7 +82,6 @@ linters:
     - ineffassign
     - interfacebloat
     - intrange
-    - ireturn
     - lll
     - loggercheck
     - maintidx
@@ -97,7 +96,6 @@ linters:
     - noctx
     - nolintlint
     - nosprintfhostport
-    - perfsprint
     - prealloc
     - predeclared
     - promlinter
@@ -309,6 +307,11 @@ linters:
       - common-false-positives
       - std-error-handling
     rules:
+      - linters:
+          - decorder
+          - revive
+          - wrapcheck
+        path: model/xai
       - linters:
           - errcheck
           - funlen
