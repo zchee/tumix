@@ -19,7 +19,10 @@ package xai
 import (
 	"context"
 	json "encoding/json/v2"
+	"errors"
 	"fmt"
+	"reflect"
+	"sync"
 	"time"
 
 	"github.com/invopop/jsonschema"
@@ -135,14 +138,8 @@ func WithJSONSchema(schema string) ChatOption {
 // WithJSONStruct derives a JSON Schema from the generic type T (pointer recommended) for structured outputs.
 func WithJSONStruct[T any]() ChatOption {
 	return func(req *xaipb.GetCompletionsRequest, _ *ChatSession) {
-		var zero T
-		refl := &jsonschema.Reflector{}
-		schema := refl.Reflect(zero)
-		if schema == nil {
-			return
-		}
-
-		b, err := json.Marshal(schema)
+		typ := reflect.TypeOf((*T)(nil)).Elem()
+		b, err := schemaBytesForType(typ)
 		if err != nil {
 			return
 		}
@@ -407,16 +404,14 @@ func (s *ChatSession) DeferBatch(ctx context.Context, n int32, timeout, interval
 // Parse sets response_format to a JSON schema derived from the provided sample value and decodes into it.
 // Pass a pointer to a struct value to populate it.
 func (s *ChatSession) Parse(ctx context.Context, out any) (*Response, error) {
-	reflector := &jsonschema.Reflector{}
-	schema := reflector.Reflect(out)
-	schemaBytes, err := json.Marshal(schema)
-	if err != nil {
-		return nil, err
-	}
-
 	if s.request.GetResponseFormat() != nil && s.request.GetResponseFormat().GetFormatType() == xaipb.FormatType_FORMAT_TYPE_JSON_SCHEMA {
 		// allow caller to override schema via options; don't overwrite
 		return s.parseWithRequest(ctx, out, proto.Clone(s.request).(*xaipb.GetCompletionsRequest))
+	}
+
+	schemaBytes, err := schemaBytesForValue(out)
+	if err != nil {
+		return nil, err
 	}
 
 	schemaStr := string(schemaBytes)
@@ -452,4 +447,36 @@ func (s *ChatSession) parseWithRequest(ctx context.Context, out any, req *xaipb.
 	}
 
 	return resp, nil
+}
+
+var jsonSchemaCache sync.Map
+
+func schemaBytesForValue(v any) ([]byte, error) {
+	if v == nil {
+		return nil, errors.New("schema value must be non-nil")
+	}
+	return schemaBytesForType(reflect.TypeOf(v))
+}
+
+func schemaBytesForType(t reflect.Type) ([]byte, error) {
+	if t == nil {
+		return nil, errors.New("schema type is nil")
+	}
+	if cached, ok := jsonSchemaCache.Load(t); ok {
+		return cached.([]byte), nil
+	}
+
+	refl := &jsonschema.Reflector{}
+	zero := reflect.New(t).Elem().Interface()
+	schema := refl.Reflect(zero)
+	if schema == nil {
+		return nil, errors.New("schema reflection returned nil")
+	}
+
+	b, err := json.Marshal(schema)
+	if err != nil {
+		return nil, err
+	}
+	jsonSchemaCache.Store(t, b)
+	return b, nil
 }
