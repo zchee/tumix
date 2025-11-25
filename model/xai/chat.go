@@ -305,7 +305,7 @@ func (s *ChatSession) makeSpanResponseAttributes(responses []*Response) []attrib
 	first := responses[0]
 	usage := first.Usage()
 
-	attrs := make([]attribute.KeyValue, 0, 12+len(responses)*4)
+	attrs := make([]attribute.KeyValue, 0, 12+len(responses)*5)
 	attrs = append(attrs,
 		attribute.String("gen_ai.response.id", first.proto.GetId()),
 		attribute.String("gen_ai.response.model", first.proto.GetModel()),
@@ -321,13 +321,14 @@ func (s *ChatSession) makeSpanResponseAttributes(responses []*Response) []attrib
 		)
 	}
 
-	finishReasons := make([]string, 0, len(responses))
+	finishReasons := make([]string, len(responses))
 	for i, resp := range responses {
-		finishReasons = append(finishReasons, resp.FinishReason())
+		finishReasons[i] = resp.FinishReason()
 
-		prefix := fmt.Sprintf("gen_ai.completion.%d", i)
+		prefix := "gen_ai.completion." + strconv.Itoa(i)
+		role := strings.ToLower(strings.TrimPrefix(resp.Role(), "ROLE_"))
 		attrs = append(attrs,
-			attribute.String(prefix+".role", strings.ToLower(strings.TrimPrefix(resp.Role(), "ROLE_"))),
+			attribute.String(prefix+".role", role),
 			attribute.String(prefix+".content", resp.Content()),
 		)
 
