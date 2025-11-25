@@ -136,6 +136,52 @@ func BenchmarkSpanAttributes(b *testing.B) {
 	}
 }
 
+func BenchmarkSpanResponseAttributes(b *testing.B) {
+	respProto := &xaipb.GetChatCompletionResponse{
+		Id:                "resp-1",
+		Model:             "grok-4-1",
+		SystemFingerprint: "fp",
+		Outputs: []*xaipb.CompletionOutput{
+			{
+				Index: 0,
+				Message: &xaipb.CompletionMessage{
+					Role:             xaipb.MessageRole_ROLE_ASSISTANT,
+					Content:          strings.Repeat("answer", 3),
+					ReasoningContent: strings.Repeat("why", 2),
+					ToolCalls: []*xaipb.ToolCall{
+						{Tool: &xaipb.ToolCall_Function{Function: &xaipb.FunctionCall{Name: "fn", Arguments: `{"a":1}`}}},
+					},
+				},
+				FinishReason: xaipb.FinishReason_REASON_STOP,
+			},
+			{
+				Index: 1,
+				Message: &xaipb.CompletionMessage{
+					Role:    xaipb.MessageRole_ROLE_ASSISTANT,
+					Content: strings.Repeat("extra", 2),
+				},
+				FinishReason: xaipb.FinishReason_REASON_MAX_LEN,
+			},
+		},
+		Usage: &xaipb.SamplingUsage{
+			PromptTokens:     123,
+			CompletionTokens: 456,
+			TotalTokens:      579,
+			ReasoningTokens:  42,
+		},
+	}
+	responses := []*Response{
+		newResponse(respProto, nil),
+	}
+
+	s := &ChatSession{}
+
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = s.makeSpanResponseAttributes(responses)
+	}
+}
+
 func metadataChunk(idx int32) *xaipb.CompletionOutputChunk {
 	return &xaipb.CompletionOutputChunk{
 		Index: idx,
