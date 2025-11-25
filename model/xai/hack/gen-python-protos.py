@@ -154,7 +154,10 @@ if __name__ == "__main__":
     import os
     import shutil
 
-    os.environ["PATH"] += os.pathsep + str(Path(__file__).parent.parent.parent.parent / "tools" / "bin")
+    tool_dir = Path(__file__).parent.parent.parent.parent / "tools" / "bin"
+    if not tool_dir.is_dir():
+        sys.exit(f"missing tools directory: {tool_dir}")
+    os.environ["PATH"] += os.pathsep + str(tool_dir)
 
     require("git")
     require("protoc")
