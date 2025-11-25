@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -210,14 +211,15 @@ func (s *ChatSession) invokeCompletion(ctx context.Context, req *xaipb.GetComple
 
 //nolint:cyclop
 func (s *ChatSession) makeSpanRequestAttributes() []attribute.KeyValue {
-	attrs := append([]attribute.KeyValue{},
+	msgs := s.request.GetMessages()
+	attrs := make([]attribute.KeyValue, 0, 18+len(msgs)*4)
+
+	attrs = append(attrs,
 		attribute.String("gen_ai.operation.name", "chat"),
 		attribute.String("gen_ai.system", "xai"),
 		attribute.String("gen_ai.output.type", "text"),
 		attribute.String("gen_ai.request.model", s.request.GetModel()),
 		attribute.Int("server.port", 443),
-
-		// Optional fields
 		attribute.Float64("gen_ai.request.frequency_penalty", float64(deref(s.request.FrequencyPenalty))),
 		attribute.Float64("gen_ai.request.presence_penalty", float64(deref(s.request.PresencePenalty))),
 		attribute.Float64("gen_ai.request.temperature", float64(deref(s.request.Temperature))),
@@ -246,40 +248,47 @@ func (s *ChatSession) makeSpanRequestAttributes() []attribute.KeyValue {
 	if s.conversationID != "" {
 		attrs = append(attrs, attribute.String("gen_ai.conversation.id", s.conversationID))
 	}
-	if len(s.request.GetStop()) > 0 {
-		attrs = append(attrs, attribute.StringSlice("gen_ai.request.stop_sequences", s.request.GetStop()))
+	if stops := s.request.GetStop(); len(stops) > 0 {
+		attrs = append(attrs, attribute.StringSlice("gen_ai.request.stop_sequences", stops))
 	}
-	if s.request.GetResponseFormat() != nil {
-		attrs = append(attrs, attribute.String("gen_ai.output.type", strings.ToLower(strings.TrimPrefix(s.request.GetResponseFormat().GetFormatType().String(), "FORMAT_TYPE_"))))
+	if rf := s.request.GetResponseFormat(); rf != nil {
+		attrs = append(attrs, attribute.String("gen_ai.output.type", strings.ToLower(strings.TrimPrefix(rf.GetFormatType().String(), "FORMAT_TYPE_"))))
 	}
-	if s.request.ReasoningEffort != nil {
-		attrs = append(attrs, attribute.String("gen_ai.request.reasoning_effort", strings.ToLower(strings.TrimPrefix(s.request.GetReasoningEffort().String(), "EFFORT_"))))
+	if re := s.request.ReasoningEffort; re != nil {
+		attrs = append(attrs, attribute.String("gen_ai.request.reasoning_effort", strings.ToLower(strings.TrimPrefix(re.String(), "EFFORT_"))))
 	}
-	if s.request.GetUser() != "" {
-		attrs = append(attrs, attribute.String("user_id", s.request.GetUser()))
+	if user := s.request.GetUser(); user != "" {
+		attrs = append(attrs, attribute.String("user_id", user))
 	}
-	if s.request.PreviousResponseId != nil {
+	if prev := s.request.PreviousResponseId; prev != nil {
 		attrs = append(attrs, attribute.String("gen_ai.request.previous_response_id", s.request.GetPreviousResponseId()))
 	}
 
-	// Prompt attributes
-	for i, msg := range s.request.GetMessages() {
-		prefix := fmt.Sprintf("gen_ai.prompt.%d", i)
+	var contentBuf strings.Builder
+	for i, msg := range msgs {
+		prefix := "gen_ai.prompt." + strconv.Itoa(i)
 		role := strings.ToLower(strings.TrimPrefix(msg.GetRole().String(), "ROLE_"))
 		attrs = append(attrs, attribute.String(prefix+".role", role))
 
-		var contentStr strings.Builder
-		for _, c := range msg.GetContent() {
-			if txt := c.GetText(); txt != "" {
-				contentStr.WriteString(txt)
+		contentBuf.Reset()
+		if parts := msg.GetContent(); len(parts) > 0 {
+			total := 0
+			for _, c := range parts {
+				total += len(c.GetText())
+			}
+			if total > 0 {
+				contentBuf.Grow(total)
+				for _, c := range parts {
+					if txt := c.GetText(); txt != "" {
+						contentBuf.WriteString(txt)
+					}
+				}
 			}
 		}
-		attrs = append(attrs, attribute.String(prefix+".content", contentStr.String()))
+		attrs = append(attrs, attribute.String(prefix+".content", contentBuf.String()))
 
-		if len(msg.GetToolCalls()) > 0 {
-			// Serialize tool calls mostly for debug, simplified here
-			// Python does full JSON serialization
-			if b, err := json.Marshal(msg.GetToolCalls()); err == nil {
+		if tcs := msg.GetToolCalls(); len(tcs) > 0 {
+			if b, err := json.Marshal(tcs); err == nil {
 				attrs = append(attrs, attribute.String(prefix+".tool_calls", string(b)))
 			}
 		}
