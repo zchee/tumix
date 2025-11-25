@@ -12,7 +12,7 @@ func main() {
 	ctx, cancel := exampleutil.Context()
 	defer cancel()
 
-	client, cleanup, err := exampleutil.NewClient(ctx)
+	client, cleanup, err := exampleutil.NewClient()
 	if err != nil {
 		log.Fatalf("create client: %v", err)
 	}

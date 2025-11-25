@@ -66,11 +66,11 @@ func (c *ImageClient) Sample(ctx context.Context, prompt, model string, opts ...
 }
 
 // SampleBatch generates n images.
-func (c *ImageClient) SampleBatch(ctx context.Context, prompt, model string, n int, opts ...ImageOption) ([]*ImageResponse, error) {
+func (c *ImageClient) SampleBatch(ctx context.Context, prompt, model string, n int32, opts ...ImageOption) ([]*ImageResponse, error) {
 	req := &xaipb.GenerateImageRequest{
 		Prompt: prompt,
 		Model:  model,
-		N:      ptr(int32(n)),
+		N:      ptr(n),
 		Format: xaipb.ImageFormat_IMG_FORMAT_URL,
 	}
 	for _, opt := range opts {
@@ -152,8 +152,6 @@ func imageFormatToProto(f ImageFormat) xaipb.ImageFormat {
 	switch f {
 	case ImageFormatBase64:
 		return xaipb.ImageFormat_IMG_FORMAT_BASE64
-	case ImageFormatURL:
-		fallthrough
 	default:
 		return xaipb.ImageFormat_IMG_FORMAT_URL
 	}

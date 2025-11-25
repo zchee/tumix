@@ -1,5 +1,17 @@
 // Copyright 2025 The tumix Authors.
 //
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
 // SPDX-License-Identifier: Apache-2.0
 
 package xai
@@ -29,15 +41,23 @@ func (e *Error) GRPCStatus() *status.Status {
 	return st
 }
 
+// Unwrap enables [errors.Is] and [errors.As] to reach the underlying status.
+func (e *Error) Unwrap() error {
+	return status.New(e.Code, e.Message).Err()
+}
+
 // ParseError converts a gRPC status error into [Error] if possible.
 func ParseError(err error) (*Error, bool) {
+	// fast path
 	if err == nil {
 		return nil, false
 	}
+
 	st, ok := status.FromError(err)
 	if !ok {
 		return nil, false
 	}
+
 	return &Error{
 		Code:    st.Code(),
 		Message: st.Message(),
@@ -63,19 +83,15 @@ func IsRetryable(err error) bool {
 			return true
 		}
 	}
-	return false
-}
 
-// Unwrap enables [errors.Is] and [errors.As] to reach the underlying status.
-func (e *Error) Unwrap() error {
-	return status.New(e.Code, e.Message).Err()
+	return false
 }
 
 // AsError is a helper for [errors.As].
 func AsError(err error) (*Error, bool) {
-	var target *Error
-	if errors.As(err, &target) {
+	if target := new(Error); errors.As(err, &target) {
 		return target, true
 	}
+
 	return nil, false
 }

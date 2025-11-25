@@ -1,4 +1,4 @@
-module github.com/zchee/tumix/model/xai/examples/image_generation
+module github.com/zchee/tumix/model/xai/examples/embeddings
 
 go 1.25
 

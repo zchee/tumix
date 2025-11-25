@@ -63,6 +63,8 @@ type FilesClient struct {
 //   - string: path on disk
 //   - []byte: raw data (requires WithFilename)
 //   - io.Reader: streaming reader (requires WithFilename; total size optional)
+//
+//nolint:cyclop,gocognit,gocyclo // TODO(zchee): fix nolint.
 func (c *FilesClient) Upload(ctx context.Context, src any, opts ...FileOption) (*xaipb.File, error) {
 	if c == nil || c.files == nil {
 		return nil, errors.New("files client not initialized")
@@ -266,8 +268,6 @@ func fileSortByToProto(sort FileSortBy) *xaipb.FilesSortBy {
 		v = xaipb.FilesSortBy_FILES_SORT_BY_FILENAME
 	case FileSortBySize:
 		v = xaipb.FilesSortBy_FILES_SORT_BY_SIZE
-	case FileSortByCreatedAt:
-		fallthrough
 	default:
 		v = xaipb.FilesSortBy_FILES_SORT_BY_CREATED_AT
 	}

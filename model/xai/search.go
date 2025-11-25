@@ -141,8 +141,6 @@ func searchModeToProto(mode SearchMode) xaipb.SearchMode {
 		return xaipb.SearchMode_ON_SEARCH_MODE
 	case SearchModeOff:
 		return xaipb.SearchMode_OFF_SEARCH_MODE
-	case SearchModeAuto:
-		fallthrough
 	default:
 		return xaipb.SearchMode_AUTO_SEARCH_MODE
 	}

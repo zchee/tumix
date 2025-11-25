@@ -61,11 +61,16 @@ func InitOTLP(ctx context.Context, cfg OTLPConfig) (*trace.TracerProvider, error
 	if err != nil {
 		return nil, err
 	}
+
 	resAttrs := defaultResource()
 	for k, v := range cfg.Resource {
 		resAttrs = append(resAttrs, attribute.String(k, v))
 	}
-	res, _ := resource.Merge(resource.Empty(), resource.NewSchemaless(resAttrs...))
+	res, err := resource.Merge(resource.Empty(), resource.NewSchemaless(resAttrs...))
+	if err != nil {
+		return nil, err
+	}
+
 	tp := trace.NewTracerProvider(
 		trace.WithBatcher(exporter),
 		trace.WithResource(res),
@@ -81,23 +86,20 @@ func newOTLPExporter(ctx context.Context, cfg OTLPConfig) (trace.SpanExporter, e
 		if cfg.Insecure {
 			opts = append(opts, otlptracegrpc.WithInsecure())
 		}
-		switch strings.ToLower(cfg.Compression) {
-		case "gzip":
+		if strings.EqualFold(cfg.Compression, "gzip") {
 			opts = append(opts, otlptracegrpc.WithCompressor("gzip"))
 		}
 		if len(cfg.Headers) > 0 {
 			opts = append(opts, otlptracegrpc.WithHeaders(cfg.Headers))
 		}
 		return otlptracegrpc.New(ctx, opts...)
-	case OTLPHTTP:
-		fallthrough
+
 	default:
 		opts := []otlptracehttp.Option{otlptracehttp.WithEndpoint(cfg.Endpoint)}
 		if cfg.Insecure {
 			opts = append(opts, otlptracehttp.WithInsecure())
 		}
-		switch strings.ToLower(cfg.Compression) {
-		case "gzip":
+		if strings.EqualFold(cfg.Compression, "gzip") {
 			opts = append(opts, otlptracehttp.WithCompression(otlptracehttp.GzipCompression))
 		}
 		if len(cfg.Headers) > 0 {

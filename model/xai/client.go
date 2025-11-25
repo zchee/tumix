@@ -67,7 +67,7 @@ type Client struct {
 }
 
 // NewClient creates a new xAI API client with optional configuration.
-func NewClient(ctx context.Context, apiKey string, optFns ...ClientOption) (*Client, error) {
+func NewClient(apiKey string, optFns ...ClientOption) (*Client, error) {
 	opts := defaultClientOptions()
 	opts.apiKey = apiKey
 	for _, fn := range optFns {
@@ -120,7 +120,9 @@ func NewClient(ctx context.Context, apiKey string, optFns ...ClientOption) (*Cli
 	if opts.managementKey != "" {
 		client.managementConn, err = grpc.NewClient(opts.managementHost, buildDialOptions(opts, opts.managementKey)...)
 		if err != nil {
-			apiConn.Close()
+			if cloneErr := apiConn.Close(); cloneErr != nil {
+				err = errors.Join(err, cloneErr)
+			}
 			return nil, err
 		}
 		client.Billing = &BillingClient{
@@ -153,7 +155,9 @@ func (c *Client) Close() error {
 }
 
 func buildDialOptions(opts *clientOptions, token string) []grpc.DialOption {
-	creds := credentials.NewTLS(&tls.Config{})
+	creds := credentials.NewTLS(&tls.Config{
+		MinVersion: tls.VersionTLS12,
+	})
 	if opts.useInsecure {
 		creds = insecure.NewCredentials()
 	}

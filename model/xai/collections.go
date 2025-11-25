@@ -466,8 +466,6 @@ func collectionSortToProto(sort CollectionSortBy) *collectionspb.CollectionsSort
 	switch sort {
 	case CollectionSortByAge:
 		v = collectionspb.CollectionsSortBy_COLLECTIONS_SORT_BY_AGE
-	case CollectionSortByName:
-		fallthrough
 	default:
 		v = collectionspb.CollectionsSortBy_COLLECTIONS_SORT_BY_NAME
 	}
@@ -481,8 +479,6 @@ func documentSortToProto(sort DocumentSortBy) *collectionspb.DocumentsSortBy {
 		v = collectionspb.DocumentsSortBy_DOCUMENTS_SORT_BY_AGE
 	case DocumentSortBySize:
 		v = collectionspb.DocumentsSortBy_DOCUMENTS_SORT_BY_SIZE
-	case DocumentSortByName:
-		fallthrough
 	default:
 		v = collectionspb.DocumentsSortBy_DOCUMENTS_SORT_BY_NAME
 	}

@@ -28,6 +28,7 @@ import (
 
 	"github.com/invopop/jsonschema"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/proto"
 
@@ -112,18 +113,16 @@ func WithUser(user string) ChatOption {
 }
 
 // WithMaxTokens sets the maximum number of tokens to generate.
-func WithMaxTokens(max int) ChatOption {
+func WithMaxTokens(maxToken int32) ChatOption {
 	return func(req *xaipb.GetCompletionsRequest, _ *ChatSession) {
-		v := int32(max)
-		req.MaxTokens = &v
+		req.MaxTokens = &maxToken
 	}
 }
 
 // WithSeed sets the random seed for deterministic generation.
-func WithSeed(seed int) ChatOption {
+func WithSeed(seed int32) ChatOption {
 	return func(req *xaipb.GetCompletionsRequest, _ *ChatSession) {
-		v := int32(seed)
-		req.Seed = &v
+		req.Seed = &seed
 	}
 }
 
@@ -135,16 +134,14 @@ func WithStop(stop ...string) ChatOption {
 // WithTemperature sets the sampling temperature.
 func WithTemperature(t float32) ChatOption {
 	return func(req *xaipb.GetCompletionsRequest, _ *ChatSession) {
-		v := t
-		req.Temperature = &v
+		req.Temperature = &t
 	}
 }
 
 // WithTopP sets the nucleus sampling probability.
 func WithTopP(p float32) ChatOption {
 	return func(req *xaipb.GetCompletionsRequest, _ *ChatSession) {
-		v := p
-		req.TopP = &v
+		req.TopP = &p
 	}
 }
 
@@ -154,10 +151,9 @@ func WithLogprobs(enabled bool) ChatOption {
 }
 
 // WithTopLogprobs sets the number of top log probabilities to return.
-func WithTopLogprobs(v int) ChatOption {
+func WithTopLogprobs(v int32) ChatOption {
 	return func(req *xaipb.GetCompletionsRequest, _ *ChatSession) {
-		vv := int32(v)
-		req.TopLogprobs = &vv
+		req.TopLogprobs = &v
 	}
 }
 
@@ -174,8 +170,7 @@ func WithToolChoice(choice *xaipb.ToolChoice) ChatOption {
 // WithParallelToolCalls enables or disables parallel tool calls.
 func WithParallelToolCalls(enabled bool) ChatOption {
 	return func(req *xaipb.GetCompletionsRequest, _ *ChatSession) {
-		v := enabled
-		req.ParallelToolCalls = &v
+		req.ParallelToolCalls = &enabled
 	}
 }
 
@@ -218,16 +213,14 @@ func WithJSONStruct[T any]() ChatOption {
 // WithFrequencyPenalty sets the frequency penalty.
 func WithFrequencyPenalty(v float32) ChatOption {
 	return func(req *xaipb.GetCompletionsRequest, _ *ChatSession) {
-		vv := v
-		req.FrequencyPenalty = &vv
+		req.FrequencyPenalty = &v
 	}
 }
 
 // WithPresencePenalty sets the presence penalty.
 func WithPresencePenalty(v float32) ChatOption {
 	return func(req *xaipb.GetCompletionsRequest, _ *ChatSession) {
-		vv := v
-		req.PresencePenalty = &vv
+		req.PresencePenalty = &v
 	}
 }
 
@@ -323,15 +316,17 @@ func (s *ChatSession) Sample(ctx context.Context) (*Response, error) {
 
 	responses, err := s.sampleN(ctx, 1)
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		span.RecordError(err)
 		return nil, err
 	}
 	span.SetAttributes(s.makeSpanResponseAttributes(responses)...)
+	span.SetStatus(codes.Ok, "")
 	return responses[0], nil
 }
 
 // SampleBatch requests n responses in a single call.
-func (s *ChatSession) SampleBatch(ctx context.Context, n int) ([]*Response, error) {
+func (s *ChatSession) SampleBatch(ctx context.Context, n int32) ([]*Response, error) {
 	ctx, span := tracer.Start(ctx, fmt.Sprintf("chat.sample_batch %s", s.request.GetModel()),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(s.makeSpanRequestAttributes()...),
@@ -340,10 +335,12 @@ func (s *ChatSession) SampleBatch(ctx context.Context, n int) ([]*Response, erro
 
 	responses, err := s.sampleN(ctx, n)
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		span.RecordError(err)
 		return nil, err
 	}
 	span.SetAttributes(s.makeSpanResponseAttributes(responses)...)
+	span.SetStatus(codes.Ok, "")
 	return responses, nil
 }
 
@@ -361,6 +358,7 @@ func (s *ChatSession) Stream(ctx context.Context) (*ChatStream, error) {
 
 	stream, err := s.streamN(ctx, 1)
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		span.RecordError(err)
 		span.End()
 		return nil, err
@@ -371,7 +369,7 @@ func (s *ChatSession) Stream(ctx context.Context) (*ChatStream, error) {
 }
 
 // StreamBatch returns a streaming iterator for multiple responses.
-func (s *ChatSession) StreamBatch(ctx context.Context, n int) (*ChatStream, error) {
+func (s *ChatSession) StreamBatch(ctx context.Context, n int32) (*ChatStream, error) {
 	ctx, span := tracer.Start(ctx, fmt.Sprintf("chat.stream_batch %s", s.request.GetModel()),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(s.makeSpanRequestAttributes()...),
@@ -379,6 +377,7 @@ func (s *ChatSession) StreamBatch(ctx context.Context, n int) (*ChatStream, erro
 
 	stream, err := s.streamN(ctx, n)
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		span.RecordError(err)
 		span.End()
 		return nil, err
@@ -398,6 +397,7 @@ func (s *ChatSession) Defer(ctx context.Context, timeout, interval time.Duration
 
 	responses, err := s.deferN(ctx, 1, timeout, interval)
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		span.RecordError(err)
 		return nil, err
 	}
@@ -406,7 +406,7 @@ func (s *ChatSession) Defer(ctx context.Context, timeout, interval time.Duration
 }
 
 // DeferBatch executes the request using deferred polling and returns n responses.
-func (s *ChatSession) DeferBatch(ctx context.Context, n int, timeout, interval time.Duration) ([]*Response, error) {
+func (s *ChatSession) DeferBatch(ctx context.Context, n int32, timeout, interval time.Duration) ([]*Response, error) {
 	ctx, span := tracer.Start(ctx, fmt.Sprintf("chat.defer_batch %s", s.request.GetModel()),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(s.makeSpanRequestAttributes()...),
@@ -415,6 +415,7 @@ func (s *ChatSession) DeferBatch(ctx context.Context, n int, timeout, interval t
 
 	responses, err := s.deferN(ctx, n, timeout, interval)
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		span.RecordError(err)
 		return nil, err
 	}
@@ -454,12 +455,15 @@ func (s *ChatSession) parseWithRequest(ctx context.Context, out any, req *xaipb.
 
 	resp, err := s.invokeCompletion(ctx, req)
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		span.RecordError(err)
 		return nil, err
 	}
 	span.SetAttributes(s.makeSpanResponseAttributes([]*Response{resp})...)
 
 	if err := json.Unmarshal([]byte(resp.Content()), out); err != nil {
+		span.SetStatus(codes.Error, err.Error())
+		span.RecordError(err)
 		return resp, err
 	}
 	return resp, nil
@@ -472,7 +476,7 @@ func ParseInto[T any](ctx context.Context, s *ChatSession) (*Response, *T, error
 	return resp, &out, err
 }
 
-func (s *ChatSession) sampleN(ctx context.Context, n int) ([]*Response, error) {
+func (s *ChatSession) sampleN(ctx context.Context, n int32) ([]*Response, error) {
 	if len(s.request.GetMessages()) == 0 {
 		return nil, errors.New("chat request requires at least one message")
 	}
@@ -487,13 +491,12 @@ func (s *ChatSession) sampleN(ctx context.Context, n int) ([]*Response, error) {
 	}
 	out := make([]*Response, n)
 	for i := range n {
-		idx := i
-		out[i] = newResponse(resp.proto, &idx)
+		out[i] = newResponse(resp.proto, &i)
 	}
 	return out, nil
 }
 
-func (s *ChatSession) streamN(ctx context.Context, n int) (*ChatStream, error) {
+func (s *ChatSession) streamN(ctx context.Context, n int32) (*ChatStream, error) {
 	if len(s.request.GetMessages()) == 0 {
 		return nil, errors.New("chat request requires at least one message")
 	}
@@ -515,7 +518,7 @@ func (s *ChatSession) streamN(ctx context.Context, n int) (*ChatStream, error) {
 	}, nil
 }
 
-func (s *ChatSession) deferN(ctx context.Context, n int, timeout, interval time.Duration) ([]*Response, error) {
+func (s *ChatSession) deferN(ctx context.Context, n int32, timeout, interval time.Duration) ([]*Response, error) {
 	if len(s.request.GetMessages()) == 0 {
 		return nil, errors.New("chat request requires at least one message")
 	}
@@ -560,11 +563,11 @@ func (s *ChatSession) invokeCompletion(ctx context.Context, req *xaipb.GetComple
 	if err != nil {
 		return nil, WrapError(err)
 	}
-	index := 0
+	index := int32(0)
 	if usesServerSideTools(req.GetTools()) {
 		index = -1
 	}
-	idxPtr := (*int)(nil)
+	idxPtr := (*int32)(nil)
 	if index >= 0 {
 		idxPtr = &index
 	}
@@ -572,18 +575,16 @@ func (s *ChatSession) invokeCompletion(ctx context.Context, req *xaipb.GetComple
 	return newResponse(resp, idxPtr), nil
 }
 
+//nolint:cyclop
 func (s *ChatSession) makeSpanRequestAttributes() []attribute.KeyValue {
-	attrs := make([]attribute.KeyValue, 0, 16+len(s.request.GetMessages())*3)
-	attrs = append(attrs,
+	attrs := append([]attribute.KeyValue{},
 		attribute.String("gen_ai.operation.name", "chat"),
 		attribute.String("gen_ai.system", "xai"),
 		attribute.String("gen_ai.output.type", "text"),
 		attribute.String("gen_ai.request.model", s.request.GetModel()),
 		attribute.Int("server.port", 443),
-	)
 
-	// Optional fields
-	attrs = append(attrs,
+		// Optional fields
 		attribute.Float64("gen_ai.request.frequency_penalty", float64(valueOrZeroFloat32(s.request.FrequencyPenalty))),
 		attribute.Float64("gen_ai.request.presence_penalty", float64(valueOrZeroFloat32(s.request.PresencePenalty))),
 		attribute.Float64("gen_ai.request.temperature", float64(valueOrZeroFloat32(s.request.Temperature))),
@@ -677,13 +678,15 @@ func (s *ChatSession) makeSpanResponseAttributes(responses []*Response) []attrib
 		)
 	}
 
-	var finishReasons []string
+	finishReasons := make([]string, 0, len(responses))
 	for i, resp := range responses {
 		finishReasons = append(finishReasons, resp.FinishReason())
 
 		prefix := fmt.Sprintf("gen_ai.completion.%d", i)
-		attrs = append(attrs, attribute.String(prefix+".role", strings.ToLower(strings.TrimPrefix(resp.Role(), "ROLE_"))))
-		attrs = append(attrs, attribute.String(prefix+".content", resp.Content()))
+		attrs = append(attrs,
+			attribute.String(prefix+".role", strings.ToLower(strings.TrimPrefix(resp.Role(), "ROLE_"))),
+			attribute.String(prefix+".content", resp.Content()),
+		)
 		if rc := resp.ReasoningContent(); rc != "" {
 			attrs = append(attrs, attribute.String(prefix+".reasoning_content", rc))
 		}
@@ -716,9 +719,9 @@ func valueOrZeroBool(p *bool) bool {
 type ChatStream struct {
 	stream             xaipb.Chat_GetCompletionChunkClient
 	response           *Response
+	ctx                context.Context
 	span               trace.Span
 	firstChunkReceived bool
-	ctx                context.Context
 }
 
 // Close closes the underlying stream and ends the span if present.
@@ -741,27 +744,30 @@ func (s *ChatStream) Close() error {
 // Recv implements [grpc.ServerStreamingClient[xaipb.GetChatCompletionChunk]].
 func (s *ChatStream) Recv() (*Response, *Chunk, error) {
 	chunk, err := s.stream.Recv()
-	if err != nil {
+	if err != nil { //nolint:nestif
 		if s.span != nil {
 			if !errors.Is(err, io.EOF) {
 				s.span.RecordError(err)
-			} else {
-				usage := s.response.Usage()
-				if usage != nil {
-					s.span.SetAttributes(
-						attribute.Int("gen_ai.usage.input_tokens", int(usage.GetPromptTokens())),
-						attribute.Int("gen_ai.usage.output_tokens", int(usage.GetCompletionTokens())),
-						attribute.Int("gen_ai.usage.total_tokens", int(usage.GetTotalTokens())),
-					)
-				}
+				return s.response, nil, err
+			}
+
+			if usage := s.response.Usage(); usage != nil {
 				s.span.SetAttributes(
-					attribute.String("gen_ai.response.id", s.response.proto.GetId()),
-					attribute.String("gen_ai.response.model", s.response.proto.GetModel()),
-					attribute.String("gen_ai.response.finish_reasons", s.response.FinishReason()),
+					attribute.Int("gen_ai.usage.input_tokens", int(usage.GetPromptTokens())),
+					attribute.Int("gen_ai.usage.output_tokens", int(usage.GetCompletionTokens())),
+					attribute.Int("gen_ai.usage.total_tokens", int(usage.GetTotalTokens())),
 				)
 			}
+
+			s.span.SetAttributes(
+				attribute.String("gen_ai.response.id", s.response.proto.GetId()),
+				attribute.String("gen_ai.response.model", s.response.proto.GetModel()),
+				attribute.String("gen_ai.response.finish_reasons", s.response.FinishReason()),
+			)
+
 			s.span.End()
 		}
+
 		return s.response, nil, err
 	}
 
@@ -778,14 +784,14 @@ func (s *ChatStream) Recv() (*Response, *Chunk, error) {
 // Response wraps GetChatCompletionResponse with convenience accessors.
 type Response struct {
 	proto             *xaipb.GetChatCompletionResponse
-	index             *int
+	index             *int32
 	contentBuffers    []*strings.Builder
 	reasoningBuffers  []*strings.Builder
 	encryptedBuffers  []*strings.Builder
 	buffersAreInProto bool
 }
 
-func newResponse(protoResp *xaipb.GetChatCompletionResponse, index *int) *Response {
+func newResponse(protoResp *xaipb.GetChatCompletionResponse, index *int32) *Response {
 	return &Response{
 		proto:             protoResp,
 		index:             index,
@@ -884,7 +890,7 @@ func (r *Response) outputNoFlush() *xaipb.CompletionOutput {
 		if out == nil || out.GetMessage() == nil {
 			continue
 		}
-		if out.GetMessage().GetRole() == xaipb.MessageRole_ROLE_ASSISTANT && (r.index == nil || out.GetIndex() == int32(valueOrZero(r.index))) {
+		if out.GetMessage().GetRole() == xaipb.MessageRole_ROLE_ASSISTANT && (r.index == nil || out.GetIndex() == deref(r.index)) {
 			outputs = append(outputs, out)
 		}
 	}
@@ -916,6 +922,7 @@ func (r *Response) flushBuffers() {
 	r.buffersAreInProto = true
 }
 
+//nolint:cyclop,gocognit // TODO(zchee): fix nolint.
 func (r *Response) processChunk(chunk *xaipb.GetChatCompletionChunk) {
 	r.proto.Usage = chunk.GetUsage()
 	r.proto.Created = chunk.GetCreated()
@@ -988,10 +995,10 @@ func (r *Response) processChunk(chunk *xaipb.GetChatCompletionChunk) {
 // Chunk wraps GetChatCompletionChunk with helpers.
 type Chunk struct {
 	proto *xaipb.GetChatCompletionChunk
-	index *int
+	index *int32
 }
 
-func newChunk(protoChunk *xaipb.GetChatCompletionChunk, index *int) *Chunk {
+func newChunk(protoChunk *xaipb.GetChatCompletionChunk, index *int32) *Chunk {
 	return &Chunk{
 		proto: protoChunk,
 		index: index,
@@ -1029,7 +1036,7 @@ func (c *Chunk) ToolCalls() []*xaipb.ToolCall {
 func (c *Chunk) outputs() []*xaipb.CompletionOutputChunk {
 	var outs []*xaipb.CompletionOutputChunk
 	for _, out := range c.proto.GetOutputs() {
-		if out.GetDelta().GetRole() == xaipb.MessageRole_ROLE_ASSISTANT && (c.index == nil || out.GetIndex() == int32(*c.index)) {
+		if out.GetDelta().GetRole() == xaipb.MessageRole_ROLE_ASSISTANT && (c.index == nil || out.GetIndex() == deref(c.index)) {
 			outs = append(outs, out)
 		}
 	}
@@ -1135,9 +1142,9 @@ func usesServerSideTools(tools []*xaipb.Tool) bool {
 	return false
 }
 
-func autoDetectMultiOutput(index *int, outputs []*xaipb.CompletionOutput) *int {
+func autoDetectMultiOutput(index *int32, outputs []*xaipb.CompletionOutput) *int32 {
 	if index != nil {
-		maxIdx := int32(valueOrZero(index))
+		maxIdx := deref(index)
 		for _, out := range outputs {
 			if out.GetIndex() > maxIdx {
 				return nil
@@ -1147,11 +1154,11 @@ func autoDetectMultiOutput(index *int, outputs []*xaipb.CompletionOutput) *int {
 	return index
 }
 
-func autoDetectMultiOutputChunks(index *int, outputs []*xaipb.CompletionOutputChunk) *int {
+func autoDetectMultiOutputChunks(index *int32, outputs []*xaipb.CompletionOutputChunk) *int32 {
 	if index != nil {
-		maxIdx := valueOrZero(index)
+		maxIdx := deref(index)
 		for _, out := range outputs {
-			if int(out.GetIndex()) > maxIdx {
+			if out.GetIndex() > maxIdx {
 				return nil
 			}
 		}
@@ -1159,24 +1166,15 @@ func autoDetectMultiOutputChunks(index *int, outputs []*xaipb.CompletionOutputCh
 	return index
 }
 
-func setN(req *xaipb.GetCompletionsRequest, n int) {
-	val := int32(n)
-	req.N = &val
+func setN(req *xaipb.GetCompletionsRequest, n int32) {
+	req.N = &n
 }
 
-func valueOrZero(p *int) int {
-	if p == nil {
-		return 0
-	}
-	return *p
-}
-
-func intPtrIf(condition bool) *int {
+func intPtrIf(condition bool) *int32 {
 	if !condition {
 		return nil
 	}
-	zero := 0
-	return &zero
+	return ptr(int32(0))
 }
 
 func ensureBuilder(bufs *[]*strings.Builder, idx int) *strings.Builder {
@@ -1203,11 +1201,10 @@ func growBuilders(bufs *[]*strings.Builder, size int) {
 	*bufs = (*bufs)[:size]
 }
 
-func splitResponses(resp *xaipb.GetChatCompletionResponse, n int) []*Response {
+func splitResponses(resp *xaipb.GetChatCompletionResponse, n int32) []*Response {
 	responses := make([]*Response, n)
 	for i := range n {
-		idx := i
-		responses[i] = newResponse(resp, &idx)
+		responses[i] = newResponse(resp, &i)
 	}
 	return responses
 }

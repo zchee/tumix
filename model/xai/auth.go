@@ -19,6 +19,7 @@ package xai
 import (
 	"context"
 
+	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	xaipb "github.com/zchee/tumix/model/xai/api/v1"
@@ -30,8 +31,8 @@ type AuthClient struct {
 }
 
 // GetAPIKeyInfo returns metadata for the current API key.
-func (c *AuthClient) GetAPIKeyInfo(ctx context.Context) (*xaipb.ApiKey, error) {
-	resp, err := c.auth.GetApiKeyInfo(ctx, &emptypb.Empty{})
+func (c *AuthClient) GetAPIKeyInfo(ctx context.Context, opts ...grpc.CallOption) (*xaipb.ApiKey, error) {
+	resp, err := c.auth.GetApiKeyInfo(ctx, &emptypb.Empty{}, opts...)
 	if err != nil {
 		return nil, WrapError(err)
 	}

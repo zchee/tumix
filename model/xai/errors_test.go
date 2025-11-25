@@ -1,3 +1,19 @@
+// Copyright 2025 The tumix Authors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package xai
 
 import (
@@ -61,8 +77,8 @@ func TestParseAndWrapError(t *testing.T) {
 		plain := errors.New("plain")
 
 		wrapped := WrapError(statusErr)
-		xe, ok := wrapped.(*Error)
-		if !ok {
+		xe := new(Error)
+		if !errors.As(wrapped, &xe) {
 			t.Fatalf("WrapError(statusErr) type = %T, want *Error", wrapped)
 		}
 		if xe.Code != codes.Unavailable || xe.Message != "try again" {
@@ -72,7 +88,7 @@ func TestParseAndWrapError(t *testing.T) {
 			t.Fatalf("WrapError(statusErr) should remain comparable to original status error")
 		}
 
-		if got := WrapError(plain); got != plain {
+		if got := WrapError(plain); !errors.Is(got, plain) {
 			t.Fatalf("WrapError(non-status) = %v, want original %v", got, plain)
 		}
 		if err := WrapError(nil); err != nil {
@@ -80,8 +96,8 @@ func TestParseAndWrapError(t *testing.T) {
 		}
 
 		again := WrapError(wrapped)
-		xe2, ok := again.(*Error)
-		if !ok {
+		xe2 := new(Error)
+		if !errors.As(wrapped, &xe2) {
 			t.Fatalf("WrapError(*Error) type = %T, want *Error", again)
 		}
 		if xe2.Code != xe.Code || xe2.Message != xe.Message {
