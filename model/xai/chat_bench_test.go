@@ -101,6 +101,41 @@ func BenchmarkChunkAccessors(b *testing.B) {
 	}
 }
 
+func BenchmarkSpanAttributes(b *testing.B) {
+	s := &ChatSession{
+		request: &xaipb.GetCompletionsRequest{
+			Model: "grok-4-1",
+			Messages: []*xaipb.Message{
+				User("hello"),
+				Assistant("world"),
+			},
+			FrequencyPenalty:    ptr(float32(0.2)),
+			PresencePenalty:     ptr(float32(0.1)),
+			Temperature:         ptr(float32(0.8)),
+			TopP:                ptr(float32(0.9)),
+			ParallelToolCalls:   ptr(true),
+			StoreMessages:       true,
+			UseEncryptedContent: true,
+			Logprobs:            true,
+			Stop:                []string{"STOP"},
+			ResponseFormat: &xaipb.ResponseFormat{
+				FormatType: xaipb.FormatType_FORMAT_TYPE_JSON_OBJECT,
+			},
+			MaxTokens:          ptr(int32(1024)),
+			TopLogprobs:        ptr(int32(4)),
+			N:                  ptr(int32(2)),
+			Seed:               ptr(int32(1234)),
+			PreviousResponseId: ptr("prev-id"),
+		},
+		conversationID: "conv-id",
+	}
+
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = s.makeSpanRequestAttributes()
+	}
+}
+
 func metadataChunk(idx int32) *xaipb.CompletionOutputChunk {
 	return &xaipb.CompletionOutputChunk{
 		Index: idx,
