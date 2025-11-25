@@ -1,0 +1,344 @@
+version: "2"
+
+run:
+  modules-download-mode: mod
+  issues-exit-code: 1
+  tests: true
+  allow-parallel-runners: true
+
+output:
+  formats:
+    text:
+      print-linter-name: true
+      print-issued-lines: true
+      colors: true
+      path: stdout
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  uniq-by-line: false
+formatters:
+  enable:
+    - gofmt
+    - gofumpt
+    - goimports
+  settings:
+    gofmt:
+      simplify: true
+    gofumpt:
+      module-path: github.com/
+      extra-rules: true
+    goimports:
+      local-prefixes:
+        - github.com/go-mcp-server/mpc
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+
+linters:
+  default: none
+  enable:
+    - asasalint
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - canonicalheader
+    - containedctx
+    - contextcheck
+    - copyloopvar
+    - cyclop
+    - decorder
+    - dogsled
+    - dupl
+    - dupword
+    - durationcheck
+    - errcheck
+    - errchkjson
+    - errname
+    - errorlint
+    - exhaustive
+    - fatcontext
+    - funlen
+    - ginkgolinter
+    - gocheckcompilerdirectives
+    - gochecksumtype
+    - gocognit
+    - goconst
+    - gocritic
+    - gocyclo
+    - godot
+    - gomodguard
+    - goprintffuncname
+    - gosec
+    - gosmopolitan
+    - govet
+    - grouper
+    - importas
+    - inamedparam
+    - ineffassign
+    - interfacebloat
+    - intrange
+    - ireturn
+    - lll
+    - loggercheck
+    - maintidx
+    - makezero
+    - mirror
+    - misspell
+    - musttag
+    - nakedret
+    - nestif
+    - nilerr
+    - nilnil
+    - noctx
+    - nolintlint
+    - nosprintfhostport
+    - perfsprint
+    - prealloc
+    - predeclared
+    - promlinter
+    - protogetter
+    - reassign
+    - revive
+    - rowserrcheck
+    - sloglint
+    - spancheck
+    - sqlclosecheck
+    - staticcheck
+    - tagalign
+    - tagliatelle
+    - testableexamples
+    - thelper
+    - tparallel
+    - unconvert
+    - unparam
+    - unused
+    - usestdlibvars
+    - varnamelen
+    - wastedassign
+    - whitespace
+    - wrapcheck
+    - zerologlint
+  settings:
+    asasalint:
+      use-builtin-exclusions: true
+    bidichk:
+      left-to-right-embedding: true
+      right-to-left-embedding: true
+      pop-directional-formatting: true
+      left-to-right-override: true
+      right-to-left-override: true
+      left-to-right-isolate: true
+      right-to-left-isolate: true
+      first-strong-isolate: true
+      pop-directional-isolate: true
+    copyloopvar:
+      check-alias: true
+    cyclop:
+      max-complexity: 15
+      package-average: 0.5
+    decorder:
+      dec-order:
+        - type
+        - const
+        - var
+        - func
+      ignore-underscore-vars: false
+      disable-dec-num-check: false
+      disable-type-dec-num-check: false
+      disable-const-dec-num-check: false
+      disable-var-dec-num-check: false
+      disable-dec-order-check: false
+      disable-init-func-first-check: false
+    dogsled:
+      max-blank-identifiers: 3
+    dupl:
+      threshold: 150
+    dupword:
+      keywords:
+        - the
+        - and
+        - a
+      ignore:
+        - 0C0C
+    errcheck:
+      disable-default-exclusions: false
+      check-type-assertions: false
+      check-blank: true
+    errchkjson:
+      check-error-free-encoding: true
+      report-no-exported: false
+    errorlint:
+      errorf: true
+      errorf-multi: true
+      asserts: true
+      comparison: true
+    funlen:
+      lines: 120
+      statements: 60
+      ignore-comments: true
+    gocognit:
+      min-complexity: 20
+    goconst:
+      ignore-strings: ""
+      match-constant: true
+      min-len: 3
+      min-occurrences: 3
+      numbers: true
+      min: 3
+      max: 3
+      ignore-calls: true
+    gocritic:
+      enable-all: true
+      disabled-checks:
+        - commentedOutCode
+        - whyNoLint
+      settings:
+        hugeParam:
+          sizeThreshold: 80
+        rangeExprCopy:
+          sizeThreshold: 512
+        rangeValCopy:
+          sizeThreshold: 128
+    gocyclo:
+      min-complexity: 20
+    godot:
+      scope: declarations
+      capital: false
+      period: true
+    govet:
+      disable:
+        - fieldalignment
+      enable-all: true
+    importas:
+      no-unaliased: true
+      no-extra-aliases: false
+    inamedparam:
+      skip-single-param: false
+    interfacebloat:
+      max: 10
+    lll:
+      line-length: 200
+      tab-width: 1
+    maintidx:
+      under: 15
+    makezero:
+      always: false
+    misspell:
+      locale: US
+      ignore-rules:
+        - cancelled
+        - cancelling
+    nakedret:
+      max-func-lines: 30
+    nestif:
+      min-complexity: 5
+    prealloc:
+      simple: true
+      range-loops: true
+      for-loops: false
+    revive:
+      rules:
+        - name: line-length-limit
+          severity: warning
+          disabled: false
+          exclude: [""]
+          arguments: [120]
+      max-open-files: 2048
+      confidence: 0.1
+      severity: error
+      enable-all-rules: true
+    sloglint:
+      no-mixed-args: true
+      kv-only: false
+      attr-only: false
+      no-global: ""
+      context: all
+      static-msg: false
+      no-raw-keys: false
+      key-naming-case: snake
+      args-on-sep-lines: false
+    spancheck:
+      checks:
+        - end
+        - record-error
+        - set-status
+      ignore-check-signatures:
+        - telemetry.RecordError
+    testpackage:
+      skip-regexp: .*(export)_test\.go
+    unconvert:
+      fast-math: true
+      safe: true
+    unparam:
+      check-exported: true
+    unused:
+      field-writes-are-uses: true
+      post-statements-are-reads: false
+      exported-fields-are-used: true
+      parameters-are-used: true
+      local-variables-are-used: true
+      generated-is-used: true
+    usestdlibvars:
+      http-method: true
+      http-status-code: true
+      time-weekday: true
+      time-month: false
+      time-layout: true
+      crypto-hash: true
+      tls-signature-scheme: false
+      constant-kind: false
+    varnamelen:
+      max-distance: 5
+      min-name-length: 1
+      check-receiver: true
+      check-return: true
+      ignore-type-assert-ok: false
+      ignore-map-index-ok: false
+      ignore-chan-recv-ok: false
+    whitespace:
+      multi-if: true
+      multi-func: true
+  exclusions:
+    generated: lax
+    presets:
+      - common-false-positives
+      - std-error-handling
+    rules:
+      - linters:
+          - errcheck
+          - funlen
+          - gocognit
+          - goconst
+          - gocyclo
+          - gosec
+          - lll
+          - wrapcheck
+        path: _test\.go
+      - linters:
+          - gocritic
+        path: (.*)?_example_test.go
+      - linters:
+          - govet
+        text: 'shadow: declaration of "err|ok|ctx"'
+      - linters:
+          - nlreturn
+        text: continue with no blank line before
+      - path: (.+)\.go$
+        text: G404
+      - path: (.+)\.go$
+        text: ST1003
+      - path: (.+)\.go$
+        text: Error return value of `.*.Add(Array|Object)` is not checked
+      - linters:
+          - cyclop
+          - goconst
+        path: (.+)_test\.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
