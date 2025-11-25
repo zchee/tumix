@@ -17,6 +17,7 @@ replace (
 
 require (
 	github.com/gaudiy/vtprotobuf v0.6.1-0.20251122131602-5bc3a6fc1d03
+	github.com/goccy/go-json v0.10.5
 	github.com/invopop/jsonschema v0.13.0
 	go.opentelemetry.io/otel v1.38.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.38.0

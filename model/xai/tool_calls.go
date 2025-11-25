@@ -17,8 +17,9 @@
 package xai
 
 import (
-	json "encoding/json"
 	"errors"
+
+	json "github.com/goccy/go-json"
 
 	xaipb "github.com/zchee/tumix/model/xai/api/v1"
 )
