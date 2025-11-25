@@ -275,7 +275,7 @@ func (s *ChatSession) Append(message any) *ChatSession {
 		s.request.Messages = append(s.request.Messages, msg)
 	case *Response:
 		if msg.index == nil {
-			for _, out := range msg.proto.Outputs {
+			for _, out := range msg.proto.GetOutputs() {
 				s.request.Messages = append(s.request.Messages, buildMessageFromCompletion(out))
 			}
 		} else if out := msg.output(); out != nil {
@@ -287,7 +287,7 @@ func (s *ChatSession) Append(message any) *ChatSession {
 	return s
 }
 
-// AppendToolResultJSON appends a tool result message with JSON payload (string or marshalled value).
+// AppendToolResultJSON appends a tool result message with JSON payload (string or marshaled value).
 // toolCallID is optional; if empty, it is omitted because the proto does not carry it.
 func (s *ChatSession) AppendToolResultJSON(toolCallID string, result any) *ChatSession {
 	var payload string
@@ -311,11 +311,11 @@ func (s *ChatSession) AppendToolResultJSON(toolCallID string, result any) *ChatS
 }
 
 // Messages returns the current conversation history.
-func (s *ChatSession) Messages() []*xaipb.Message { return s.request.Messages }
+func (s *ChatSession) Messages() []*xaipb.Message { return s.request.GetMessages() }
 
 // Sample sends the chat request and returns the first response.
 func (s *ChatSession) Sample(ctx context.Context) (*Response, error) {
-	ctx, span := tracer.Start(ctx, fmt.Sprintf("chat.sample %s", s.request.Model),
+	ctx, span := tracer.Start(ctx, fmt.Sprintf("chat.sample %s", s.request.GetModel()),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(s.makeSpanRequestAttributes()...),
 	)
@@ -332,7 +332,7 @@ func (s *ChatSession) Sample(ctx context.Context) (*Response, error) {
 
 // SampleBatch requests n responses in a single call.
 func (s *ChatSession) SampleBatch(ctx context.Context, n int) ([]*Response, error) {
-	ctx, span := tracer.Start(ctx, fmt.Sprintf("chat.sample_batch %s", s.request.Model),
+	ctx, span := tracer.Start(ctx, fmt.Sprintf("chat.sample_batch %s", s.request.GetModel()),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(s.makeSpanRequestAttributes()...),
 	)
@@ -349,7 +349,7 @@ func (s *ChatSession) SampleBatch(ctx context.Context, n int) ([]*Response, erro
 
 // Stream returns a streaming iterator for a single response.
 func (s *ChatSession) Stream(ctx context.Context) (*ChatStream, error) {
-	ctx, span := tracer.Start(ctx, fmt.Sprintf("chat.stream %s", s.request.Model),
+	ctx, span := tracer.Start(ctx, fmt.Sprintf("chat.stream %s", s.request.GetModel()),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(s.makeSpanRequestAttributes()...),
 	)
@@ -372,7 +372,7 @@ func (s *ChatSession) Stream(ctx context.Context) (*ChatStream, error) {
 
 // StreamBatch returns a streaming iterator for multiple responses.
 func (s *ChatSession) StreamBatch(ctx context.Context, n int) (*ChatStream, error) {
-	ctx, span := tracer.Start(ctx, fmt.Sprintf("chat.stream_batch %s", s.request.Model),
+	ctx, span := tracer.Start(ctx, fmt.Sprintf("chat.stream_batch %s", s.request.GetModel()),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(s.makeSpanRequestAttributes()...),
 	)
@@ -390,7 +390,7 @@ func (s *ChatSession) StreamBatch(ctx context.Context, n int) (*ChatStream, erro
 
 // Defer executes the request using deferred polling.
 func (s *ChatSession) Defer(ctx context.Context, timeout, interval time.Duration) (*Response, error) {
-	ctx, span := tracer.Start(ctx, fmt.Sprintf("chat.defer %s", s.request.Model),
+	ctx, span := tracer.Start(ctx, fmt.Sprintf("chat.defer %s", s.request.GetModel()),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(s.makeSpanRequestAttributes()...),
 	)
@@ -407,7 +407,7 @@ func (s *ChatSession) Defer(ctx context.Context, timeout, interval time.Duration
 
 // DeferBatch executes the request using deferred polling and returns n responses.
 func (s *ChatSession) DeferBatch(ctx context.Context, n int, timeout, interval time.Duration) ([]*Response, error) {
-	ctx, span := tracer.Start(ctx, fmt.Sprintf("chat.defer_batch %s", s.request.Model),
+	ctx, span := tracer.Start(ctx, fmt.Sprintf("chat.defer_batch %s", s.request.GetModel()),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(s.makeSpanRequestAttributes()...),
 	)
@@ -431,7 +431,7 @@ func (s *ChatSession) Parse(ctx context.Context, out any) (*Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	if s.request.ResponseFormat != nil && s.request.ResponseFormat.GetFormatType() == xaipb.FormatType_FORMAT_TYPE_JSON_SCHEMA {
+	if s.request.GetResponseFormat() != nil && s.request.GetResponseFormat().GetFormatType() == xaipb.FormatType_FORMAT_TYPE_JSON_SCHEMA {
 		// allow caller to override schema via options; don't overwrite
 		return s.parseWithRequest(ctx, out, proto.Clone(s.request).(*xaipb.GetCompletionsRequest))
 	}
@@ -446,7 +446,7 @@ func (s *ChatSession) Parse(ctx context.Context, out any) (*Response, error) {
 
 // parseWithRequest executes a parse with the provided request.
 func (s *ChatSession) parseWithRequest(ctx context.Context, out any, req *xaipb.GetCompletionsRequest) (*Response, error) {
-	ctx, span := tracer.Start(ctx, fmt.Sprintf("chat.parse %s", s.request.Model),
+	ctx, span := tracer.Start(ctx, fmt.Sprintf("chat.parse %s", s.request.GetModel()),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(s.makeSpanRequestAttributes()...),
 	)
@@ -473,7 +473,7 @@ func ParseInto[T any](ctx context.Context, s *ChatSession) (*Response, *T, error
 }
 
 func (s *ChatSession) sampleN(ctx context.Context, n int) ([]*Response, error) {
-	if len(s.request.Messages) == 0 {
+	if len(s.request.GetMessages()) == 0 {
 		return nil, errors.New("chat request requires at least one message")
 	}
 	req := proto.Clone(s.request).(*xaipb.GetCompletionsRequest)
@@ -494,7 +494,7 @@ func (s *ChatSession) sampleN(ctx context.Context, n int) ([]*Response, error) {
 }
 
 func (s *ChatSession) streamN(ctx context.Context, n int) (*ChatStream, error) {
-	if len(s.request.Messages) == 0 {
+	if len(s.request.GetMessages()) == 0 {
 		return nil, errors.New("chat request requires at least one message")
 	}
 	req := proto.Clone(s.request).(*xaipb.GetCompletionsRequest)
@@ -516,7 +516,7 @@ func (s *ChatSession) streamN(ctx context.Context, n int) (*ChatStream, error) {
 }
 
 func (s *ChatSession) deferN(ctx context.Context, n int, timeout, interval time.Duration) ([]*Response, error) {
-	if len(s.request.Messages) == 0 {
+	if len(s.request.GetMessages()) == 0 {
 		return nil, errors.New("chat request requires at least one message")
 	}
 	req := proto.Clone(s.request).(*xaipb.GetCompletionsRequest)
@@ -537,20 +537,20 @@ func (s *ChatSession) deferN(ctx context.Context, n int, timeout, interval time.
 			return nil, fmt.Errorf("deferred request timed out after %s", timeout)
 		}
 		res, err := s.stub.GetDeferredCompletion(ctx, &xaipb.GetDeferredRequest{
-			RequestId: startResp.RequestId,
+			RequestId: startResp.GetRequestId(),
 		})
 		if err != nil {
 			return nil, WrapError(err)
 		}
-		switch res.Status {
+		switch res.GetStatus() {
 		case xaipb.DeferredStatus_DONE:
-			return splitResponses(res.Response, n), nil
+			return splitResponses(res.GetResponse(), n), nil
 		case xaipb.DeferredStatus_EXPIRED:
 			return nil, fmt.Errorf("deferred request expired")
 		case xaipb.DeferredStatus_PENDING:
 			time.Sleep(interval)
 		default:
-			return nil, fmt.Errorf("unknown deferred status %v", res.Status)
+			return nil, fmt.Errorf("unknown deferred status %v", res.GetStatus())
 		}
 	}
 }
@@ -561,24 +561,24 @@ func (s *ChatSession) invokeCompletion(ctx context.Context, req *xaipb.GetComple
 		return nil, WrapError(err)
 	}
 	index := 0
-	if usesServerSideTools(req.Tools) {
+	if usesServerSideTools(req.GetTools()) {
 		index = -1
 	}
 	idxPtr := (*int)(nil)
 	if index >= 0 {
 		idxPtr = &index
 	}
-	idxPtr = autoDetectMultiOutput(idxPtr, resp.Outputs)
+	idxPtr = autoDetectMultiOutput(idxPtr, resp.GetOutputs())
 	return newResponse(resp, idxPtr), nil
 }
 
 func (s *ChatSession) makeSpanRequestAttributes() []attribute.KeyValue {
-	attrs := make([]attribute.KeyValue, 0, 16+len(s.request.Messages)*3)
+	attrs := make([]attribute.KeyValue, 0, 16+len(s.request.GetMessages())*3)
 	attrs = append(attrs,
 		attribute.String("gen_ai.operation.name", "chat"),
 		attribute.String("gen_ai.system", "xai"),
 		attribute.String("gen_ai.output.type", "text"),
-		attribute.String("gen_ai.request.model", s.request.Model),
+		attribute.String("gen_ai.request.model", s.request.GetModel()),
 		attribute.Int("server.port", 443),
 	)
 
@@ -588,64 +588,64 @@ func (s *ChatSession) makeSpanRequestAttributes() []attribute.KeyValue {
 		attribute.Float64("gen_ai.request.presence_penalty", float64(valueOrZeroFloat32(s.request.PresencePenalty))),
 		attribute.Float64("gen_ai.request.temperature", float64(valueOrZeroFloat32(s.request.Temperature))),
 		attribute.Bool("gen_ai.request.parallel_tool_calls", valueOrZeroBool(s.request.ParallelToolCalls)),
-		attribute.Bool("gen_ai.request.store_messages", s.request.StoreMessages),
-		attribute.Bool("gen_ai.request.use_encrypted_content", s.request.UseEncryptedContent),
-		attribute.Bool("gen_ai.request.logprobs", s.request.Logprobs),
+		attribute.Bool("gen_ai.request.store_messages", s.request.GetStoreMessages()),
+		attribute.Bool("gen_ai.request.use_encrypted_content", s.request.GetUseEncryptedContent()),
+		attribute.Bool("gen_ai.request.logprobs", s.request.GetLogprobs()),
 	)
 
 	if s.request.TopP != nil {
-		attrs = append(attrs, attribute.Float64("gen_ai.request.top_p", float64(*s.request.TopP)))
+		attrs = append(attrs, attribute.Float64("gen_ai.request.top_p", float64(s.request.GetTopP())))
 	}
 	if s.request.N != nil {
-		attrs = append(attrs, attribute.Int("gen_ai.request.choice.count", int(*s.request.N)))
+		attrs = append(attrs, attribute.Int("gen_ai.request.choice.count", int(s.request.GetN())))
 	}
 	if s.request.Seed != nil {
-		attrs = append(attrs, attribute.Int("gen_ai.request.seed", int(*s.request.Seed)))
+		attrs = append(attrs, attribute.Int("gen_ai.request.seed", int(s.request.GetSeed())))
 	}
 	if s.request.MaxTokens != nil {
-		attrs = append(attrs, attribute.Int("gen_ai.request.max_tokens", int(*s.request.MaxTokens)))
+		attrs = append(attrs, attribute.Int("gen_ai.request.max_tokens", int(s.request.GetMaxTokens())))
 	}
 	if s.request.TopLogprobs != nil {
-		attrs = append(attrs, attribute.Int("gen_ai.request.top_logprobs", int(*s.request.TopLogprobs)))
+		attrs = append(attrs, attribute.Int("gen_ai.request.top_logprobs", int(s.request.GetTopLogprobs())))
 	}
 
 	if s.conversationID != "" {
 		attrs = append(attrs, attribute.String("gen_ai.conversation.id", s.conversationID))
 	}
-	if len(s.request.Stop) > 0 {
-		attrs = append(attrs, attribute.StringSlice("gen_ai.request.stop_sequences", s.request.Stop))
+	if len(s.request.GetStop()) > 0 {
+		attrs = append(attrs, attribute.StringSlice("gen_ai.request.stop_sequences", s.request.GetStop()))
 	}
-	if s.request.ResponseFormat != nil {
-		attrs = append(attrs, attribute.String("gen_ai.output.type", strings.ToLower(strings.TrimPrefix(s.request.ResponseFormat.FormatType.String(), "FORMAT_TYPE_"))))
+	if s.request.GetResponseFormat() != nil {
+		attrs = append(attrs, attribute.String("gen_ai.output.type", strings.ToLower(strings.TrimPrefix(s.request.GetResponseFormat().GetFormatType().String(), "FORMAT_TYPE_"))))
 	}
 	if s.request.ReasoningEffort != nil {
-		attrs = append(attrs, attribute.String("gen_ai.request.reasoning_effort", strings.ToLower(strings.TrimPrefix(s.request.ReasoningEffort.String(), "EFFORT_"))))
+		attrs = append(attrs, attribute.String("gen_ai.request.reasoning_effort", strings.ToLower(strings.TrimPrefix(s.request.GetReasoningEffort().String(), "EFFORT_"))))
 	}
-	if s.request.User != "" {
-		attrs = append(attrs, attribute.String("user_id", s.request.User))
+	if s.request.GetUser() != "" {
+		attrs = append(attrs, attribute.String("user_id", s.request.GetUser()))
 	}
 	if s.request.PreviousResponseId != nil {
-		attrs = append(attrs, attribute.String("gen_ai.request.previous_response_id", *s.request.PreviousResponseId))
+		attrs = append(attrs, attribute.String("gen_ai.request.previous_response_id", s.request.GetPreviousResponseId()))
 	}
 
 	// Prompt attributes
-	for i, msg := range s.request.Messages {
+	for i, msg := range s.request.GetMessages() {
 		prefix := fmt.Sprintf("gen_ai.prompt.%d", i)
-		role := strings.ToLower(strings.TrimPrefix(msg.Role.String(), "ROLE_"))
+		role := strings.ToLower(strings.TrimPrefix(msg.GetRole().String(), "ROLE_"))
 		attrs = append(attrs, attribute.String(prefix+".role", role))
 
 		var contentStr strings.Builder
-		for _, c := range msg.Content {
+		for _, c := range msg.GetContent() {
 			if txt := c.GetText(); txt != "" {
 				contentStr.WriteString(txt)
 			}
 		}
 		attrs = append(attrs, attribute.String(prefix+".content", contentStr.String()))
 
-		if len(msg.ToolCalls) > 0 {
+		if len(msg.GetToolCalls()) > 0 {
 			// Serialize tool calls mostly for debug, simplified here
 			// Python does full JSON serialization
-			if b, err := json.Marshal(msg.ToolCalls); err == nil {
+			if b, err := json.Marshal(msg.GetToolCalls()); err == nil {
 				attrs = append(attrs, attribute.String(prefix+".tool_calls", string(b)))
 			}
 		}
@@ -663,17 +663,17 @@ func (s *ChatSession) makeSpanResponseAttributes(responses []*Response) []attrib
 
 	attrs := make([]attribute.KeyValue, 0, 12+len(responses)*4)
 	attrs = append(attrs,
-		attribute.String("gen_ai.response.id", first.proto.Id),
-		attribute.String("gen_ai.response.model", first.proto.Model),
-		attribute.String("gen_ai.response.system_fingerprint", first.proto.SystemFingerprint),
+		attribute.String("gen_ai.response.id", first.proto.GetId()),
+		attribute.String("gen_ai.response.model", first.proto.GetModel()),
+		attribute.String("gen_ai.response.system_fingerprint", first.proto.GetSystemFingerprint()),
 	)
 
 	if usage != nil {
 		attrs = append(attrs,
-			attribute.Int("gen_ai.usage.input_tokens", int(usage.PromptTokens)),
-			attribute.Int("gen_ai.usage.output_tokens", int(usage.CompletionTokens)),
-			attribute.Int("gen_ai.usage.total_tokens", int(usage.TotalTokens)),
-			attribute.Int("gen_ai.usage.reasoning_tokens", int(usage.ReasoningTokens)),
+			attribute.Int("gen_ai.usage.input_tokens", int(usage.GetPromptTokens())),
+			attribute.Int("gen_ai.usage.output_tokens", int(usage.GetCompletionTokens())),
+			attribute.Int("gen_ai.usage.total_tokens", int(usage.GetTotalTokens())),
+			attribute.Int("gen_ai.usage.reasoning_tokens", int(usage.GetReasoningTokens())),
 		)
 	}
 
@@ -749,14 +749,14 @@ func (s *ChatStream) Recv() (*Response, *Chunk, error) {
 				usage := s.response.Usage()
 				if usage != nil {
 					s.span.SetAttributes(
-						attribute.Int("gen_ai.usage.input_tokens", int(usage.PromptTokens)),
-						attribute.Int("gen_ai.usage.output_tokens", int(usage.CompletionTokens)),
-						attribute.Int("gen_ai.usage.total_tokens", int(usage.TotalTokens)),
+						attribute.Int("gen_ai.usage.input_tokens", int(usage.GetPromptTokens())),
+						attribute.Int("gen_ai.usage.output_tokens", int(usage.GetCompletionTokens())),
+						attribute.Int("gen_ai.usage.total_tokens", int(usage.GetTotalTokens())),
 					)
 				}
 				s.span.SetAttributes(
-					attribute.String("gen_ai.response.id", s.response.proto.Id),
-					attribute.String("gen_ai.response.model", s.response.proto.Model),
+					attribute.String("gen_ai.response.id", s.response.proto.GetId()),
+					attribute.String("gen_ai.response.model", s.response.proto.GetModel()),
 					attribute.String("gen_ai.response.finish_reasons", s.response.FinishReason()),
 				)
 			}
@@ -770,7 +770,7 @@ func (s *ChatStream) Recv() (*Response, *Chunk, error) {
 		s.firstChunkReceived = true
 	}
 
-	s.response.index = autoDetectMultiOutputChunks(s.response.index, chunk.Outputs)
+	s.response.index = autoDetectMultiOutputChunks(s.response.index, chunk.GetOutputs())
 	s.response.processChunk(chunk)
 	return s.response, newChunk(chunk, s.response.index), nil
 }
@@ -806,7 +806,7 @@ func (r *Response) Proto() *xaipb.GetChatCompletionResponse {
 func (r *Response) Content() string {
 	r.flushBuffers()
 	if out := r.output(); out != nil {
-		return out.Message.Content
+		return out.GetMessage().GetContent()
 	}
 	return ""
 }
@@ -821,7 +821,7 @@ func (r *Response) DecodeJSON(out any) error {
 func (r *Response) ReasoningContent() string {
 	r.flushBuffers()
 	if out := r.output(); out != nil {
-		return out.Message.ReasoningContent
+		return out.GetMessage().GetReasoningContent()
 	}
 	return ""
 }
@@ -830,7 +830,7 @@ func (r *Response) ReasoningContent() string {
 func (r *Response) EncryptedContent() string {
 	r.flushBuffers()
 	if out := r.output(); out != nil {
-		return out.Message.EncryptedContent
+		return out.GetMessage().GetEncryptedContent()
 	}
 	return ""
 }
@@ -839,7 +839,7 @@ func (r *Response) EncryptedContent() string {
 func (r *Response) Role() string {
 	r.flushBuffers()
 	if out := r.output(); out != nil {
-		return xaipb.MessageRole_name[int32(out.Message.Role)]
+		return xaipb.MessageRole_name[int32(out.GetMessage().GetRole())]
 	}
 	return ""
 }
@@ -847,10 +847,10 @@ func (r *Response) Role() string {
 // ToolCalls returns tool calls from all assistant outputs.
 func (r *Response) ToolCalls() []*xaipb.ToolCall {
 	r.flushBuffers()
-	calls := make([]*xaipb.ToolCall, 0, len(r.proto.Outputs))
-	for out := range slices.Values(r.proto.Outputs) {
-		if out.Message.Role == xaipb.MessageRole_ROLE_ASSISTANT {
-			calls = append(calls, out.Message.ToolCalls...)
+	calls := make([]*xaipb.ToolCall, 0, len(r.proto.GetOutputs()))
+	for out := range slices.Values(r.proto.GetOutputs()) {
+		if out.GetMessage().GetRole() == xaipb.MessageRole_ROLE_ASSISTANT {
+			calls = append(calls, out.GetMessage().GetToolCalls()...)
 		}
 	}
 	return calls
@@ -859,19 +859,19 @@ func (r *Response) ToolCalls() []*xaipb.ToolCall {
 // FinishReason returns the finish reason string.
 func (r *Response) FinishReason() string {
 	if out := r.outputNoFlush(); out != nil {
-		return xaipb.FinishReason_name[int32(out.FinishReason)]
+		return xaipb.FinishReason_name[int32(out.GetFinishReason())]
 	}
 	return ""
 }
 
 // Usage returns token usage.
-func (r *Response) Usage() *xaipb.SamplingUsage { return r.proto.Usage }
+func (r *Response) Usage() *xaipb.SamplingUsage { return r.proto.GetUsage() }
 
 // Citations returns any citations returned by the model.
-func (r *Response) Citations() []string { return r.proto.Citations }
+func (r *Response) Citations() []string { return r.proto.GetCitations() }
 
 // SystemFingerprint returns system fingerprint.
-func (r *Response) SystemFingerprint() string { return r.proto.SystemFingerprint }
+func (r *Response) SystemFingerprint() string { return r.proto.GetSystemFingerprint() }
 
 func (r *Response) output() *xaipb.CompletionOutput {
 	r.flushBuffers()
@@ -880,11 +880,11 @@ func (r *Response) output() *xaipb.CompletionOutput {
 
 func (r *Response) outputNoFlush() *xaipb.CompletionOutput {
 	var outputs []*xaipb.CompletionOutput
-	for _, out := range r.proto.Outputs {
-		if out == nil || out.Message == nil {
+	for _, out := range r.proto.GetOutputs() {
+		if out == nil || out.GetMessage() == nil {
 			continue
 		}
-		if out.Message.Role == xaipb.MessageRole_ROLE_ASSISTANT && (r.index == nil || int32(out.Index) == int32(valueOrZero(r.index))) {
+		if out.GetMessage().GetRole() == xaipb.MessageRole_ROLE_ASSISTANT && (r.index == nil || out.GetIndex() == int32(valueOrZero(r.index))) {
 			outputs = append(outputs, out)
 		}
 	}
@@ -899,17 +899,17 @@ func (r *Response) flushBuffers() {
 		return
 	}
 	for idx, b := range r.contentBuffers {
-		if b != nil && idx < len(r.proto.Outputs) {
+		if b != nil && idx < len(r.proto.GetOutputs()) {
 			r.proto.Outputs[idx].Message.Content = b.String()
 		}
 	}
 	for idx, b := range r.reasoningBuffers {
-		if b != nil && idx < len(r.proto.Outputs) {
+		if b != nil && idx < len(r.proto.GetOutputs()) {
 			r.proto.Outputs[idx].Message.ReasoningContent = b.String()
 		}
 	}
 	for idx, b := range r.encryptedBuffers {
-		if b != nil && idx < len(r.proto.Outputs) {
+		if b != nil && idx < len(r.proto.GetOutputs()) {
 			r.proto.Outputs[idx].Message.EncryptedContent = b.String()
 		}
 	}
@@ -917,29 +917,29 @@ func (r *Response) flushBuffers() {
 }
 
 func (r *Response) processChunk(chunk *xaipb.GetChatCompletionChunk) {
-	r.proto.Usage = chunk.Usage
-	r.proto.Created = chunk.Created
-	r.proto.Id = chunk.Id
-	r.proto.Model = chunk.Model
-	r.proto.SystemFingerprint = chunk.SystemFingerprint
-	r.proto.Citations = append(r.proto.Citations, chunk.Citations...)
+	r.proto.Usage = chunk.GetUsage()
+	r.proto.Created = chunk.GetCreated()
+	r.proto.Id = chunk.GetId()
+	r.proto.Model = chunk.GetModel()
+	r.proto.SystemFingerprint = chunk.GetSystemFingerprint()
+	r.proto.Citations = append(r.proto.Citations, chunk.GetCitations()...)
 
 	maxIndex := 0
 	hasContent := false
 	hasReasoning := false
 	hasEncrypted := false
-	for _, out := range chunk.Outputs {
-		if idx := int(out.Index); idx > maxIndex {
+	for _, out := range chunk.GetOutputs() {
+		if idx := int(out.GetIndex()); idx > maxIndex {
 			maxIndex = idx
 		}
-		hasContent = hasContent || out.Delta.Content != ""
-		hasReasoning = hasReasoning || out.Delta.ReasoningContent != ""
-		hasEncrypted = hasEncrypted || out.Delta.EncryptedContent != ""
+		hasContent = hasContent || out.GetDelta().GetContent() != ""
+		hasReasoning = hasReasoning || out.GetDelta().GetReasoningContent() != ""
+		hasEncrypted = hasEncrypted || out.GetDelta().GetEncryptedContent() != ""
 	}
-	if needed := maxIndex + 1 - len(r.proto.Outputs); needed > 0 {
-		start := len(r.proto.Outputs)
+	if needed := maxIndex + 1 - len(r.proto.GetOutputs()); needed > 0 {
+		start := len(r.proto.GetOutputs())
 		r.proto.Outputs = append(r.proto.Outputs, make([]*xaipb.CompletionOutput, needed)...)
-		for i := start; i < len(r.proto.Outputs); i++ {
+		for i := start; i < len(r.proto.GetOutputs()); i++ {
 			r.proto.Outputs[i] = nil
 		}
 	}
@@ -956,30 +956,30 @@ func (r *Response) processChunk(chunk *xaipb.GetChatCompletionChunk) {
 		}
 	}
 
-	for _, c := range chunk.Outputs {
-		target := r.proto.Outputs[c.Index]
+	for _, c := range chunk.GetOutputs() {
+		target := r.proto.GetOutputs()[c.GetIndex()]
 		if target == nil {
 			target = &xaipb.CompletionOutput{}
-			r.proto.Outputs[c.Index] = target
+			r.proto.Outputs[c.GetIndex()] = target
 		}
-		target.Index = c.Index
-		if target.Message == nil {
+		target.Index = c.GetIndex()
+		if target.GetMessage() == nil {
 			target.Message = &xaipb.CompletionMessage{}
 		}
-		target.Message.Role = c.Delta.Role
-		target.Message.ToolCalls = append(target.Message.ToolCalls, c.Delta.ToolCalls...)
-		target.FinishReason = c.FinishReason
+		target.Message.Role = c.GetDelta().GetRole()
+		target.Message.ToolCalls = append(target.Message.ToolCalls, c.GetDelta().GetToolCalls()...)
+		target.FinishReason = c.GetFinishReason()
 
-		if c.Delta.Content != "" {
-			ensureBuilder(&r.contentBuffers, int(c.Index)).WriteString(c.Delta.Content)
+		if c.GetDelta().GetContent() != "" {
+			ensureBuilder(&r.contentBuffers, int(c.GetIndex())).WriteString(c.GetDelta().GetContent())
 			r.buffersAreInProto = false
 		}
-		if c.Delta.ReasoningContent != "" {
-			ensureBuilder(&r.reasoningBuffers, int(c.Index)).WriteString(c.Delta.ReasoningContent)
+		if c.GetDelta().GetReasoningContent() != "" {
+			ensureBuilder(&r.reasoningBuffers, int(c.GetIndex())).WriteString(c.GetDelta().GetReasoningContent())
 			r.buffersAreInProto = false
 		}
-		if c.Delta.EncryptedContent != "" {
-			ensureBuilder(&r.encryptedBuffers, int(c.Index)).WriteString(c.Delta.EncryptedContent)
+		if c.GetDelta().GetEncryptedContent() != "" {
+			ensureBuilder(&r.encryptedBuffers, int(c.GetIndex())).WriteString(c.GetDelta().GetEncryptedContent())
 			r.buffersAreInProto = false
 		}
 	}
@@ -1002,7 +1002,7 @@ func newChunk(protoChunk *xaipb.GetChatCompletionChunk, index *int) *Chunk {
 func (c *Chunk) Content() string {
 	var b strings.Builder
 	for _, out := range c.outputs() {
-		b.WriteString(out.Delta.Content)
+		b.WriteString(out.GetDelta().GetContent())
 	}
 	return b.String()
 }
@@ -1011,7 +1011,7 @@ func (c *Chunk) Content() string {
 func (c *Chunk) ReasoningContent() string {
 	var b strings.Builder
 	for _, out := range c.outputs() {
-		b.WriteString(out.Delta.ReasoningContent)
+		b.WriteString(out.GetDelta().GetReasoningContent())
 	}
 	return b.String()
 }
@@ -1020,7 +1020,7 @@ func (c *Chunk) ReasoningContent() string {
 func (c *Chunk) ToolCalls() []*xaipb.ToolCall {
 	var calls []*xaipb.ToolCall
 	for _, out := range c.outputs() {
-		calls = append(calls, out.Delta.ToolCalls...)
+		calls = append(calls, out.GetDelta().GetToolCalls()...)
 	}
 	return calls
 }
@@ -1028,8 +1028,8 @@ func (c *Chunk) ToolCalls() []*xaipb.ToolCall {
 // Outputs returns the raw chunk outputs filtered by index.
 func (c *Chunk) outputs() []*xaipb.CompletionOutputChunk {
 	var outs []*xaipb.CompletionOutputChunk
-	for _, out := range c.proto.Outputs {
-		if out.Delta.Role == xaipb.MessageRole_ROLE_ASSISTANT && (c.index == nil || out.Index == int32(*c.index)) {
+	for _, out := range c.proto.GetOutputs() {
+		if out.GetDelta().GetRole() == xaipb.MessageRole_ROLE_ASSISTANT && (c.index == nil || out.GetIndex() == int32(*c.index)) {
 			outs = append(outs, out)
 		}
 	}
@@ -1072,18 +1072,18 @@ func newMessage(role xaipb.MessageRole, parts ...any) *xaipb.Message {
 
 func buildMessageFromCompletion(out *xaipb.CompletionOutput) *xaipb.Message {
 	var reasoning *string
-	if out.Message.ReasoningContent != "" {
-		rc := out.Message.ReasoningContent
+	if out.GetMessage().GetReasoningContent() != "" {
+		rc := out.GetMessage().GetReasoningContent()
 		reasoning = &rc
 	}
 	return &xaipb.Message{
-		Role: out.Message.Role,
+		Role: out.GetMessage().GetRole(),
 		Content: []*xaipb.Content{
-			TextContent(out.Message.Content),
+			TextContent(out.GetMessage().GetContent()),
 		},
 		ReasoningContent: reasoning,
-		EncryptedContent: out.Message.EncryptedContent,
-		ToolCalls:        out.Message.ToolCalls,
+		EncryptedContent: out.GetMessage().GetEncryptedContent(),
+		ToolCalls:        out.GetMessage().GetToolCalls(),
 	}
 }
 
@@ -1125,7 +1125,7 @@ func FileContent(fileID string) *xaipb.Content {
 
 func usesServerSideTools(tools []*xaipb.Tool) bool {
 	for _, t := range tools {
-		switch t.Tool.(type) {
+		switch t.GetTool().(type) {
 		case *xaipb.Tool_Function:
 			continue
 		default:
@@ -1139,7 +1139,7 @@ func autoDetectMultiOutput(index *int, outputs []*xaipb.CompletionOutput) *int {
 	if index != nil {
 		maxIdx := int32(valueOrZero(index))
 		for _, out := range outputs {
-			if out.Index > maxIdx {
+			if out.GetIndex() > maxIdx {
 				return nil
 			}
 		}
@@ -1151,7 +1151,7 @@ func autoDetectMultiOutputChunks(index *int, outputs []*xaipb.CompletionOutputCh
 	if index != nil {
 		maxIdx := valueOrZero(index)
 		for _, out := range outputs {
-			if int(out.Index) > maxIdx {
+			if int(out.GetIndex()) > maxIdx {
 				return nil
 			}
 		}

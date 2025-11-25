@@ -121,7 +121,7 @@ func CollectionsSearchToolIDs(limit int32, collectionIDs ...string) *xaipb.Tool 
 }
 
 // MCPTool connects to a remote MCP server.
-func MCPTool(serverURL string, serverLabel, serverDescription string, allowedToolNames []string, authorization string, extraHeaders map[string]string) *xaipb.Tool {
+func MCPTool(serverURL, serverLabel, serverDescription string, allowedToolNames []string, authorization string, extraHeaders map[string]string) *xaipb.Tool {
 	var auth *string
 	if authorization != "" {
 		auth = &authorization

@@ -21,10 +21,10 @@ func ToolCallArguments(tc *xaipb.ToolCall, out any) error {
 	if fn == nil {
 		return errors.New("tool call does not contain a function")
 	}
-	if fn.Arguments == "" {
+	if fn.GetArguments() == "" {
 		return errors.New("tool call arguments empty")
 	}
-	return json.Unmarshal([]byte(fn.Arguments), out)
+	return json.Unmarshal([]byte(fn.GetArguments()), out)
 }
 
 // ToolCallJSON returns the raw JSON arguments string (empty if absent).

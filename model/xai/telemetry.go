@@ -18,7 +18,7 @@ package xai
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"runtime"
 	"strings"
 
@@ -55,7 +55,7 @@ func InitOTLP(ctx context.Context, cfg OTLPConfig) (*trace.TracerProvider, error
 		cfg.Transport = OTLPHTTP
 	}
 	if cfg.Endpoint == "" {
-		return nil, fmt.Errorf("OTLP endpoint is required")
+		return nil, errors.New("OTLP endpoint is required")
 	}
 	exporter, err := newOTLPExporter(ctx, cfg)
 	if err != nil {

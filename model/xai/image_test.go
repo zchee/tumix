@@ -1,6 +1,7 @@
 package xai
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"testing"
@@ -48,7 +49,7 @@ func TestImageResponseHelpers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("data decode error: %v", err)
 	}
-	if string(data) != string(raw) {
+	if !bytes.Equal(data, raw) {
 		t.Fatalf("data mismatch: %q", data)
 	}
 

@@ -15,7 +15,7 @@ func ExampleWithJSONStruct() {
 		Name string `json:"name"`
 	}]()(req, nil)
 
-	if req.ResponseFormat != nil && req.ResponseFormat.Schema != nil {
+	if req.GetResponseFormat() != nil && req.ResponseFormat.Schema != nil {
 		fmt.Println("schema set")
 	}
 	// Output:

@@ -28,11 +28,11 @@ func TestParseAndWrapError(t *testing.T) {
 	if !ok || parsed.Code != codes.Unavailable || parsed.Message != "try again" {
 		t.Fatalf("ParseError failed: ok=%v parsed=%+v", ok, parsed)
 	}
-	if WrapError(gerr) == gerr {
+	if errors.Is(WrapError(gerr), gerr) {
 		t.Fatalf("WrapError should convert grpc status errors")
 	}
 	nonStatus := errors.New("plain")
-	if got := WrapError(nonStatus); got != nonStatus {
+	if got := WrapError(nonStatus); !errors.Is(got, nonStatus) {
 		t.Fatalf("WrapError should return original non-status error")
 	}
 	if err := WrapError(nil); err != nil {

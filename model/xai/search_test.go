@@ -22,13 +22,13 @@ func TestSearchParametersProto(t *testing.T) {
 	if proto.GetMode() != xaipb.SearchMode_ON_SEARCH_MODE {
 		t.Fatalf("mode not converted")
 	}
-	if proto.FromDate == nil || !proto.FromDate.AsTime().Equal(from) {
+	if proto.GetFromDate() == nil || !proto.GetFromDate().AsTime().Equal(from) {
 		t.Fatalf("from date mismatch")
 	}
 	if proto.GetMaxSearchResults() != 7 {
 		t.Fatalf("max search results mismatch")
 	}
-	if len(proto.Sources) != 1 || proto.Sources[0].GetWeb() == nil {
+	if len(proto.GetSources()) != 1 || proto.GetSources()[0].GetWeb() == nil {
 		t.Fatalf("web source missing")
 	}
 }

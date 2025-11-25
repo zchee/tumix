@@ -19,7 +19,7 @@ package xai
 import (
 	"context"
 	"encoding/base64"
-	"fmt"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -81,8 +81,8 @@ func (c *ImageClient) SampleBatch(ctx context.Context, prompt, model string, n i
 	if err != nil {
 		return nil, WrapError(err)
 	}
-	images := make([]*ImageResponse, len(resp.Images))
-	for i := range resp.Images {
+	images := make([]*ImageResponse, len(resp.GetImages()))
+	for i := range resp.GetImages() {
 		images[i] = &ImageResponse{
 			proto: resp,
 			index: i,
@@ -104,7 +104,7 @@ func (r *ImageResponse) Prompt() string { return r.image().GetUpSampledPrompt() 
 func (r *ImageResponse) URL() (string, error) {
 	url := r.image().GetUrl()
 	if url == "" {
-		return "", fmt.Errorf("image was not returned via URL")
+		return "", errors.New("image was not returned via URL")
 	}
 	return url, nil
 }
@@ -112,7 +112,7 @@ func (r *ImageResponse) URL() (string, error) {
 // Base64 returns the base64 representation if present.
 func (r *ImageResponse) Base64() (string, error) {
 	if r.image().GetBase64() == "" {
-		return "", fmt.Errorf("image was not returned via base64")
+		return "", errors.New("image was not returned via base64")
 	}
 	return r.image().GetBase64(), nil
 }
@@ -130,7 +130,7 @@ func (r *ImageResponse) Data(ctx context.Context) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +146,7 @@ func (r *ImageResponse) Data(ctx context.Context) ([]byte, error) {
 	return io.ReadAll(resp.Body)
 }
 
-func (r *ImageResponse) image() *xaipb.GeneratedImage { return r.proto.Images[r.index] }
+func (r *ImageResponse) image() *xaipb.GeneratedImage { return r.proto.GetImages()[r.index] }
 
 func imageFormatToProto(f ImageFormat) xaipb.ImageFormat {
 	switch f {

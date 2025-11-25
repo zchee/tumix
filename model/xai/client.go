@@ -19,7 +19,7 @@ package xai
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
+	"errors"
 	"os"
 	"time"
 
@@ -33,7 +33,21 @@ import (
 	billingpb "github.com/zchee/tumix/model/xai/management_api/v1"
 )
 
-const defaultServiceConfig = `{"methodConfig":[{"name":[{}],"retryPolicy":{"maxAttempts":5,"initialBackoff":"0.1s","maxBackoff":"1s","backoffMultiplier":2,"retryableStatusCodes":["UNAVAILABLE"]}}]}`
+const defaultServiceConfig = `{
+	"methodConfig":
+		[
+			{
+				"name":[{}],
+				"retryPolicy":{
+					"maxAttempts":5,
+					"initialBackoff":"0.1s",
+					"maxBackoff":"1s",
+					"backoffMultiplier":2,
+					"retryableStatusCodes":["UNAVAILABLE"]
+				}
+			}
+		]
+	}`
 
 // Client aggregates all xAI service clients.
 type Client struct {
@@ -64,29 +78,19 @@ func NewClient(ctx context.Context, apiKey string, optFns ...ClientOption) (*Cli
 		opts.apiKey = os.Getenv("XAI_API_KEY")
 	}
 	if opts.apiKey == "" {
-		return nil, fmt.Errorf("API key is required")
+		return nil, errors.New("API key is required")
 	}
 	if opts.managementKey == "" {
 		opts.managementKey = os.Getenv("XAI_MANAGEMENT_KEY")
 	}
 
-	apiConn, err := grpc.DialContext(ctx, opts.apiHost, buildDialOptions(opts, opts.apiKey)...)
+	apiConn, err := grpc.NewClient(opts.apiHost, buildDialOptions(opts, opts.apiKey)...)
 	if err != nil {
 		return nil, err
 	}
 
-	var mgmtConn *grpc.ClientConn
-	if opts.managementKey != "" {
-		mgmtConn, err = grpc.DialContext(ctx, opts.managementHost, buildDialOptions(opts, opts.managementKey)...)
-		if err != nil {
-			apiConn.Close()
-			return nil, err
-		}
-	}
-
 	client := &Client{
-		apiConn:        apiConn,
-		managementConn: mgmtConn,
+		apiConn: apiConn,
 		Auth: &AuthClient{
 			auth: xaipb.NewAuthClient(apiConn),
 		},
@@ -113,13 +117,18 @@ func NewClient(ctx context.Context, apiKey string, optFns ...ClientOption) (*Cli
 		},
 	}
 
-	if mgmtConn != nil {
-		client.Billing = &BillingClient{
-			uisvc: billingpb.NewUISvcClient(mgmtConn),
+	if opts.managementKey != "" {
+		client.managementConn, err = grpc.NewClient(opts.managementHost, buildDialOptions(opts, opts.managementKey)...)
+		if err != nil {
+			apiConn.Close()
+			return nil, err
 		}
-	}
+		client.Billing = &BillingClient{
+			uisvc: billingpb.NewUISvcClient(client.managementConn),
+		}
 
-	client.Collections = NewCollectionsClient(apiConn, mgmtConn)
+		client.Collections = NewCollectionsClient(apiConn, client.managementConn)
+	}
 
 	return client, nil
 }

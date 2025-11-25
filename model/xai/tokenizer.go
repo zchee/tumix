@@ -28,7 +28,7 @@ type TokenizerClient struct {
 }
 
 // Tokenize converts text into tokens using the specified model.
-func (c *TokenizerClient) Tokenize(ctx context.Context, text string, model string) (*xaipb.TokenizeTextResponse, error) {
+func (c *TokenizerClient) Tokenize(ctx context.Context, text, model string) (*xaipb.TokenizeTextResponse, error) {
 	resp, err := c.tokenize.TokenizeText(ctx, &xaipb.TokenizeTextRequest{
 		Text:  text,
 		Model: model,

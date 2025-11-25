@@ -11,10 +11,10 @@ func TestToolFunction(t *testing.T) {
 		t.Fatalf("Tool returned error: %v", err)
 	}
 	fn := tool.GetFunction()
-	if fn == nil || fn.Name != "foo" || fn.Description != "bar" {
+	if fn == nil || fn.GetName() != "foo" || fn.GetDescription() != "bar" {
 		t.Fatalf("unexpected function tool: %+v", fn)
 	}
-	if fn.Parameters == "" {
+	if fn.GetParameters() == "" {
 		t.Fatalf("expected parameters to be serialized")
 	}
 }
@@ -35,7 +35,7 @@ func TestCollectionsSearchTool(t *testing.T) {
 	limit := int32(5)
 	tool := CollectionsSearchTool([]string{"c1", "c2"}, limit)
 	cs := tool.GetCollectionsSearch()
-	if cs == nil || len(cs.CollectionIds) != 2 {
+	if cs == nil || len(cs.GetCollectionIds()) != 2 {
 		t.Fatalf("collections search not populated")
 	}
 	if cs.GetLimit() != limit {

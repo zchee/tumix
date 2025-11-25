@@ -39,7 +39,7 @@ type fileUploadConfig struct {
 	progress ProgressFunc
 }
 
-// FileOption customises upload behaviour.
+// FileOption customizes upload behavior.
 type FileOption func(*fileUploadConfig)
 
 // WithFilename overrides the filename used for non-path uploads (e.g. bytes, readers).
@@ -65,7 +65,7 @@ type FilesClient struct {
 //   - io.Reader: streaming reader (requires WithFilename; total size optional)
 func (c *FilesClient) Upload(ctx context.Context, src any, opts ...FileOption) (*xaipb.File, error) {
 	if c == nil || c.files == nil {
-		return nil, errors.New("files client not initialised")
+		return nil, errors.New("files client not initialized")
 	}
 	cfg := fileUploadConfig{}
 	for _, opt := range opts {
@@ -234,7 +234,7 @@ func (c *FilesClient) Content(ctx context.Context, fileID string) ([]byte, error
 			}
 			return nil, err
 		}
-		buf.Write(chunk.Data)
+		buf.Write(chunk.GetData())
 	}
 	return buf.Bytes(), nil
 }

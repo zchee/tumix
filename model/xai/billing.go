@@ -48,7 +48,7 @@ func (c *BillingClient) GetBillingInfo(ctx context.Context, teamID string) (*bil
 	if err != nil {
 		return nil, WrapError(err)
 	}
-	return resp.BillingInfo, nil
+	return resp.GetBillingInfo(), nil
 }
 
 // ListPaymentMethods lists payment methods of a team.

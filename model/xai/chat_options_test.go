@@ -10,10 +10,10 @@ func TestWithJSONSchema(t *testing.T) {
 	schema := `{"type":"object"}`
 	req := &xaipb.GetCompletionsRequest{}
 	WithJSONSchema(schema)(req, nil)
-	if req.ResponseFormat == nil || req.ResponseFormat.GetFormatType() != xaipb.FormatType_FORMAT_TYPE_JSON_SCHEMA {
+	if req.GetResponseFormat() == nil || req.GetResponseFormat().GetFormatType() != xaipb.FormatType_FORMAT_TYPE_JSON_SCHEMA {
 		t.Fatalf("response format not set to json schema")
 	}
-	if req.ResponseFormat.GetSchema() != schema {
+	if req.GetResponseFormat().GetSchema() != schema {
 		t.Fatalf("schema not propagated")
 	}
 }

@@ -14,7 +14,7 @@ type demoStruct struct {
 func TestWithJSONStruct(t *testing.T) {
 	s := chatSessionForTest()
 	WithJSONStruct[*demoStruct]()(s.request, nil)
-	if s.request.ResponseFormat == nil || s.request.ResponseFormat.GetFormatType() != xaipb.FormatType_FORMAT_TYPE_JSON_SCHEMA {
+	if s.request.GetResponseFormat() == nil || s.request.GetResponseFormat().GetFormatType() != xaipb.FormatType_FORMAT_TYPE_JSON_SCHEMA {
 		t.Fatalf("response format not set")
 	}
 }

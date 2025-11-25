@@ -173,7 +173,7 @@ func (c *CollectionsClient) requireCollectionsStub() error {
 }
 
 // Create makes a new collection.
-func (c *CollectionsClient) Create(ctx context.Context, name string, modelName string, chunkCfg *ragpb.ChunkConfiguration, opts ...collectionsOption) (*collectionspb.CollectionMetadata, error) {
+func (c *CollectionsClient) Create(ctx context.Context, name, modelName string, chunkCfg *ragpb.ChunkConfiguration, opts ...collectionsOption) (*collectionspb.CollectionMetadata, error) {
 	if err := c.requireCollectionsStub(); err != nil {
 		return nil, err
 	}
@@ -239,7 +239,7 @@ func (c *CollectionsClient) Get(ctx context.Context, collectionID string, opts .
 }
 
 // Update changes name and/or chunk configuration.
-func (c *CollectionsClient) Update(ctx context.Context, collectionID string, name string, chunkCfg *ragpb.ChunkConfiguration, opts ...collectionsOption) (*collectionspb.CollectionMetadata, error) {
+func (c *CollectionsClient) Update(ctx context.Context, collectionID, name string, chunkCfg *ragpb.ChunkConfiguration, opts ...collectionsOption) (*collectionspb.CollectionMetadata, error) {
 	if err := c.requireCollectionsStub(); err != nil {
 		return nil, err
 	}
