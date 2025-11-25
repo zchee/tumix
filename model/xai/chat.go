@@ -644,7 +644,9 @@ func (r *Response) processChunk(chunk *xaipb.GetChatCompletionChunk) {
 					r.buffersAreInProto = false
 				}
 			} else {
-				ensureBuilder(&r.contentBuffers, idx).WriteString(content)
+				buf := ensureBuilder(&r.contentBuffers, idx)
+				buf.Grow(len(content))
+				buf.WriteString(content)
 			}
 		}
 		if reasoning := delta.GetReasoningContent(); reasoning != "" {
@@ -659,7 +661,9 @@ func (r *Response) processChunk(chunk *xaipb.GetChatCompletionChunk) {
 					r.buffersAreInProto = false
 				}
 			} else {
-				ensureBuilder(&r.reasoningBuffers, idx).WriteString(reasoning)
+				buf := ensureBuilder(&r.reasoningBuffers, idx)
+				buf.Grow(len(reasoning))
+				buf.WriteString(reasoning)
 			}
 		}
 		if encrypted := delta.GetEncryptedContent(); encrypted != "" {
@@ -674,7 +678,9 @@ func (r *Response) processChunk(chunk *xaipb.GetChatCompletionChunk) {
 					r.buffersAreInProto = false
 				}
 			} else {
-				ensureBuilder(&r.encryptedBuffers, idx).WriteString(encrypted)
+				buf := ensureBuilder(&r.encryptedBuffers, idx)
+				buf.Grow(len(encrypted))
+				buf.WriteString(encrypted)
 			}
 		}
 	}
