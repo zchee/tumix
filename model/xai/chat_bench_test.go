@@ -182,6 +182,45 @@ func BenchmarkSpanResponseAttributes(b *testing.B) {
 	}
 }
 
+func BenchmarkChatSessionStreamAggregate(b *testing.B) {
+	chunks := streamingChunks(8, 3, "chunk-")
+	resp := newResponse(&xaipb.GetChatCompletionResponse{}, nil)
+
+	b.ReportAllocs()
+	for b.Loop() {
+		for _, ch := range chunks {
+			resp.processChunk(ch)
+		}
+		_ = resp.Content()
+		_ = resp.ToolCalls()
+		resp.reset()
+	}
+}
+
+func streamingChunks(nChunks, outputs int, contentPrefix string) []*xaipb.GetChatCompletionChunk {
+	chunks := make([]*xaipb.GetChatCompletionChunk, 0, nChunks)
+	for i := range rangeN(nChunks) {
+		outs := make([]*xaipb.CompletionOutputChunk, 0, outputs)
+		for j := range rangeN(outputs) {
+			outs = append(outs, &xaipb.CompletionOutputChunk{
+				Index: int32(j),
+				Delta: &xaipb.Delta{
+					Role:             xaipb.MessageRole_ROLE_ASSISTANT,
+					Content:          contentPrefix + strconv.Itoa(i) + "-" + strconv.Itoa(j),
+					ReasoningContent: "r-" + strconv.Itoa(j),
+					ToolCalls: []*xaipb.ToolCall{
+						{Tool: &xaipb.ToolCall_Function{Function: &xaipb.FunctionCall{Name: "fn", Arguments: `{"x":1}`}}},
+					},
+				},
+				FinishReason: xaipb.FinishReason_REASON_STOP,
+			})
+		}
+		chunks = append(chunks, &xaipb.GetChatCompletionChunk{Outputs: outs})
+	}
+
+	return chunks
+}
+
 func metadataChunk(idx int32) *xaipb.CompletionOutputChunk {
 	return &xaipb.CompletionOutputChunk{
 		Index: idx,
