@@ -24,6 +24,7 @@ import (
 	"io"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -426,6 +427,33 @@ func newResponse(protoResp *xaipb.GetChatCompletionResponse, index *int32) *Resp
 	}
 }
 
+func (r *Response) reset() {
+	r.proto.Id = ""
+	r.proto.Model = ""
+	r.proto.Created = nil
+	r.proto.SystemFingerprint = ""
+	r.proto.Usage = nil
+	r.proto.Citations = r.proto.Citations[:0]
+	for _, out := range r.proto.Outputs {
+		if out == nil {
+			continue
+		}
+		if msg := out.Message; msg != nil {
+			msg.Content = ""
+			msg.ReasoningContent = ""
+			msg.EncryptedContent = ""
+			msg.ToolCalls = msg.ToolCalls[:0]
+			msg.Role = 0
+		}
+		out.FinishReason = 0
+	}
+	r.index = nil
+	r.contentBuffers = nil
+	r.reasoningBuffers = nil
+	r.encryptedBuffers = nil
+	r.buffersAreInProto = true
+}
+
 // Proto returns the underlying protobuf message (materializing buffered chunks).
 func (r *Response) Proto() *xaipb.GetChatCompletionResponse {
 	r.flushBuffers()
@@ -520,20 +548,22 @@ func (r *Response) output() *xaipb.CompletionOutput {
 }
 
 func (r *Response) outputNoFlush() *xaipb.CompletionOutput {
-	var outputs []*xaipb.CompletionOutput
+	var last *xaipb.CompletionOutput
+	idx, hasIdx := deref(r.index), r.index != nil
 	for out := range slices.Values(r.proto.GetOutputs()) {
 		if out == nil || out.GetMessage() == nil {
 			continue
 		}
-		if out.GetMessage().GetRole() == xaipb.MessageRole_ROLE_ASSISTANT && (r.index == nil || out.GetIndex() == deref(r.index)) {
-			outputs = append(outputs, out)
+		if out.GetMessage().GetRole() != xaipb.MessageRole_ROLE_ASSISTANT {
+			continue
 		}
-	}
-	if len(outputs) == 0 {
-		return nil
+		if hasIdx && out.GetIndex() != idx {
+			continue
+		}
+		last = out
 	}
 
-	return outputs[len(outputs)-1]
+	return last
 }
 
 func (r *Response) flushBuffers() {
@@ -560,6 +590,9 @@ func (r *Response) flushBuffers() {
 	}
 
 	r.buffersAreInProto = true
+	releaseBuilders(&r.contentBuffers)
+	releaseBuilders(&r.reasoningBuffers)
+	releaseBuilders(&r.encryptedBuffers)
 }
 
 //nolint:cyclop,gocognit // TODO(zchee): fix nolint.
@@ -571,64 +604,68 @@ func (r *Response) processChunk(chunk *xaipb.GetChatCompletionChunk) {
 	r.proto.SystemFingerprint = chunk.GetSystemFingerprint()
 	r.proto.Citations = append(r.proto.Citations, chunk.GetCitations()...)
 
-	maxIndex := 0
-	hasContent := false
-	hasReasoning := false
-	hasEncrypted := false
-	for _, out := range chunk.GetOutputs() {
-		if idx := int(out.GetIndex()); idx > maxIndex {
-			maxIndex = idx
-		}
-		hasContent = hasContent || out.GetDelta().GetContent() != ""
-		hasReasoning = hasReasoning || out.GetDelta().GetReasoningContent() != ""
-		hasEncrypted = hasEncrypted || out.GetDelta().GetEncryptedContent() != ""
-	}
-
-	if needed := maxIndex + 1 - len(r.proto.GetOutputs()); needed > 0 {
-		start := len(r.proto.GetOutputs())
-		r.proto.Outputs = append(r.proto.Outputs, make([]*xaipb.CompletionOutput, needed)...)
-		for i := start; i < len(r.proto.GetOutputs()); i++ {
-			r.proto.Outputs[i] = nil
-		}
-	}
-
-	if size := maxIndex + 1; size > 0 {
-		if hasContent {
-			growBuilders(&r.contentBuffers, size)
-		}
-		if hasReasoning {
-			growBuilders(&r.reasoningBuffers, size)
-		}
-		if hasEncrypted {
-			growBuilders(&r.encryptedBuffers, size)
-		}
+	if citations := chunk.GetCitations(); len(citations) > 0 {
+		r.proto.Citations = slices.Grow(r.proto.Citations, len(citations))
+		r.proto.Citations = append(r.proto.Citations, citations...)
 	}
 
 	for _, c := range chunk.GetOutputs() {
-		target := r.proto.GetOutputs()[c.GetIndex()]
-		if target == nil {
-			target = &xaipb.CompletionOutput{}
-			r.proto.Outputs[c.GetIndex()] = target
-		}
+		idx := int(c.GetIndex())
+		delta := c.GetDelta()
+		target := r.ensureOutput(idx)
+		msg := target.Message
 		target.Index = c.GetIndex()
-		if target.GetMessage() == nil {
-			target.Message = &xaipb.CompletionMessage{}
+		msg.Role = delta.GetRole()
+		if calls := delta.GetToolCalls(); len(calls) > 0 {
+			msg.ToolCalls = slices.Grow(msg.ToolCalls, len(calls))
+			msg.ToolCalls = append(msg.ToolCalls, calls...)
 		}
-		target.Message.Role = c.GetDelta().GetRole()
-		target.Message.ToolCalls = append(target.Message.ToolCalls, c.GetDelta().GetToolCalls()...)
 		target.FinishReason = c.GetFinishReason()
 
-		if c.GetDelta().GetContent() != "" {
-			ensureBuilder(&r.contentBuffers, int(c.GetIndex())).WriteString(c.GetDelta().GetContent())
-			r.buffersAreInProto = false
+		if content := delta.GetContent(); content != "" {
+			if r.buffersAreInProto {
+				if msg.GetContent() == "" {
+					msg.Content = content
+				} else {
+					buf := ensureBuilder(&r.contentBuffers, idx)
+					buf.Grow(len(msg.GetContent()) + len(content))
+					buf.WriteString(msg.GetContent())
+					buf.WriteString(content)
+					r.buffersAreInProto = false
+				}
+			} else {
+				ensureBuilder(&r.contentBuffers, idx).WriteString(content)
+			}
 		}
-		if c.GetDelta().GetReasoningContent() != "" {
-			ensureBuilder(&r.reasoningBuffers, int(c.GetIndex())).WriteString(c.GetDelta().GetReasoningContent())
-			r.buffersAreInProto = false
+		if reasoning := delta.GetReasoningContent(); reasoning != "" {
+			if r.buffersAreInProto {
+				if msg.GetReasoningContent() == "" {
+					msg.ReasoningContent = reasoning
+				} else {
+					buf := ensureBuilder(&r.reasoningBuffers, idx)
+					buf.Grow(len(msg.GetReasoningContent()) + len(reasoning))
+					buf.WriteString(msg.GetReasoningContent())
+					buf.WriteString(reasoning)
+					r.buffersAreInProto = false
+				}
+			} else {
+				ensureBuilder(&r.reasoningBuffers, idx).WriteString(reasoning)
+			}
 		}
-		if c.GetDelta().GetEncryptedContent() != "" {
-			ensureBuilder(&r.encryptedBuffers, int(c.GetIndex())).WriteString(c.GetDelta().GetEncryptedContent())
-			r.buffersAreInProto = false
+		if encrypted := delta.GetEncryptedContent(); encrypted != "" {
+			if r.buffersAreInProto {
+				if msg.GetEncryptedContent() == "" {
+					msg.EncryptedContent = encrypted
+				} else {
+					buf := ensureBuilder(&r.encryptedBuffers, idx)
+					buf.Grow(len(msg.GetEncryptedContent()) + len(encrypted))
+					buf.WriteString(msg.GetEncryptedContent())
+					buf.WriteString(encrypted)
+					r.buffersAreInProto = false
+				}
+			} else {
+				ensureBuilder(&r.encryptedBuffers, idx).WriteString(encrypted)
+			}
 		}
 	}
 }
@@ -649,8 +686,16 @@ func newChunk(protoChunk *xaipb.GetChatCompletionChunk, index *int32) *Chunk {
 // Content concatenates chunk content for the tracked index (or all when multi-output).
 func (c *Chunk) Content() string {
 	var b strings.Builder
-	for _, out := range c.outputs() {
-		b.WriteString(out.GetDelta().GetContent())
+	idx, hasIdx := deref(c.index), c.index != nil
+	for out := range slices.Values(c.proto.GetOutputs()) {
+		delta := out.GetDelta()
+		if delta.GetRole() != xaipb.MessageRole_ROLE_ASSISTANT {
+			continue
+		}
+		if hasIdx && out.GetIndex() != idx {
+			continue
+		}
+		b.WriteString(delta.GetContent())
 	}
 	return b.String()
 }
@@ -658,8 +703,16 @@ func (c *Chunk) Content() string {
 // ReasoningContent concatenates reasoning content for tracked outputs.
 func (c *Chunk) ReasoningContent() string {
 	var b strings.Builder
-	for _, out := range c.outputs() {
-		b.WriteString(out.GetDelta().GetReasoningContent())
+	idx, hasIdx := deref(c.index), c.index != nil
+	for out := range slices.Values(c.proto.GetOutputs()) {
+		delta := out.GetDelta()
+		if delta.GetRole() != xaipb.MessageRole_ROLE_ASSISTANT {
+			continue
+		}
+		if hasIdx && out.GetIndex() != idx {
+			continue
+		}
+		b.WriteString(delta.GetReasoningContent())
 	}
 
 	return b.String()
@@ -667,24 +720,36 @@ func (c *Chunk) ReasoningContent() string {
 
 // ToolCalls returns tool calls for this chunk.
 func (c *Chunk) ToolCalls() []*xaipb.ToolCall {
-	var calls []*xaipb.ToolCall
-	for _, out := range c.outputs() {
-		calls = append(calls, out.GetDelta().GetToolCalls()...)
+	idx, hasIdx := deref(c.index), c.index != nil
+	total := 0
+	for out := range slices.Values(c.proto.GetOutputs()) {
+		delta := out.GetDelta()
+		if delta.GetRole() != xaipb.MessageRole_ROLE_ASSISTANT {
+			continue
+		}
+		if hasIdx && out.GetIndex() != idx {
+			continue
+		}
+		total += len(delta.GetToolCalls())
+	}
+
+	if total == 0 {
+		return nil
+	}
+
+	calls := make([]*xaipb.ToolCall, 0, total)
+	for out := range slices.Values(c.proto.GetOutputs()) {
+		delta := out.GetDelta()
+		if delta.GetRole() != xaipb.MessageRole_ROLE_ASSISTANT {
+			continue
+		}
+		if hasIdx && out.GetIndex() != idx {
+			continue
+		}
+		calls = append(calls, delta.GetToolCalls()...)
 	}
 
 	return calls
-}
-
-// Outputs returns the raw chunk outputs filtered by index.
-func (c *Chunk) outputs() []*xaipb.CompletionOutputChunk {
-	var outs []*xaipb.CompletionOutputChunk
-	for _, out := range c.proto.GetOutputs() {
-		if out.GetDelta().GetRole() == xaipb.MessageRole_ROLE_ASSISTANT && (c.index == nil || out.GetIndex() == deref(c.index)) {
-			outs = append(outs, out)
-		}
-	}
-
-	return outs
 }
 
 // Convenience builders for messages and content.
@@ -843,10 +908,48 @@ func ensureBuilder(bufs *[]*strings.Builder, idx int) *strings.Builder {
 	}
 
 	if (*bufs)[idx] == nil {
-		(*bufs)[idx] = &strings.Builder{}
+		b := builderPool.Get().(*strings.Builder)
+		b.Reset()
+		(*bufs)[idx] = b
 	}
 
 	return (*bufs)[idx]
+}
+
+func releaseBuilders(bufs *[]*strings.Builder) {
+	for i, b := range *bufs {
+		if b == nil {
+			continue
+		}
+		b.Reset()
+		builderPool.Put(b)
+		(*bufs)[i] = nil
+	}
+}
+
+func (r *Response) ensureOutput(idx int) *xaipb.CompletionOutput {
+	if idx >= len(r.proto.Outputs) {
+		needed := idx + 1 - len(r.proto.Outputs)
+		r.proto.Outputs = append(r.proto.Outputs, make([]*xaipb.CompletionOutput, needed)...)
+	}
+
+	out := r.proto.Outputs[idx]
+	if out == nil {
+		out = &xaipb.CompletionOutput{}
+		r.proto.Outputs[idx] = out
+	}
+
+	if out.Message == nil {
+		out.Message = &xaipb.CompletionMessage{}
+	}
+
+	return out
+}
+
+var builderPool = sync.Pool{
+	New: func() any {
+		return &strings.Builder{}
+	},
 }
 
 func growBuilders(bufs *[]*strings.Builder, size int) {
