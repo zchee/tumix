@@ -17,6 +17,8 @@
 package xai
 
 import (
+	"encoding/json"
+	"reflect"
 	"testing"
 
 	xaipb "github.com/zchee/tumix/model/xai/api/v1"
@@ -39,5 +41,61 @@ func TestResponseDecodeJSON(t *testing.T) {
 	}
 	if out.Foo != 123 {
 		t.Fatalf("unexpected value: %+v", out)
+	}
+}
+
+func TestSchemaBytesCacheReused(t *testing.T) {
+	type sample struct {
+		Foo int `json:"foo"`
+	}
+
+	first, err := schemaBytesForType(reflect.TypeFor[sample]())
+	if err != nil {
+		t.Fatalf("first schema err: %v", err)
+	}
+	second, err := schemaBytesForType(reflect.TypeFor[sample]())
+	if err != nil {
+		t.Fatalf("second schema err: %v", err)
+	}
+
+	if hdr1, hdr2 := reflect.ValueOf(first).Pointer(), reflect.ValueOf(second).Pointer(); hdr1 != hdr2 {
+		t.Fatalf("expected cached schema slice to be reused")
+	}
+	if !json.Valid(first) {
+		t.Fatalf("schema is not valid JSON: %s", string(first))
+	}
+}
+
+func TestResponseProcessChunkStreamingAggregation(t *testing.T) {
+	resp := newResponse(&xaipb.GetChatCompletionResponse{}, nil)
+
+	chunk1 := &xaipb.GetChatCompletionChunk{
+		Outputs: []*xaipb.CompletionOutputChunk{{
+			Index: 0,
+			Delta: &xaipb.Delta{
+				Role:    xaipb.MessageRole_ROLE_ASSISTANT,
+				Content: "hel",
+			},
+		}},
+	}
+	chunk2 := &xaipb.GetChatCompletionChunk{
+		Outputs: []*xaipb.CompletionOutputChunk{{
+			Index: 0,
+			Delta: &xaipb.Delta{
+				Role:             xaipb.MessageRole_ROLE_ASSISTANT,
+				Content:          "lo",
+				ReasoningContent: "why",
+			},
+		}},
+	}
+
+	resp.processChunk(chunk1)
+	resp.processChunk(chunk2)
+
+	if got := resp.Content(); got != "hello" {
+		t.Fatalf("content aggregation mismatch: %q", got)
+	}
+	if got := resp.ReasoningContent(); got != "why" {
+		t.Fatalf("reasoning aggregation mismatch: %q", got)
 	}
 }
