@@ -17,9 +17,9 @@
 package xai
 
 import (
-	"encoding/json"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	xaipb "github.com/zchee/tumix/model/xai/api/v1"
@@ -27,7 +27,7 @@ import (
 
 // Tool builds a function-calling tool definition.
 func Tool(name, description string, parameters any) (*xaipb.Tool, error) {
-	data, err := json.Marshal(parameters)
+	data, err := sonic.ConfigFastest.Marshal(parameters)
 	if err != nil {
 		return nil, err
 	}

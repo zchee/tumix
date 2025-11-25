@@ -19,7 +19,7 @@ package xai
 import (
 	"errors"
 
-	json "github.com/goccy/go-json"
+	"github.com/bytedance/sonic"
 
 	xaipb "github.com/zchee/tumix/model/xai/api/v1"
 )
@@ -37,7 +37,7 @@ func ToolCallArguments(tc *xaipb.ToolCall, out any) error {
 	if fn.GetArguments() == "" {
 		return errors.New("tool call arguments empty")
 	}
-	return json.Unmarshal([]byte(fn.GetArguments()), out)
+	return sonic.ConfigFastest.Unmarshal([]byte(fn.GetArguments()), out)
 }
 
 // ToolCallJSON returns the raw JSON arguments string (empty if absent).

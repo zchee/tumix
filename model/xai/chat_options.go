@@ -18,13 +18,13 @@ package xai
 
 import (
 	"context"
-	json "encoding/json/v2"
 	"errors"
 	"fmt"
 	"reflect"
 	"sync"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/invopop/jsonschema"
 	xaipb "github.com/zchee/tumix/model/xai/api/v1"
 	"go.opentelemetry.io/otel/codes"
@@ -249,7 +249,7 @@ func (s *ChatSession) AppendToolResultJSON(toolCallID string, result any) *ChatS
 		payload = v
 
 	default:
-		b, err := json.Marshal(v)
+		b, err := sonic.ConfigFastest.Marshal(v)
 		if err != nil {
 			panic(err)
 		}
@@ -440,7 +440,7 @@ func (s *ChatSession) parseWithRequest(ctx context.Context, out any, req *xaipb.
 	}
 	span.SetAttributes(s.makeSpanResponseAttributes([]*Response{resp})...)
 
-	if err := json.Unmarshal([]byte(resp.Content()), out); err != nil {
+	if err := sonic.ConfigFastest.Unmarshal([]byte(resp.Content()), out); err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		span.RecordError(err)
 		return resp, err
@@ -473,7 +473,7 @@ func schemaBytesForType(t reflect.Type) ([]byte, error) {
 		return nil, errors.New("schema reflection returned nil")
 	}
 
-	b, err := json.Marshal(schema)
+	b, err := sonic.ConfigFastest.Marshal(schema)
 	if err != nil {
 		return nil, err
 	}
