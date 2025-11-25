@@ -1,0 +1,51 @@
+---
+# https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference
+version: 2
+
+updates:
+  - package-ecosystem: gomod
+    directory: "/"
+    commit-message:
+      prefix: "go.mod"
+    pull-request-branch-name:
+      separator: "-"
+    open-pull-requests-limit: 50
+    schedule:
+      interval: daily
+      timezone: Asia/Tokyo
+      time: "11:00"
+    labels:
+      - dependabot
+      - dependencies
+
+  - package-ecosystem: gomod
+    directory: "/tools"
+    commit-message:
+      prefix: "tools"
+    pull-request-branch-name:
+      separator: "-"
+    open-pull-requests-limit: 50
+    schedule:
+      interval: daily
+      timezone: Asia/Tokyo
+      time: "11:00"
+    labels:
+      - dependabot
+      - dependencies
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    commit-message:
+      prefix: "gha"
+    pull-request-branch-name:
+      separator: "-"
+    open-pull-requests-limit: 20
+    schedule:
+      interval: daily
+      timezone: Asia/Tokyo
+      time: "11:00"
+    labels:
+      - dependabot
+      - dependencies
+
+enable-beta-ecosystems: true
