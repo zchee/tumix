@@ -151,7 +151,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    import os
     import shutil
 
     tool_dir = Path(__file__).parent.parent.parent.parent / "tools" / "bin"
