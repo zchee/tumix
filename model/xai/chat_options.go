@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/bytedance/sonic"
-	"github.com/invopop/jsonschema"
+	"github.com/eino-contrib/jsonschema"
 	xaipb "github.com/zchee/tumix/model/xai/api/v1"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
