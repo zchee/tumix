@@ -50,7 +50,7 @@ jobs:
       - name: Download dependency modules
         run: |
           go mod download -x
-          GOBIN=$PWD/bin go -C tools install -v -x tool
+          GOBIN=$PWD/tools/bin go -C tools install -v -x tool
 
       - name: Run Unit tests
         run: |
