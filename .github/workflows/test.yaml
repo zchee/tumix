@@ -60,6 +60,7 @@ jobs:
       - name: Upload Coverage report to CodeCov
         uses: codecov/codecov-action@v5
         with:
+          use_oidc: true
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage.out,./model/xai/coverage.out
           disable_file_fixes: true
