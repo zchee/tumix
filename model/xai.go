@@ -14,7 +14,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Package model implements the LLM model integration.
 package model
 
 import (
