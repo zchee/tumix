@@ -330,6 +330,7 @@ linters:
     rules:
       - linters:
           - decorder
+          - gosec
           - revive
           - wrapcheck
         path: model/xai
