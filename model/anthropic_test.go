@@ -20,7 +20,7 @@ import (
 	json "encoding/json/v2"
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"

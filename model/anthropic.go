@@ -27,7 +27,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/anthropics/anthropic-sdk-go/packages/param"
 	"github.com/anthropics/anthropic-sdk-go/shared/constant"
