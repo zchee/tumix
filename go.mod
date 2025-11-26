@@ -5,15 +5,15 @@ go 1.25
 replace github.com/zchee/tumix/model/xai => ./model/xai
 
 require (
+	github.com/anthropics/anthropic-sdk-go v1.19.0
 	github.com/google/go-cmp v0.7.0
+	github.com/openai/openai-go/v3 v3.8.1
 	github.com/zchee/tumix/model/xai v0.0.0-00010101000000-000000000000
 	google.golang.org/adk v0.2.1-0.20251124114330-f5e8b6d18dee // @main
 	google.golang.org/genai v1.36.0
 	google.golang.org/grpc v1.77.0
 	google.golang.org/protobuf v1.36.10
 )
-
-require github.com/anthropics/anthropic-sdk-go v1.19.0
 
 require (
 	cloud.google.com/go v0.123.0 // indirect
