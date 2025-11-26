@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"iter"
 	"reflect"
+	"strings"
 
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
@@ -81,10 +82,16 @@ func (s *streamingResponseAggregator) aggregateResponse(llmResponse *model.LLMRe
 
 	// If part is text append it
 	if part0 != nil && part0.Text != "" {
+		delta := appendDelta(part0.Text, func() *string {
+			if part0.Thought {
+				return &s.thoughtText
+			}
+			return &s.text
+		}())
 		if part0.Thought {
-			s.thoughtText += part0.Text
+			s.thoughtText += delta
 		} else {
-			s.text += part0.Text
+			s.text += delta
 		}
 		llmResponse.Partial = true
 		return nil
@@ -145,4 +152,17 @@ func (s *streamingResponseAggregator) clear() {
 	s.text = ""
 	s.thoughtText = ""
 	s.role = ""
+}
+
+func appendDelta(incoming string, acc *string) string {
+	if acc == nil || incoming == "" {
+		return incoming
+	}
+
+	if after, ok := strings.CutPrefix(incoming, *acc); ok {
+		return after
+	}
+
+	// If the incoming text is not a superset, treat it as fresh chunk to avoid data loss.
+	return incoming
 }
