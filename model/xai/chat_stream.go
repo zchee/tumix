@@ -69,7 +69,7 @@ func (s *ChatStream) Recv() iter.Seq2[*Response, error] {
 
 		for {
 			chunk, err := s.stream.Recv()
-			if err != nil { //nolint:nestif // TODO(zchee): fix nolint
+			if err != nil {
 				s.finishSpan(err)
 
 				if errors.Is(err, io.EOF) {
