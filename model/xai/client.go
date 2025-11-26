@@ -28,7 +28,6 @@ import (
 	"google.golang.org/grpc/keepalive"
 
 	xaipb "github.com/zchee/tumix/model/xai/api/v1"
-	"github.com/zchee/tumix/model/xai/internal/grpccodec"
 	billingpb "github.com/zchee/tumix/model/xai/management_api/v1"
 )
 
@@ -166,7 +165,6 @@ func buildDialOptions(opts *clientOptions, token string) []grpc.DialOption {
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallSendMsgSize(defaultMaxMessageBytes),
 			grpc.MaxCallRecvMsgSize(defaultMaxMessageBytes),
-			grpc.ForceCodecV2(&grpccodec.Codec{}),
 		),
 		grpc.WithDefaultServiceConfig(defaultServiceConfig),
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
