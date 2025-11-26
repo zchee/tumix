@@ -600,7 +600,7 @@ func (r *Response) processChunk(chunk *xaipb.GetChatCompletionChunk) {
 	r.proto.SystemFingerprint = chunk.GetSystemFingerprint()
 
 	if citations := chunk.GetCitations(); len(citations) > 0 {
-		r.proto.Citations = append(slices.Grow(r.proto.Citations, len(citations)), citations...)
+		r.proto.Citations = append(slices.Grow(r.proto.GetCitations(), len(citations)), citations...)
 	}
 
 	for _, c := range chunk.GetOutputs() {
@@ -683,11 +683,12 @@ type Chunk struct {
 	indexValue   int32
 	contentLen   int
 	reasoningLen int
+	toolCallsLen int
 }
 
 func newChunk(protoChunk *xaipb.GetChatCompletionChunk, index *int32) *Chunk {
 	idxVal, hasIdx := deref(index), index != nil
-	contentLen, reasoningLen := computeChunkLengths(protoChunk.GetOutputs(), hasIdx, idxVal)
+	contentLen, reasoningLen, toolCallsLen := computeChunkStats(protoChunk.GetOutputs(), hasIdx, idxVal)
 	return &Chunk{
 		proto:        protoChunk,
 		index:        index,
@@ -695,6 +696,7 @@ func newChunk(protoChunk *xaipb.GetChatCompletionChunk, index *int32) *Chunk {
 		indexValue:   idxVal,
 		contentLen:   contentLen,
 		reasoningLen: reasoningLen,
+		toolCallsLen: toolCallsLen,
 	}
 }
 
@@ -749,7 +751,7 @@ func (c *Chunk) ReasoningContent() string {
 
 // ToolCalls returns tool calls for this chunk.
 func (c *Chunk) ToolCalls() []*xaipb.ToolCall {
-	var calls []*xaipb.ToolCall
+	calls := make([]*xaipb.ToolCall, 0, c.toolCallsLen)
 	for out := range slices.Values(c.proto.GetOutputs()) {
 		delta := out.GetDelta()
 		if delta.GetRole() != xaipb.MessageRole_ROLE_ASSISTANT {
@@ -958,7 +960,7 @@ var builderPool = sync.Pool{
 	},
 }
 
-func computeChunkLengths(chunks []*xaipb.CompletionOutputChunk, hasIdx bool, idxVal int32) (contentTotal, reasoningTotal int) {
+func computeChunkStats(chunks []*xaipb.CompletionOutputChunk, hasIdx bool, idxVal int32) (contentTotal, reasoningTotal, toolCallsTotal int) {
 	for out := range slices.Values(chunks) {
 		delta := out.GetDelta()
 		if delta.GetRole() != xaipb.MessageRole_ROLE_ASSISTANT {
@@ -969,9 +971,10 @@ func computeChunkLengths(chunks []*xaipb.CompletionOutputChunk, hasIdx bool, idx
 		}
 		contentTotal += len(delta.GetContent())
 		reasoningTotal += len(delta.GetReasoningContent())
+		toolCallsTotal += len(delta.GetToolCalls())
 	}
 
-	return contentTotal, reasoningTotal
+	return contentTotal, reasoningTotal, toolCallsTotal
 }
 
 func encodeToolCalls(tc []*xaipb.ToolCall) string {
