@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/bytedance/sonic"
+
 	xaipb "github.com/zchee/tumix/model/xai/api/v1"
 )
 

@@ -227,7 +227,8 @@ func (e emptyBuffer) ReadOnlyData() []byte {
 	return nil
 }
 
-func (e emptyBuffer) Ref()  {}
+func (e emptyBuffer) Ref() {}
+
 func (e emptyBuffer) Free() {}
 
 func (e emptyBuffer) Len() int {
