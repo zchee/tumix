@@ -20,12 +20,16 @@
 package grpccodec
 
 import (
+	"unsafe"
+
 	"google.golang.org/grpc/encoding"
-	"google.golang.org/grpc/mem"
+	grpcmem "google.golang.org/grpc/mem"
 
 	// Guarantee that the built-in proto is called registered before this one
 	// so that it can be replaced.
 	_ "google.golang.org/grpc/encoding/proto"
+
+	"github.com/zchee/tumix/model/xai/internal/grpccodec/mem"
 )
 
 func init() {
@@ -55,15 +59,17 @@ var _ encoding.CodecV2 = (*Codec)(nil)
 func (Codec) Name() string { return Name }
 
 // Marshal implements [encoding.CodecV2].
-func (c *Codec) Marshal(v any) (mem.BufferSlice, error) {
+func (c *Codec) Marshal(v any) (grpcmem.BufferSlice, error) {
 	if m, ok := v.(vtprotoMessage); ok {
 		size := m.SizeVT()
 		if mem.IsBelowBufferPoolingThreshold(size) {
-			buf := make([]byte, 0, size)
-			if _, err := m.MarshalToSizedBufferVT(buf[:size]); err != nil {
+			buf := make([]byte, size)
+			if _, err := m.MarshalToSizedBufferVT(buf); err != nil {
 				return nil, err
 			}
-			return mem.BufferSlice{mem.SliceBuffer(buf)}, nil
+			buffer := mem.SliceBuffer(buf)
+			gbuffer := (*grpcmem.SliceBuffer)(unsafe.Pointer(&buffer))
+			return grpcmem.BufferSlice{gbuffer}, nil
 		}
 
 		pool := mem.DefaultBufferPool()
@@ -73,16 +79,20 @@ func (c *Codec) Marshal(v any) (mem.BufferSlice, error) {
 			return nil, err
 		}
 
-		return mem.BufferSlice{mem.NewBuffer(buf, pool)}, nil
+		buffer := mem.NewBuffer(buf, pool)
+		gbuffer := *(*grpcmem.Buffer)(unsafe.Pointer(&buffer))
+		return grpcmem.BufferSlice{gbuffer}, nil
 	}
 
 	return c.fallback.Marshal(v)
 }
 
 // Unmarshal implements [encoding.CodecV2].
-func (c *Codec) Unmarshal(data mem.BufferSlice, v any) error {
+func (c *Codec) Unmarshal(data grpcmem.BufferSlice, v any) error {
+	data2 := *(*mem.BufferSlice)(unsafe.Pointer(&data))
+
 	if m, ok := v.(vtprotoMessage); ok {
-		buf := data.MaterializeToBuffer(mem.DefaultBufferPool())
+		buf := data2.MaterializeToBuffer(mem.DefaultBufferPool())
 		defer buf.Free()
 		return m.UnmarshalVT(buf.ReadOnlyData())
 	}
