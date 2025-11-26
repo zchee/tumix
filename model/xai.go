@@ -14,10 +14,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+// Package model implements the LLM model integration.
 package model
 
 import (
 	"context"
+	"encoding/json/jsontext"
 	json "encoding/json/v2"
 	"fmt"
 	"iter"
@@ -201,17 +203,20 @@ func genAI2XAIChatOptions(config *genai.GenerateContentConfig) xai.ChatOption {
 		return nil
 	}
 
+	sb := new(strings.Builder)
+	enc := jsontext.NewEncoder(sb)
 	marshalJSON := func(v any) (string, bool) {
 		if v == nil {
 			return "", false
 		}
 
-		b, err := json.Marshal(v)
-		if err != nil {
+		sb.Reset()
+		enc.Reset(sb)
+		if err := json.MarshalEncode(enc, v); err != nil {
 			return "", false
 		}
 
-		return string(b), true
+		return sb.String(), true
 	}
 
 	var (
@@ -423,6 +428,7 @@ func xai2LLMResponse(resp *xai.Response) *model.LLMResponse {
 
 	var argErrors []string
 	if toolCalls := resp.ToolCalls(); len(toolCalls) > 0 { //nolint:nestif // TODO(zchee): fix nolint
+		dec := jsontext.NewDecoder(nil)
 		for _, call := range toolCalls {
 			fc := call.GetFunction()
 			if fc == nil {
@@ -432,12 +438,14 @@ func xai2LLMResponse(resp *xai.Response) *model.LLMResponse {
 			args := map[string]any{}
 			rawArgs := fc.GetArguments()
 			if rawArgs != "" {
+				dec.Reset(strings.NewReader(rawArgs))
+
 				var obj map[string]any
-				if err := json.Unmarshal([]byte(rawArgs), &obj); err == nil {
+				if err := json.UnmarshalDecode(dec, &obj); err == nil {
 					args = obj
 				} else {
 					var generic any
-					if err2 := json.Unmarshal([]byte(rawArgs), &generic); err2 == nil {
+					if err2 := json.UnmarshalDecode(dec, &generic); err2 == nil {
 						args = map[string]any{"value": generic}
 					} else {
 						args["raw"] = rawArgs
