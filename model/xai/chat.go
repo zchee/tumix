@@ -684,6 +684,13 @@ type Chunk struct {
 	contentLen   int
 	reasoningLen int
 	toolCallsLen int
+
+	contentCache    string
+	reasoningCache  string
+	toolCallsCache  []*xaipb.ToolCall
+	contentCached   bool
+	reasoningCached bool
+	toolCallsCached bool
 }
 
 func newChunk(protoChunk *xaipb.GetChatCompletionChunk, index *int32) *Chunk {
@@ -702,9 +709,14 @@ func newChunk(protoChunk *xaipb.GetChatCompletionChunk, index *int32) *Chunk {
 
 // Content concatenates chunk content for the tracked index (or all when multi-output).
 func (c *Chunk) Content() string {
+	if c.contentCached {
+		return c.contentCache
+	}
 	if c.contentLen == 0 {
+		c.contentCached = true
 		return ""
 	}
+
 	buf := make([]byte, c.contentLen)
 	pos := 0
 	for out := range slices.Values(c.proto.GetOutputs()) {
@@ -721,14 +733,22 @@ func (c *Chunk) Content() string {
 		}
 		pos += copy(buf[pos:], part)
 	}
-	return string(buf)
+
+	c.contentCache = string(buf[:pos])
+	c.contentCached = true
+	return c.contentCache
 }
 
 // ReasoningContent concatenates reasoning content for tracked outputs.
 func (c *Chunk) ReasoningContent() string {
+	if c.reasoningCached {
+		return c.reasoningCache
+	}
 	if c.reasoningLen == 0 {
+		c.reasoningCached = true
 		return ""
 	}
+
 	buf := make([]byte, c.reasoningLen)
 	pos := 0
 	for out := range slices.Values(c.proto.GetOutputs()) {
@@ -746,11 +766,21 @@ func (c *Chunk) ReasoningContent() string {
 		pos += copy(buf[pos:], part)
 	}
 
-	return string(buf)
+	c.reasoningCache = string(buf[:pos])
+	c.reasoningCached = true
+	return c.reasoningCache
 }
 
 // ToolCalls returns tool calls for this chunk.
 func (c *Chunk) ToolCalls() []*xaipb.ToolCall {
+	if c.toolCallsCached {
+		return c.toolCallsCache
+	}
+	if c.toolCallsLen == 0 {
+		c.toolCallsCached = true
+		return nil
+	}
+
 	calls := make([]*xaipb.ToolCall, 0, c.toolCallsLen)
 	for out := range slices.Values(c.proto.GetOutputs()) {
 		delta := out.GetDelta()
@@ -761,10 +791,12 @@ func (c *Chunk) ToolCalls() []*xaipb.ToolCall {
 			continue
 		}
 		if toolCalls := delta.GetToolCalls(); len(toolCalls) > 0 {
-			calls = append(slices.Grow(calls, len(toolCalls)), toolCalls...)
+			calls = append(calls, toolCalls...)
 		}
 	}
 
+	c.toolCallsCache = calls
+	c.toolCallsCached = true
 	return calls
 }
 
