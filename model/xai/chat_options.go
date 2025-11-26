@@ -138,7 +138,7 @@ func WithJSONSchema(schema string) ChatOption {
 // WithJSONStruct derives a JSON Schema from the generic type T (pointer recommended) for structured outputs.
 func WithJSONStruct[T any]() ChatOption {
 	return func(req *xaipb.GetCompletionsRequest, _ *ChatSession) {
-		typ := reflect.TypeOf((*T)(nil)).Elem()
+		typ := reflect.TypeFor[T]()
 		b, err := schemaBytesForType(typ)
 		if err != nil {
 			return
