@@ -678,37 +678,16 @@ func newChunk(protoChunk *xaipb.GetChatCompletionChunk, index *int32) *Chunk {
 
 // Content concatenates chunk content for the tracked index (or all when multi-output).
 func (c *Chunk) Content() string {
-	var b strings.Builder
-	idx, hasIdx := deref(c.index), c.index != nil
-	for out := range slices.Values(c.proto.GetOutputs()) {
-		delta := out.GetDelta()
-		if delta.GetRole() != xaipb.MessageRole_ROLE_ASSISTANT {
-			continue
-		}
-		if hasIdx && out.GetIndex() != idx {
-			continue
-		}
-		b.WriteString(delta.GetContent())
-	}
-	return b.String()
+	return concatChunkText(c.proto.GetOutputs(), c.index, func(delta *xaipb.Delta) string {
+		return delta.GetContent()
+	})
 }
 
 // ReasoningContent concatenates reasoning content for tracked outputs.
 func (c *Chunk) ReasoningContent() string {
-	var b strings.Builder
-	idx, hasIdx := deref(c.index), c.index != nil
-	for out := range slices.Values(c.proto.GetOutputs()) {
-		delta := out.GetDelta()
-		if delta.GetRole() != xaipb.MessageRole_ROLE_ASSISTANT {
-			continue
-		}
-		if hasIdx && out.GetIndex() != idx {
-			continue
-		}
-		b.WriteString(delta.GetReasoningContent())
-	}
-
-	return b.String()
+	return concatChunkText(c.proto.GetOutputs(), c.index, func(delta *xaipb.Delta) string {
+		return delta.GetReasoningContent()
+	})
 }
 
 // ToolCalls returns tool calls for this chunk.
@@ -929,6 +908,45 @@ var builderPool = sync.Pool{
 	New: func() any {
 		return &strings.Builder{}
 	},
+}
+
+func concatChunkText(chunks []*xaipb.CompletionOutputChunk, idx *int32, pick func(*xaipb.Delta) string) string {
+	idxVal, hasIdx := deref(idx), idx != nil
+	total := 0
+	for out := range slices.Values(chunks) {
+		delta := out.GetDelta()
+		if delta.GetRole() != xaipb.MessageRole_ROLE_ASSISTANT {
+			continue
+		}
+		if hasIdx && out.GetIndex() != idxVal {
+			continue
+		}
+		part := pick(delta)
+		if part == "" {
+			continue
+		}
+		total += len(part)
+	}
+	if total == 0 {
+		return ""
+	}
+	buf := make([]byte, total)
+	pos := 0
+	for out := range slices.Values(chunks) {
+		delta := out.GetDelta()
+		if delta.GetRole() != xaipb.MessageRole_ROLE_ASSISTANT {
+			continue
+		}
+		if hasIdx && out.GetIndex() != idxVal {
+			continue
+		}
+		part := pick(delta)
+		if part == "" {
+			continue
+		}
+		pos += copy(buf[pos:], part)
+	}
+	return string(buf)
 }
 
 func splitResponses(resp *xaipb.GetChatCompletionResponse, n int32) []*Response {
