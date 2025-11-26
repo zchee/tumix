@@ -99,7 +99,7 @@ func genaiContentToMessage(c *genai.Content, overrideRole xaipb.MessageRole) (*x
 			if err != nil {
 				return nil, fmt.Errorf("part[%d] function_response: %w", pi, err)
 			}
-			if msg.Role == xaipb.MessageRole_INVALID_ROLE {
+			if msg.GetRole() == xaipb.MessageRole_INVALID_ROLE {
 				msg.Role = xaipb.MessageRole_ROLE_TOOL
 			}
 			msg.Content = append(msg.Content, TextContent(payload))
@@ -115,7 +115,7 @@ func genaiContentToMessage(c *genai.Content, overrideRole xaipb.MessageRole) (*x
 		}
 	}
 
-	if len(msg.Content) == 0 && len(msg.ToolCalls) == 0 {
+	if len(msg.GetContent()) == 0 && len(msg.GetToolCalls()) == 0 {
 		return nil, errors.New("message has neither content nor tool calls")
 	}
 
