@@ -15,8 +15,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package grpccodec provides a gRPC codec that uses vtproto for serialization.
-//
-//nolint:cyclop
 package grpccodec
 
 import (

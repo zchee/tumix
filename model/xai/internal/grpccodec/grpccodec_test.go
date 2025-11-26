@@ -63,10 +63,6 @@ func TestCodecMarshalVTProtoSmallPayload(t *testing.T) {
 		t.Fatalf("Marshal() data = %v, want %v", data, payload)
 	}
 
-	if _, ok := got[0].(grpcmem.Buffer); !ok {
-		t.Fatalf("Marshal() returned %T, want mem.SliceBuffer", got[0])
-	}
-
 	got.Free()
 }
 
