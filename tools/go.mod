@@ -15,7 +15,7 @@ require (
 	github.com/bufbuild/buf v1.60.0 // indirect
 	github.com/gaudiy/vtprotobuf v0.6.1-0.20251122131602-5bc3a6fc1d03 // indirect; indirect // @main
 	github.com/golangci/golangci-lint/v2 v2.6.2 // indirect
-	github.com/zchee/goimports-rereviser/v4 v4.0.1 // indirect
+	github.com/zchee/goimports-rereviser/v4 v4.0.2 // indirect
 	gotest.tools/gotestsum v1.13.0 // indirect
 )
 
