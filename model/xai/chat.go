@@ -663,8 +663,16 @@ func (r *Response) processChunk(chunk *xaipb.GetChatCompletionChunk) {
 		target.Index = c.GetIndex()
 		msg.Role = delta.GetRole()
 		if calls := delta.GetToolCalls(); len(calls) > 0 {
-			msg.ToolCalls = slices.Grow(msg.GetToolCalls(), len(calls))
-			msg.ToolCalls = append(msg.ToolCalls, calls...)
+			existing := msg.GetToolCalls()
+			need := len(existing) + len(calls)
+			if cap(existing) < need {
+				newCap := need + need>>1 // grow by 1.5x to cut reallocs across chunks
+				buf := make([]*xaipb.ToolCall, len(existing), newCap)
+				copy(buf, existing)
+				existing = buf
+				msg.ToolCalls = buf
+			}
+			msg.ToolCalls = append(existing, calls...)
 		}
 		target.FinishReason = c.GetFinishReason()
 
