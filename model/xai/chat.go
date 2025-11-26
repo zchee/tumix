@@ -209,7 +209,7 @@ func (s *ChatSession) invokeCompletion(ctx context.Context, req *xaipb.GetComple
 	return newResponse(resp, idxPtr), nil
 }
 
-//nolint:cyclop
+//nolint:gocognit,cyclop
 func (s *ChatSession) makeSpanRequestAttributes() []attribute.KeyValue {
 	msgs := s.request.GetMessages()
 	attrs := make([]attribute.KeyValue, 0, 18+len(msgs)*4)
@@ -220,10 +220,10 @@ func (s *ChatSession) makeSpanRequestAttributes() []attribute.KeyValue {
 		attribute.String("gen_ai.output.type", "text"),
 		attribute.String("gen_ai.request.model", s.request.GetModel()),
 		attribute.Int("server.port", 443),
-		attribute.Float64("gen_ai.request.frequency_penalty", float64(deref(s.request.FrequencyPenalty))),
-		attribute.Float64("gen_ai.request.presence_penalty", float64(deref(s.request.PresencePenalty))),
-		attribute.Float64("gen_ai.request.temperature", float64(deref(s.request.Temperature))),
-		attribute.Bool("gen_ai.request.parallel_tool_calls", deref(s.request.ParallelToolCalls)),
+		attribute.Float64("gen_ai.request.frequency_penalty", float64(s.request.GetFrequencyPenalty())),
+		attribute.Float64("gen_ai.request.presence_penalty", float64(s.request.GetPresencePenalty())),
+		attribute.Float64("gen_ai.request.temperature", float64(s.request.GetTemperature())),
+		attribute.Bool("gen_ai.request.parallel_tool_calls", s.request.GetParallelToolCalls()),
 		attribute.Bool("gen_ai.request.store_messages", s.request.GetStoreMessages()),
 		attribute.Bool("gen_ai.request.use_encrypted_content", s.request.GetUseEncryptedContent()),
 		attribute.Bool("gen_ai.request.logprobs", s.request.GetLogprobs()),
@@ -443,16 +443,16 @@ func (r *Response) reset() {
 	r.proto.Created = nil
 	r.proto.SystemFingerprint = ""
 	r.proto.Usage = nil
-	r.proto.Citations = r.proto.Citations[:0]
-	for _, out := range r.proto.Outputs {
+	r.proto.Citations = r.proto.GetCitations()[:0]
+	for _, out := range r.proto.GetOutputs() {
 		if out == nil {
 			continue
 		}
-		if msg := out.Message; msg != nil {
+		if msg := out.GetMessage(); msg != nil {
 			msg.Content = ""
 			msg.ReasoningContent = ""
 			msg.EncryptedContent = ""
-			msg.ToolCalls = msg.ToolCalls[:0]
+			msg.ToolCalls = msg.GetToolCalls()[:0]
 			msg.Role = 0
 		}
 		out.FinishReason = 0
@@ -605,7 +605,7 @@ func (r *Response) flushBuffers() {
 	releaseBuilders(&r.encryptedBuffers)
 }
 
-//nolint:cyclop,gocognit // TODO(zchee): fix nolint.
+//nolint:gocognit // TODO(zchee): fix nolint.
 func (r *Response) processChunk(chunk *xaipb.GetChatCompletionChunk) {
 	r.proto.Usage = chunk.GetUsage()
 	r.proto.Created = chunk.GetCreated()
@@ -615,7 +615,7 @@ func (r *Response) processChunk(chunk *xaipb.GetChatCompletionChunk) {
 	r.proto.Citations = append(r.proto.Citations, chunk.GetCitations()...)
 
 	if citations := chunk.GetCitations(); len(citations) > 0 {
-		r.proto.Citations = slices.Grow(r.proto.Citations, len(citations))
+		r.proto.Citations = slices.Grow(r.proto.GetCitations(), len(citations))
 		r.proto.Citations = append(r.proto.Citations, citations...)
 	}
 
@@ -623,15 +623,16 @@ func (r *Response) processChunk(chunk *xaipb.GetChatCompletionChunk) {
 		idx := int(c.GetIndex())
 		delta := c.GetDelta()
 		target := r.ensureOutput(idx)
-		msg := target.Message
+		msg := target.GetMessage()
 		target.Index = c.GetIndex()
 		msg.Role = delta.GetRole()
 		if calls := delta.GetToolCalls(); len(calls) > 0 {
-			msg.ToolCalls = slices.Grow(msg.ToolCalls, len(calls))
+			msg.ToolCalls = slices.Grow(msg.GetToolCalls(), len(calls))
 			msg.ToolCalls = append(msg.ToolCalls, calls...)
 		}
 		target.FinishReason = c.GetFinishReason()
 
+		//nolint:nestif // TODO(zchee): fix nestif
 		if content := delta.GetContent(); content != "" {
 			if r.buffersAreInProto {
 				if msg.GetContent() == "" {
@@ -649,6 +650,8 @@ func (r *Response) processChunk(chunk *xaipb.GetChatCompletionChunk) {
 				buf.WriteString(content)
 			}
 		}
+
+		//nolint:nestif // TODO(zchee): fix nestif
 		if reasoning := delta.GetReasoningContent(); reasoning != "" {
 			if r.buffersAreInProto {
 				if msg.GetReasoningContent() == "" {
@@ -666,6 +669,8 @@ func (r *Response) processChunk(chunk *xaipb.GetChatCompletionChunk) {
 				buf.WriteString(reasoning)
 			}
 		}
+
+		//nolint:nestif // TODO(zchee): fix nestif
 		if encrypted := delta.GetEncryptedContent(); encrypted != "" {
 			if r.buffersAreInProto {
 				if msg.GetEncryptedContent() == "" {
@@ -944,18 +949,18 @@ func releaseBuilders(bufs *[]*strings.Builder) {
 }
 
 func (r *Response) ensureOutput(idx int) *xaipb.CompletionOutput {
-	if idx >= len(r.proto.Outputs) {
-		needed := idx + 1 - len(r.proto.Outputs)
+	if idx >= len(r.proto.GetOutputs()) {
+		needed := idx + 1 - len(r.proto.GetOutputs())
 		r.proto.Outputs = append(r.proto.Outputs, make([]*xaipb.CompletionOutput, needed)...)
 	}
 
-	out := r.proto.Outputs[idx]
+	out := r.proto.GetOutputs()[idx]
 	if out == nil {
 		out = &xaipb.CompletionOutput{}
 		r.proto.Outputs[idx] = out
 	}
 
-	if out.Message == nil {
+	if out.GetMessage() == nil {
 		out.Message = &xaipb.CompletionMessage{}
 	}
 
@@ -966,16 +971,6 @@ var builderPool = sync.Pool{
 	New: func() any {
 		return &strings.Builder{}
 	},
-}
-
-func growBuilders(bufs *[]*strings.Builder, size int) {
-	if size <= len(*bufs) {
-		return
-	}
-
-	extra := size - len(*bufs)
-	*bufs = slices.Grow(*bufs, extra)
-	*bufs = (*bufs)[:size]
 }
 
 func splitResponses(resp *xaipb.GetChatCompletionResponse, n int32) []*Response {

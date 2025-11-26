@@ -17,12 +17,11 @@
 package xai
 
 import (
+	"iter"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
-
-	"iter"
-	"slices"
 
 	xaipb "github.com/zchee/tumix/model/xai/api/v1"
 )
@@ -264,7 +263,7 @@ func heavyChunk(outputs, toolCalls int, content string) *xaipb.GetChatCompletion
 
 func rangeN(n int) iter.Seq[int] {
 	return func(yield func(int) bool) {
-		for i := 0; i < n; i++ {
+		for i := range n {
 			if !yield(i) {
 				return
 			}

@@ -15,6 +15,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package grpccodec provides a gRPC codec that uses vtproto for serialization.
+//
+//nolint:cyclop
 package grpccodec
 
 import (
@@ -34,7 +36,7 @@ func init() {
 
 type vtprotoMessage interface {
 	MarshalToSizedBufferVT(data []byte) (int, error)
-	UnmarshalVT([]byte) error
+	UnmarshalVT(data []byte) error
 	SizeVT() int
 }
 
