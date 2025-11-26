@@ -259,10 +259,10 @@ func (s *ChatSession) makeSpanRequestAttributes() []attribute.KeyValue {
 		attrs = append(attrs, attribute.StringSlice("gen_ai.request.stop_sequences", stops))
 	}
 	if rf := s.request.GetResponseFormat(); rf != nil {
-		attrs = append(attrs, attribute.String("gen_ai.output.type", strings.ToLower(strings.TrimPrefix(rf.GetFormatType().String(), "FORMAT_TYPE_"))))
+		attrs = append(attrs, attribute.String("gen_ai.output.type", formatTypeLower(rf.GetFormatType())))
 	}
 	if re := s.request.ReasoningEffort; re != nil {
-		attrs = append(attrs, attribute.String("gen_ai.request.reasoning_effort", strings.ToLower(strings.TrimPrefix(re.String(), "EFFORT_"))))
+		attrs = append(attrs, attribute.String("gen_ai.request.reasoning_effort", reasoningEffortLower(*re)))
 	}
 	if user := s.request.GetUser(); user != "" {
 		attrs = append(attrs, attribute.String("user_id", user))
@@ -274,7 +274,7 @@ func (s *ChatSession) makeSpanRequestAttributes() []attribute.KeyValue {
 	var contentBuf strings.Builder
 	for i, msg := range msgs {
 		prefix := "gen_ai.prompt." + strconv.Itoa(i)
-		role := strings.ToLower(strings.TrimPrefix(msg.GetRole().String(), "ROLE_"))
+		role := messageRoleLower(msg.GetRole())
 		attrs = append(attrs, attribute.String(prefix+".role", role))
 
 		contentBuf.Reset()
@@ -336,20 +336,26 @@ func (s *ChatSession) makeSpanResponseAttributes(responses []*Response) []attrib
 
 	finishReasons := make([]string, len(responses))
 	for i, resp := range responses {
-		finishReasons[i] = resp.FinishReason()
+		out := resp.outputNoFlush()
+		if out == nil {
+			continue
+		}
+
+		msg := out.GetMessage()
+		finishReasons[i] = finishReasonLower(out.GetFinishReason())
 
 		prefix := "gen_ai.completion." + strconv.Itoa(i)
-		role := strings.ToLower(strings.TrimPrefix(resp.Role(), "ROLE_"))
+		role := messageRoleLower(msg.GetRole())
 		attrs = append(attrs,
 			attribute.String(prefix+".role", role),
-			attribute.String(prefix+".content", resp.Content()),
+			attribute.String(prefix+".content", msg.GetContent()),
 		)
 
-		if rc := resp.ReasoningContent(); rc != "" {
+		if rc := msg.GetReasoningContent(); rc != "" {
 			attrs = append(attrs, attribute.String(prefix+".reasoning_content", rc))
 		}
 
-		if tcs := resp.ToolCalls(); len(tcs) > 0 {
+		if tcs := msg.GetToolCalls(); len(tcs) > 0 {
 			if encoded := encodeToolCalls(tcs); encoded != "" {
 				attrs = append(attrs, attribute.String(prefix+".tool_calls", encoded))
 			}
@@ -1028,6 +1034,71 @@ func computeChunkStats(chunks []*xaipb.CompletionOutputChunk, hasIdx bool, idxVa
 
 	return contentTotal, reasoningTotal, toolCallsTotal
 }
+
+func messageRoleLower(role xaipb.MessageRole) string {
+	if int(role) < len(messageRoleStrings) {
+		return messageRoleStrings[role]
+	}
+
+	return strings.ToLower(strings.TrimPrefix(role.String(), "ROLE_"))
+}
+
+func finishReasonLower(reason xaipb.FinishReason) string {
+	if int(reason) < len(finishReasonStrings) {
+		return finishReasonStrings[reason]
+	}
+
+	return strings.ToLower(strings.TrimPrefix(reason.String(), "REASON_"))
+}
+
+func formatTypeLower(format xaipb.FormatType) string {
+	if int(format) < len(formatTypeStrings) {
+		return formatTypeStrings[format]
+	}
+
+	return strings.ToLower(strings.TrimPrefix(format.String(), "FORMAT_TYPE_"))
+}
+
+func reasoningEffortLower(effort xaipb.ReasoningEffort) string {
+	if int(effort) < len(reasoningEffortStrings) {
+		return reasoningEffortStrings[effort]
+	}
+
+	return strings.ToLower(strings.TrimPrefix(effort.String(), "EFFORT_"))
+}
+
+var (
+	messageRoleStrings = [...]string{
+		xaipb.MessageRole_INVALID_ROLE:   "invalid_role",
+		xaipb.MessageRole_ROLE_USER:      "user",
+		xaipb.MessageRole_ROLE_ASSISTANT: "assistant",
+		xaipb.MessageRole_ROLE_SYSTEM:    "system",
+		xaipb.MessageRole_ROLE_TOOL:      "tool",
+	}
+
+	finishReasonStrings = [...]string{
+		xaipb.FinishReason_REASON_INVALID:     "reason_invalid",
+		xaipb.FinishReason_REASON_MAX_LEN:     "reason_max_len",
+		xaipb.FinishReason_REASON_MAX_CONTEXT: "reason_max_context",
+		xaipb.FinishReason_REASON_STOP:        "reason_stop",
+		xaipb.FinishReason_REASON_TOOL_CALLS:  "reason_tool_calls",
+		xaipb.FinishReason_REASON_TIME_LIMIT:  "reason_time_limit",
+	}
+
+	formatTypeStrings = [...]string{
+		xaipb.FormatType_FORMAT_TYPE_INVALID:     "format_type_invalid",
+		xaipb.FormatType_FORMAT_TYPE_TEXT:        "format_type_text",
+		xaipb.FormatType_FORMAT_TYPE_JSON_OBJECT: "format_type_json_object",
+		xaipb.FormatType_FORMAT_TYPE_JSON_SCHEMA: "format_type_json_schema",
+	}
+
+	reasoningEffortStrings = [...]string{
+		xaipb.ReasoningEffort_INVALID_EFFORT: "invalid_effort",
+		xaipb.ReasoningEffort_EFFORT_LOW:     "effort_low",
+		xaipb.ReasoningEffort_EFFORT_MEDIUM:  "effort_medium",
+		xaipb.ReasoningEffort_EFFORT_HIGH:    "effort_high",
+	}
+)
 
 func encodeToolCalls(tc []*xaipb.ToolCall) string {
 	if len(tc) == 0 {

@@ -162,6 +162,30 @@ func BenchmarkSpanAttributes(b *testing.B) {
 	}
 }
 
+func BenchmarkSpanAttributesManyMessages(b *testing.B) {
+	msgs := make([]*xaipb.Message, 0, 32)
+	for i := range rangeN(32) {
+		msgs = append(msgs, &xaipb.Message{
+			Role: xaipb.MessageRole_ROLE_USER,
+			Content: []*xaipb.Content{
+				TextContent("msg-" + strconv.Itoa(i)),
+			},
+		})
+	}
+
+	s := &ChatSession{
+		request: &xaipb.GetCompletionsRequest{
+			Model:    "grok-4-1",
+			Messages: msgs,
+		},
+	}
+
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = s.makeSpanRequestAttributes()
+	}
+}
+
 func BenchmarkSpanResponseAttributes(b *testing.B) {
 	respProto := &xaipb.GetChatCompletionResponse{
 		Id:                "resp-1",
