@@ -5,9 +5,12 @@ go 1.25
 replace github.com/zchee/tumix/model/xai => ./model/xai
 
 require (
+	github.com/google/go-cmp v0.7.0
 	github.com/zchee/tumix/model/xai v0.0.0-00010101000000-000000000000
 	google.golang.org/adk v0.2.1-0.20251124114330-f5e8b6d18dee // @main
-	google.golang.org/genai v1.20.0
+	google.golang.org/genai v1.36.0
+	google.golang.org/grpc v1.77.0
+	google.golang.org/protobuf v1.36.10
 )
 
 require (
@@ -22,7 +25,6 @@ require (
 	github.com/gaudiy/vtprotobuf v0.6.1-0.20251122131602-5bc3a6fc1d03 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.6 // indirect
@@ -47,8 +49,6 @@ require (
 	golang.org/x/text v0.31.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251022142026-3a174f9686a8 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251111163417-95abcf5c77ba // indirect
-	google.golang.org/grpc v1.77.0 // indirect
-	google.golang.org/protobuf v1.36.10 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	rsc.io/omap v1.2.0 // indirect
 	rsc.io/ordered v1.1.1 // indirect
