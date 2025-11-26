@@ -1,0 +1,350 @@
+// Copyright 2025 The tumix Authors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
+package model
+
+import (
+	"context"
+	"net"
+	"net/http"
+	"testing"
+	"time"
+
+	"github.com/google/go-cmp/cmp"
+	"google.golang.org/adk/model"
+	"google.golang.org/genai"
+	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
+
+	"github.com/zchee/tumix/model/xai"
+	xaipb "github.com/zchee/tumix/model/xai/api/v1"
+)
+
+func TestXAIModel_Generate(t *testing.T) {
+	t.Parallel()
+
+	temp := float32(0.0)
+	req := &model.LLMRequest{
+		Contents: genai.Text("What is the capital of France?"),
+		Config: &genai.GenerateContentConfig{
+			Temperature: &temp,
+			HTTPOptions: &genai.HTTPOptions{Headers: make(http.Header)},
+		},
+	}
+
+	fakeResp := &xaipb.GetChatCompletionResponse{
+		Model:             "grok-4-1-fast-reasoning",
+		SystemFingerprint: "fp-123",
+		Outputs: []*xaipb.CompletionOutput{
+			{
+				Index:        0,
+				FinishReason: xaipb.FinishReason_REASON_STOP,
+				Message: &xaipb.CompletionMessage{
+					Role:    xaipb.MessageRole_ROLE_ASSISTANT,
+					Content: "Paris",
+				},
+			},
+		},
+		Usage: &xaipb.SamplingUsage{
+			CompletionTokens:       2,
+			PromptTokens:           10,
+			TotalTokens:            12,
+			CachedPromptTextTokens: 1,
+		},
+	}
+
+	server := &stubChatServer{completionResp: fakeResp}
+	m, cleanup := newTestXAIModel(t, server, "grok-1")
+	defer cleanup()
+
+	var got *model.LLMResponse
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+
+	for resp, err := range m.GenerateContent(ctx, req, false) {
+		if err != nil {
+			t.Fatalf("GenerateContent() unexpected error: %v", err)
+		}
+		got = resp
+	}
+	if got == nil {
+		t.Fatal("GenerateContent() returned no response")
+	}
+
+	want := &model.LLMResponse{
+		Content: genai.NewContentFromText("Paris", genai.RoleModel),
+		UsageMetadata: &genai.GenerateContentResponseUsageMetadata{
+			CachedContentTokenCount: 1,
+			CandidatesTokenCount:    2,
+			PromptTokenCount:        10,
+			TotalTokenCount:         12,
+		},
+		CustomMetadata: map[string]any{
+			"xai_finish_reason":      "REASON_STOP",
+			"xai_system_fingerprint": "fp-123",
+		},
+		FinishReason: genai.FinishReasonStop,
+	}
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("GenerateContent() diff (-want +got):\n%s", diff)
+	}
+
+	if ua := req.Config.HTTPOptions.Headers.Get("User-Agent"); ua != "tumix/test go1.25" {
+		t.Fatalf("User-Agent header = %q, want %q", ua, "tumix/test go1.25")
+	}
+
+	if server.lastRequest == nil {
+		t.Fatal("GetCompletion was not invoked")
+	}
+	gotText := server.lastRequest.Messages[0].GetContent()[0].GetText()
+	if gotText != "What is the capital of France?" {
+		t.Fatalf("request message text = %q, want %q", gotText, "What is the capital of France?")
+	}
+}
+
+func TestXAIModel_GenerateStream(t *testing.T) {
+	t.Parallel()
+
+	temp := float32(0.0)
+	req := &model.LLMRequest{
+		Contents: genai.Text("Stream please"),
+		Config: &genai.GenerateContentConfig{
+			Temperature: &temp,
+		},
+	}
+
+	chunks := []*xaipb.GetChatCompletionChunk{
+		{
+			Outputs: []*xaipb.CompletionOutputChunk{
+				{
+					Index: 0,
+					Delta: &xaipb.Delta{
+						Role:    xaipb.MessageRole_ROLE_ASSISTANT,
+						Content: "Par",
+					},
+				},
+			},
+		},
+		{
+			Model:             "grok-1",
+			SystemFingerprint: "fp-123",
+			Usage: &xaipb.SamplingUsage{
+				CompletionTokens: 2,
+				PromptTokens:     10,
+				TotalTokens:      12,
+			},
+			Outputs: []*xaipb.CompletionOutputChunk{
+				{
+					Index:        0,
+					FinishReason: xaipb.FinishReason_REASON_STOP,
+					Delta: &xaipb.Delta{
+						Role:    xaipb.MessageRole_ROLE_ASSISTANT,
+						Content: "is",
+					},
+				},
+			},
+		},
+	}
+
+	server := &stubChatServer{chunks: chunks}
+	m, cleanup := newTestXAIModel(t, server, "grok-4-1-fast-reasoning")
+	defer cleanup()
+
+	var partialTexts []string
+	var finalTexts []string
+	var finishReasons []genai.FinishReason
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+
+	for resp, err := range m.GenerateContent(ctx, req, true) {
+		if err != nil {
+			t.Fatalf("GenerateContent(stream) unexpected error: %v", err)
+		}
+		if resp == nil || resp.Content == nil || len(resp.Content.Parts) == 0 {
+			t.Fatalf("GenerateContent(stream) returned empty response: %+v", resp)
+		}
+
+		text := resp.Content.Parts[0].Text
+		if resp.Partial {
+			partialTexts = append(partialTexts, text)
+		} else {
+			finalTexts = append(finalTexts, text)
+		}
+		if resp.FinishReason != genai.FinishReasonUnspecified {
+			finishReasons = append(finishReasons, resp.FinishReason)
+		}
+	}
+
+	if len(partialTexts) < 2 {
+		t.Fatalf("partial texts too short: %v", partialTexts)
+	}
+	if partialTexts[0] != "Par" {
+		t.Fatalf("first partial = %q, want %q", partialTexts[0], "Par")
+	}
+	if got := partialTexts[len(partialTexts)-1]; got != "Paris" {
+		t.Fatalf("last partial = %q, want %q", got, "Paris")
+	}
+	if diff := cmp.Diff([]string{"Paris"}, finalTexts); diff != "" {
+		t.Fatalf("final texts diff (-want +got):\n%s", diff)
+	}
+	if len(finishReasons) == 0 || finishReasons[len(finishReasons)-1] != genai.FinishReasonStop {
+		t.Fatalf("finish reasons = %v, want last reason FinishReasonStop", finishReasons)
+	}
+}
+
+func TestXAIModel_MaybeAppendUserContent(t *testing.T) {
+	t.Parallel()
+
+	m := &xaiModel{}
+
+	t.Run("appends_when_empty", func(t *testing.T) {
+		req := &model.LLMRequest{}
+		m.maybeAppendUserContent(req)
+		if got := req.Contents[len(req.Contents)-1].Role; got != genai.RoleUser {
+			t.Fatalf("last role = %q, want user", got)
+		}
+	})
+
+	t.Run("appends_when_last_not_user", func(t *testing.T) {
+		req := &model.LLMRequest{
+			Contents: []*genai.Content{genai.NewContentFromText("assistant output", genai.RoleModel)},
+		}
+		m.maybeAppendUserContent(req)
+		if got := req.Contents[len(req.Contents)-1].Role; got != genai.RoleUser {
+			t.Fatalf("last role = %q, want user", got)
+		}
+	})
+}
+
+func TestGenAI2XAIChatOptions(t *testing.T) {
+	t.Parallel()
+
+	temp := float32(0.7)
+	topP := float32(0.8)
+	maxTokens := int32(32)
+	stop := []string{"END"}
+
+	cfg := &genai.GenerateContentConfig{
+		Temperature:      &temp,
+		TopP:             &topP,
+		MaxOutputTokens:  maxTokens,
+		StopSequences:    stop,
+		ResponseLogprobs: true,
+	}
+
+	req := &xaipb.GetCompletionsRequest{}
+	session := &xai.ChatSession{}
+
+	opt := genAI2XAIChatOptions(cfg)
+	if opt == nil {
+		t.Fatal("genAI2XAIChatOptions returned nil")
+	}
+
+	opt(req, session)
+
+	if req.Temperature == nil || *req.Temperature != temp {
+		t.Fatalf("temperature = %v, want %v", req.Temperature, temp)
+	}
+	if req.TopP == nil || *req.TopP != topP {
+		t.Fatalf("topP = %v, want %v", req.TopP, topP)
+	}
+	if req.MaxTokens == nil || *req.MaxTokens != maxTokens {
+		t.Fatalf("maxTokens = %v, want %v", req.MaxTokens, maxTokens)
+	}
+	if got := req.GetStop(); !cmp.Equal(got, stop) {
+		t.Fatalf("stop sequences = %v, want %v", got, stop)
+	}
+	if !req.GetLogprobs() {
+		t.Fatal("logprobs not set")
+	}
+}
+
+type stubChatServer struct {
+	xaipb.UnimplementedChatServer
+
+	completionResp *xaipb.GetChatCompletionResponse
+	chunks         []*xaipb.GetChatCompletionChunk
+	lastRequest    *xaipb.GetCompletionsRequest
+}
+
+func (s *stubChatServer) cloneRequest(req *xaipb.GetCompletionsRequest) *xaipb.GetCompletionsRequest {
+	if req == nil {
+		return nil
+	}
+	return proto.Clone(req).(*xaipb.GetCompletionsRequest)
+}
+
+func (s *stubChatServer) GetCompletion(ctx context.Context, req *xaipb.GetCompletionsRequest) (*xaipb.GetChatCompletionResponse, error) {
+	s.lastRequest = s.cloneRequest(req)
+	return proto.Clone(s.completionResp).(*xaipb.GetChatCompletionResponse), nil
+}
+
+func (s *stubChatServer) GetCompletionChunk(req *xaipb.GetCompletionsRequest, stream grpc.ServerStreamingServer[xaipb.GetChatCompletionChunk]) error {
+	s.lastRequest = s.cloneRequest(req)
+	for _, ch := range s.chunks {
+		if err := stream.Send(proto.Clone(ch).(*xaipb.GetChatCompletionChunk)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func newTestXAIModel(t *testing.T, server *stubChatServer, modelName string) (*xaiModel, func()) {
+	t.Helper()
+
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+
+	grpcServer := grpc.NewServer()
+	xaipb.RegisterChatServer(grpcServer, server)
+
+	go func() {
+		_ = grpcServer.Serve(lis)
+	}()
+
+	dialer := &net.Dialer{}
+	dialFunc := func(ctx context.Context, _ string) (net.Conn, error) {
+		return dialer.DialContext(ctx, "tcp", lis.Addr().String())
+	}
+
+	client, err := xai.NewClient("test-key",
+		xai.WithAPIHost(lis.Addr().String()),
+		xai.WithInsecure(),
+		xai.WithTimeout(0),
+		xai.WithDialOptions(grpc.WithContextDialer(dialFunc)),
+	)
+	if err != nil {
+		grpcServer.Stop()
+		_ = lis.Close()
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	cleanup := func() {
+		_ = client.Close()
+		grpcServer.Stop()
+		_ = lis.Close()
+	}
+
+	return &xaiModel{
+		client:             client,
+		name:               modelName,
+		versionHeaderValue: "tumix/test go1.25",
+	}, cleanup
+}
