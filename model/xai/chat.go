@@ -216,7 +216,7 @@ func (s *ChatSession) invokeCompletion(ctx context.Context, req *xaipb.GetComple
 	return newResponse(resp, idxPtr), nil
 }
 
-//nolint:gocognit,cyclop // TODO(zchee): fix nolint
+//nolint:cyclop,gocyclo,gocognit // TODO(zchee): fix nolint
 func (s *ChatSession) makeSpanRequestAttributes() []attribute.KeyValue {
 	msgs := s.request.GetMessages()
 	attrs := make([]attribute.KeyValue, 0, 18+len(msgs)*4)
@@ -619,7 +619,7 @@ func (r *Response) flushBuffers() {
 	releaseBuilders(&r.encryptedBuffers)
 }
 
-//nolint:gocognit // TODO(zchee): fix nolint.
+//nolint:cyclop,gocognit // TODO(zchee): fix nolint.
 func (r *Response) processChunk(chunk *xaipb.GetChatCompletionChunk) {
 	r.proto.Usage = chunk.GetUsage()
 	r.proto.Created = chunk.GetCreated()
@@ -639,17 +639,19 @@ func (r *Response) processChunk(chunk *xaipb.GetChatCompletionChunk) {
 		}
 	}
 
-	if len(r.proto.Outputs) == 0 && maxOutputIdx >= 0 {
+	if len(r.proto.GetOutputs()) == 0 && maxOutputIdx >= 0 {
 		r.proto.Outputs = make([]*xaipb.CompletionOutput, maxOutputIdx+1)
 		r.contentBuffers = make([]*strings.Builder, maxOutputIdx+1)
 		r.reasoningBuffers = make([]*strings.Builder, maxOutputIdx+1)
 		r.encryptedBuffers = make([]*strings.Builder, maxOutputIdx+1)
 
-		for i := range r.proto.Outputs {
+		i := int32(0)
+		for range r.proto.GetOutputs() {
 			r.proto.Outputs[i] = &xaipb.CompletionOutput{
-				Index:   int32(i),
+				Index:   i,
 				Message: &xaipb.CompletionMessage{},
 			}
+			i++
 		}
 	}
 
