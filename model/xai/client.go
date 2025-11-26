@@ -17,7 +17,6 @@
 package xai
 
 import (
-	"context"
 	"crypto/tls"
 	"errors"
 	"os"
@@ -27,7 +26,6 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
-	"google.golang.org/grpc/metadata"
 
 	xaipb "github.com/zchee/tumix/model/xai/api/v1"
 	"github.com/zchee/tumix/model/xai/internal/grpccodec"
@@ -177,12 +175,12 @@ func buildDialOptions(opts *clientOptions, token string) []grpc.DialOption {
 			PermitWithoutStream: true,
 		}),
 		grpc.WithChainUnaryInterceptor(
-			authUnaryInterceptor(token, opts.metadata),
-			timeoutUnaryInterceptor(opts.timeout),
+			AuthUnaryInterceptor(token, opts.metadata),
+			TimeoutUnaryInterceptor(opts.timeout),
 		),
 		grpc.WithChainStreamInterceptor(
-			authStreamInterceptor(token, opts.metadata),
-			timeoutStreamInterceptor(opts.timeout),
+			AuthStreamInterceptor(token, opts.metadata),
+			TimeoutStreamInterceptor(opts.timeout),
 		),
 	}
 
@@ -191,48 +189,4 @@ func buildDialOptions(opts *clientOptions, token string) []grpc.DialOption {
 	}
 
 	return base
-}
-
-func authUnaryInterceptor(token string, md map[string]string) grpc.UnaryClientInterceptor {
-	return func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, callOpts ...grpc.CallOption) error {
-		ctx = attachMetadata(ctx, token, md)
-		return invoker(ctx, method, req, reply, cc, callOpts...)
-	}
-}
-
-func authStreamInterceptor(token string, md map[string]string) grpc.StreamClientInterceptor {
-	return func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, callOpts ...grpc.CallOption) (grpc.ClientStream, error) {
-		ctx = attachMetadata(ctx, token, md)
-		return streamer(ctx, desc, cc, method, callOpts...)
-	}
-}
-
-func timeoutUnaryInterceptor(timeout time.Duration) grpc.UnaryClientInterceptor {
-	return func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, callOpts ...grpc.CallOption) error {
-		if _, ok := ctx.Deadline(); !ok && timeout > 0 {
-			var cancel context.CancelFunc
-			ctx, cancel = context.WithTimeout(ctx, timeout)
-			defer cancel()
-		}
-		return invoker(ctx, method, req, reply, cc, callOpts...)
-	}
-}
-
-func timeoutStreamInterceptor(timeout time.Duration) grpc.StreamClientInterceptor {
-	return func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, callOpts ...grpc.CallOption) (grpc.ClientStream, error) {
-		if _, ok := ctx.Deadline(); !ok && timeout > 0 {
-			var cancel context.CancelFunc
-			ctx, cancel = context.WithTimeout(ctx, timeout)
-			defer cancel()
-		}
-		return streamer(ctx, desc, cc, method, callOpts...)
-	}
-}
-
-func attachMetadata(ctx context.Context, token string, static map[string]string) context.Context {
-	pairs := []string{"authorization", "Bearer " + token}
-	for k, v := range static {
-		pairs = append(pairs, k, v)
-	}
-	return metadata.AppendToOutgoingContext(ctx, pairs...)
 }
