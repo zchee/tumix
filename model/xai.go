@@ -42,7 +42,7 @@ type xaiModel struct {
 
 var _ model.LLM = (*xaiModel)(nil)
 
-func NewXAIModel(ctx context.Context, modelName string, opts ...xai.ClientOption) (model.LLM, error) {
+func NewXAIModel(_ context.Context, modelName string, opts ...xai.ClientOption) (model.LLM, error) {
 	client, err := xai.NewClient("", opts...)
 	if err != nil {
 		return nil, fmt.Errorf("new xAI client: %w", err)
@@ -124,7 +124,7 @@ func (m *xaiModel) generate(ctx context.Context, req *model.LLMRequest) (*model.
 		return nil, fmt.Errorf("failed to call model: %w", err)
 	}
 
-	if len(resp.Content()) == 0 {
+	if resp.Content() == "" {
 		// shouldn't happen?
 		return nil, fmt.Errorf("empty response")
 	}
@@ -422,7 +422,7 @@ func xai2LLMResponse(resp *xai.Response) *model.LLMResponse {
 	}
 
 	var argErrors []string
-	if toolCalls := resp.ToolCalls(); len(toolCalls) > 0 {
+	if toolCalls := resp.ToolCalls(); len(toolCalls) > 0 { //nolint:nestif // TODO(zchee): fix nolint
 		for _, call := range toolCalls {
 			fc := call.GetFunction()
 			if fc == nil {

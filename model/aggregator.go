@@ -44,8 +44,8 @@ func NewStreamingResponseAggregator() *streamingResponseAggregator {
 }
 
 // ProcessResponse transforms the GenerateContentResponse into an model.Response and yields that result,
-// also yielding an aggregated response if the GenerateContentResponse has zero parts or is audio data
-func (s *streamingResponseAggregator) ProcessResponse(ctx context.Context, xaiResp *xai.Response) iter.Seq2[*model.LLMResponse, error] {
+// also yielding an aggregated response if the GenerateContentResponse has zero parts or is audio data.
+func (s *streamingResponseAggregator) ProcessResponse(_ context.Context, xaiResp *xai.Response) iter.Seq2[*model.LLMResponse, error] {
 	return func(yield func(*model.LLMResponse, error) bool) {
 		if xaiResp.Content() == "" {
 			// shouldn't happen?
@@ -69,7 +69,7 @@ func (s *streamingResponseAggregator) ProcessResponse(ctx context.Context, xaiRe
 }
 
 // aggregateResponse processes a single model response,
-// returning an aggregated response if the next event has zero parts or is audio data
+// returning an aggregated response if the next event has zero parts or is audio data.
 func (s *streamingResponseAggregator) aggregateResponse(llmResponse *model.LLMResponse) *model.LLMResponse {
 	s.response = llmResponse
 
@@ -102,6 +102,7 @@ func (s *streamingResponseAggregator) aggregateResponse(llmResponse *model.LLMRe
 			len(llmResponse.Content.Parts) == 0 ||
 			// don't yield the merged text event when receiving audio data
 			(len(llmResponse.Content.Parts) > 0 && llmResponse.Content.Parts[0].InlineData == nil)) {
+
 		return s.createAggregateResponse()
 	}
 

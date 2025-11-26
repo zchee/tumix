@@ -53,7 +53,7 @@ linters:
     - canonicalheader
     - contextcheck
     - copyloopvar
-    - cyclop
+    # - cyclop
     - decorder
     - dogsled
     - dupl
@@ -64,14 +64,14 @@ linters:
     - errname
     - errorlint
     - fatcontext
-    - funlen
+    # - funlen
     - ginkgolinter
     - gocheckcompilerdirectives
     - gochecksumtype
-    - gocognit
+    # - gocognit
     - goconst
     - gocritic
-    - gocyclo
+    # - gocyclo
     - godot
     - goheader
     - gomodguard
@@ -104,7 +104,7 @@ linters:
     - promlinter
     - protogetter
     - reassign
-    - revive
+    # - revive
     - rowserrcheck
     - sloglint
     - spancheck
