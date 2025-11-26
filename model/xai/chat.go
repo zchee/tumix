@@ -306,7 +306,13 @@ func (s *ChatSession) makeSpanResponseAttributes(responses []*Response) []attrib
 	first := responses[0]
 	usage := first.Usage()
 
-	attrs := make([]attribute.KeyValue, 0, 12+len(responses)*5)
+	toolCallAttrs := 0
+	for _, resp := range responses {
+		if len(resp.ToolCalls()) > 0 {
+			toolCallAttrs++
+		}
+	}
+	attrs := make([]attribute.KeyValue, 0, 12+len(responses)*5+toolCallAttrs)
 	attrs = append(attrs,
 		attribute.String("gen_ai.response.id", first.proto.GetId()),
 		attribute.String("gen_ai.response.model", first.proto.GetModel()),
