@@ -18,6 +18,7 @@ package xai
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -51,13 +52,55 @@ func TimeoutUnaryInterceptor(timeout time.Duration) grpc.UnaryClientInterceptor 
 
 func TimeoutStreamInterceptor(timeout time.Duration) grpc.StreamClientInterceptor {
 	return func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, callOpts ...grpc.CallOption) (grpc.ClientStream, error) {
-		if _, ok := ctx.Deadline(); !ok && timeout > 0 {
-			var cancel context.CancelFunc
-			ctx, cancel = context.WithTimeout(ctx, timeout)
-			defer cancel()
+		if timeout <= 0 {
+			return streamer(ctx, desc, cc, method, callOpts...)
 		}
-		return streamer(ctx, desc, cc, method, callOpts...)
+		if _, ok := ctx.Deadline(); ok {
+			return streamer(ctx, desc, cc, method, callOpts...)
+		}
+
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+
+		stream, err := streamer(ctx, desc, cc, method, callOpts...)
+		if err != nil {
+			cancel()
+			return stream, err
+		}
+
+		return &cancelOnCloseClientStream{
+			ClientStream: stream,
+			cancel:       cancel,
+		}, nil
 	}
+}
+
+type cancelOnCloseClientStream struct {
+	grpc.ClientStream
+	cancel func()
+	once   sync.Once
+}
+
+func (c *cancelOnCloseClientStream) CloseSend() error {
+	err := c.ClientStream.CloseSend()
+	c.once.Do(func() {
+		if c.cancel != nil {
+			c.cancel()
+		}
+	})
+	return err
+}
+
+func (c *cancelOnCloseClientStream) RecvMsg(m any) error {
+	err := c.ClientStream.RecvMsg(m)
+	if err != nil {
+		c.once.Do(func() {
+			if c.cancel != nil {
+				c.cancel()
+			}
+		})
+	}
+	return err
 }
 
 func attachMetadata(ctx context.Context, token string, static map[string]string) context.Context {
