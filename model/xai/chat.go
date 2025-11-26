@@ -624,7 +624,7 @@ func (r *Response) flushBuffers() {
 	releaseBuilders(&r.encryptedBuffers)
 }
 
-//nolint:cyclop,gocognit // TODO(zchee): fix nolint.
+//nolint:cyclop,gocognit,funlen,gocyclo // TODO(zchee): fix nolint.
 func (r *Response) processChunk(chunk *xaipb.GetChatCompletionChunk) {
 	r.proto.Usage = chunk.GetUsage()
 	r.proto.Created = chunk.GetCreated()
@@ -669,10 +669,31 @@ func (r *Response) processChunk(chunk *xaipb.GetChatCompletionChunk) {
 		target.Index = c.GetIndex()
 		msg.Role = delta.GetRole()
 		if calls := delta.GetToolCalls(); len(calls) > 0 {
-			scratch := ensureToolCallScratch(&r.toolCallScratch, idx, len(calls))
-			scratch = append(scratch, calls...)
-			r.toolCallScratch[idx] = scratch
-			msg.ToolCalls = scratch
+			existing := msg.GetToolCalls()
+			if len(existing) == 0 {
+				r.ensureToolCallSlot(idx)
+				if len(calls) == 1 {
+					buf := make([]*xaipb.ToolCall, 1, 8)
+					buf[0] = calls[0] //nolint:gosec
+					r.toolCallScratch[idx] = buf
+					msg.ToolCalls = buf
+					continue
+				}
+
+				r.toolCallScratch[idx] = calls
+				msg.ToolCalls = calls
+				continue
+			}
+
+			need := len(existing) + len(calls)
+			spare := growthSpareToolCalls(len(existing))
+			if cap(existing) < need {
+				existing = slices.Grow(existing, len(calls)+spare)
+			}
+			existing = append(existing, calls...)
+			msg.ToolCalls = existing
+			r.ensureToolCallSlot(idx)
+			r.toolCallScratch[idx] = existing
 		}
 		target.FinishReason = c.GetFinishReason()
 
@@ -1027,43 +1048,26 @@ func releaseBuilders(bufs *[]*strings.Builder) {
 	}
 }
 
-func ensureToolCallScratch(bufs *[][]*xaipb.ToolCall, idx, incoming int) []*xaipb.ToolCall {
-	if idx >= len(*bufs) {
-		*bufs = append(*bufs, make([][]*xaipb.ToolCall, idx+1-len(*bufs))...)
+func (r *Response) ensureToolCallSlot(idx int) {
+	if idx < len(r.toolCallScratch) {
+		return
 	}
-
-	scratch := (*bufs)[idx]
-	if incoming == 0 {
-		return scratch
-	}
-
-	if cap(scratch) >= len(scratch)+incoming {
-		return scratch
-	}
-
-	const (
-		minToolCallSpare = 3
-		maxToolCallSpare = 32
-	)
-	reserve := incoming
-	if len(scratch) == 0 && incoming == 1 {
-		reserve += minToolCallSpare
-	}
-	if reserve > incoming+maxToolCallSpare {
-		reserve = incoming + maxToolCallSpare
-	}
-
-	scratch = slices.Grow(scratch, reserve)
-	(*bufs)[idx] = scratch
-	return scratch
+	r.toolCallScratch = append(r.toolCallScratch, make([][]*xaipb.ToolCall, idx+1-len(r.toolCallScratch))...)
 }
 
-func releaseToolCallScratch(bufs *[][]*xaipb.ToolCall) {
-	for i := range *bufs {
-		if scratch := (*bufs)[i]; scratch != nil {
-			(*bufs)[i] = scratch[:0]
-		}
+func growthSpareToolCalls(existing int) int {
+	if existing == 0 {
+		return 0
 	}
+
+	spare := existing
+	if spare < 2 {
+		spare = 2
+	} else if spare > 16 {
+		spare = 16
+	}
+
+	return spare
 }
 
 func (r *Response) ensureOutput(idx int) *xaipb.CompletionOutput {

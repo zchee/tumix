@@ -54,6 +54,14 @@ func (r *Response) reset() {
 	r.buffersAreInProto = true
 }
 
+func releaseToolCallScratch(bufs *[][]*xaipb.ToolCall) {
+	for i := range *bufs {
+		if scratch := (*bufs)[i]; scratch != nil {
+			(*bufs)[i] = scratch[:0]
+		}
+	}
+}
+
 func BenchmarkResponseProcessChunkSingle(b *testing.B) {
 	chunk := &xaipb.GetChatCompletionChunk{
 		Outputs: []*xaipb.CompletionOutputChunk{metadataChunk(0)},
