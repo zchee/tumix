@@ -54,7 +54,7 @@ linters:
     - contextcheck
     - copyloopvar
     # - cyclop
-    - decorder
+    # - decorder
     - dogsled
     - dupl
     - dupword
