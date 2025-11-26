@@ -209,7 +209,7 @@ func (s *ChatSession) invokeCompletion(ctx context.Context, req *xaipb.GetComple
 	return newResponse(resp, idxPtr), nil
 }
 
-//nolint:gocognit,cyclop
+//nolint:gocognit,cyclop // TODO(zchee): fix nolint
 func (s *ChatSession) makeSpanRequestAttributes() []attribute.KeyValue {
 	msgs := s.request.GetMessages()
 	attrs := make([]attribute.KeyValue, 0, 18+len(msgs)*4)
@@ -378,7 +378,7 @@ func (s *ChatStream) Close() error {
 // Recv implements [grpc.ServerStreamingClient[xaipb.GetChatCompletionChunk]].
 func (s *ChatStream) Recv() (*Response, *Chunk, error) {
 	chunk, err := s.stream.Recv()
-	if err != nil { //nolint:nestif
+	if err != nil { //nolint:nestif // TODO(zchee): fix nolint
 		if s.span != nil {
 			if !errors.Is(err, io.EOF) {
 				s.span.RecordError(err)
@@ -605,7 +605,7 @@ func (r *Response) processChunk(chunk *xaipb.GetChatCompletionChunk) {
 		}
 		target.FinishReason = c.GetFinishReason()
 
-		//nolint:nestif // TODO(zchee): fix nestif
+		//nolint:nestif // TODO(zchee): fix nolint
 		if content := delta.GetContent(); content != "" {
 			if r.buffersAreInProto {
 				if msg.GetContent() == "" {
@@ -624,7 +624,7 @@ func (r *Response) processChunk(chunk *xaipb.GetChatCompletionChunk) {
 			}
 		}
 
-		//nolint:nestif // TODO(zchee): fix nestif
+		//nolint:nestif // TODO(zchee): fix nolint
 		if reasoning := delta.GetReasoningContent(); reasoning != "" {
 			if r.buffersAreInProto {
 				if msg.GetReasoningContent() == "" {
@@ -643,7 +643,7 @@ func (r *Response) processChunk(chunk *xaipb.GetChatCompletionChunk) {
 			}
 		}
 
-		//nolint:nestif // TODO(zchee): fix nestif
+		//nolint:nestif // TODO(zchee): fix nolint
 		if encrypted := delta.GetEncryptedContent(); encrypted != "" {
 			if r.buffersAreInProto {
 				if msg.GetEncryptedContent() == "" {
