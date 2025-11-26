@@ -24,6 +24,7 @@ import (
 	"iter"
 	"net/http"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -48,7 +49,9 @@ var _ model.LLM = (*anthropicModel)(nil)
 
 // NewAnthropicModel creates a new Anthropics-backed LLM.
 // If apiKey is empty, the Anthropics SDK will fall back to ANTHROPIC_API_KEY.
-func NewAnthropicModel(_ context.Context, modelName string, apiKey string, opts ...option.RequestOption) (model.LLM, error) {
+//
+//nolint:unparam
+func NewAnthropicModel(_ context.Context, modelName, apiKey string, opts ...option.RequestOption) (model.LLM, error) {
 	client := anthropic.NewClient(append([]option.RequestOption{
 		option.WithHeader("User-Agent", fmt.Sprintf("tumix/%s %s", version.Version, strings.TrimPrefix(runtime.Version(), "go"))),
 		option.WithAPIKey(apiKey),
@@ -202,9 +205,8 @@ func accText(msg *anthropic.Message) string {
 		return ""
 	}
 	var sb strings.Builder
-	for _, block := range msg.Content {
-		switch v := block.AsAny().(type) {
-		case anthropic.TextBlock:
+	for block := range slices.Values(msg.Content) {
+		if v, ok := block.AsAny().(anthropic.TextBlock); ok {
 			sb.WriteString(v.Text)
 		}
 	}
@@ -225,14 +227,16 @@ func anthropicMessageToLLMResponse(msg *anthropic.Message) (*model.LLMResponse, 
 	}
 
 	parts := make([]*genai.Part, 0, len(msg.Content))
-	for _, block := range msg.Content {
+	for block := range slices.Values(msg.Content) {
 		switch v := block.AsAny().(type) {
 		case anthropic.TextBlock:
 			parts = append(parts, genai.NewPartFromText(v.Text))
 		case anthropic.ToolUseBlock:
 			args := map[string]any{}
 			if len(v.Input) > 0 {
-				_ = json.Unmarshal(v.Input, &args)
+				if err := json.Unmarshal(v.Input, &args); err != nil {
+					return nil, fmt.Errorf("unmarshal json: %w", err)
+				}
 			}
 			parts = append(parts, &genai.Part{
 				FunctionCall: &genai.FunctionCall{
@@ -334,7 +338,10 @@ func genaiToAnthropicMessages(system *genai.Content, contents []*genai.Content) 
 				if fr.Name == "" {
 					return nil, nil, fmt.Errorf("content[%d] part[%d]: function response missing name", idx, pi)
 				}
-				contentJSON, _ := json.Marshal(fr.Response)
+				contentJSON, err := json.Marshal(fr.Response)
+				if err != nil {
+					return nil, nil, fmt.Errorf("marshal json: %w", err)
+				}
 				mp.Content = append(mp.Content, anthropic.ContentBlockParamUnion{
 					OfToolResult: &anthropic.ToolResultBlockParam{
 						ToolUseID: ensureToolID(fr.ID, idx, pi),

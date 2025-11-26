@@ -109,7 +109,6 @@ func (s *streamingResponseAggregator) aggregateResponse(llmResponse *model.LLMRe
 			len(llmResponse.Content.Parts) == 0 ||
 			// don't yield the merged text event when receiving audio data
 			(len(llmResponse.Content.Parts) > 0 && llmResponse.Content.Parts[0].InlineData == nil)) {
-
 		return s.createAggregateResponse()
 	}
 

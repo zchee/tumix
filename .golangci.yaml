@@ -319,7 +319,7 @@ linters:
       ignore-map-index-ok: false
       ignore-chan-recv-ok: false
     whitespace:
-      multi-if: true
+      multi-if: false
       multi-func: true
 
   exclusions:
