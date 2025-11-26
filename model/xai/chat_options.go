@@ -280,8 +280,8 @@ func (s *ChatSession) Messages() []*xaipb.Message {
 	return s.request.GetMessages()
 }
 
-// Sample sends the chat request and returns the first response.
-func (s *ChatSession) Sample(ctx context.Context) (*Response, error) {
+// Completion sends the chat request and returns the first response.
+func (s *ChatSession) Completion(ctx context.Context) (*Response, error) {
 	ctx, span := tracer.Start(ctx, fmt.Sprintf("chat.sample %s", s.request.GetModel()),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(s.makeSpanRequestAttributes()...),
@@ -301,8 +301,8 @@ func (s *ChatSession) Sample(ctx context.Context) (*Response, error) {
 	return responses[0], nil
 }
 
-// SampleBatch requests n responses in a single call.
-func (s *ChatSession) SampleBatch(ctx context.Context, n int32) ([]*Response, error) {
+// CompletionBatch requests n responses in a single call.
+func (s *ChatSession) CompletionBatch(ctx context.Context, n int32) ([]*Response, error) {
 	ctx, span := tracer.Start(ctx, fmt.Sprintf("chat.sample_batch %s", s.request.GetModel()),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(s.makeSpanRequestAttributes()...),

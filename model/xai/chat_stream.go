@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"iter"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -54,47 +55,74 @@ func (s *ChatStream) Close() error {
 	return err
 }
 
-// Recv returns the next chunk and the aggregated response.
+// Response returns the aggregated response built from streamed chunks.
+func (s *ChatStream) Response() *Response {
+	return s.response
+}
+
+// Recv returns an iterator over the aggregated response as it streams in. Iterate with:
 //
-// Recv implements [grpc.ServerStreamingClient[xaipb.GetChatCompletionChunk]].
-func (s *ChatStream) Recv() (*Response, *Chunk, error) {
-	chunk, err := s.stream.Recv()
-	if err != nil { //nolint:nestif // TODO(zchee): fix nolint
-		if s.span != nil {
-			if !errors.Is(err, io.EOF) {
-				s.span.RecordError(err)
-				return s.response, nil, err
+//	for resp, err := range stream.Recv() { ... }
+func (s *ChatStream) Recv() iter.Seq2[*Response, error] {
+	return func(yield func(*Response, error) bool) {
+		defer s.Close()
+
+		for {
+			chunk, err := s.stream.Recv()
+			if err != nil { //nolint:nestif // TODO(zchee): fix nolint
+				s.finishSpan(err)
+
+				if errors.Is(err, io.EOF) {
+					return
+				}
+
+				if !yield(nil, err) {
+					return
+				}
+				return
 			}
 
-			if usage := s.response.Usage(); usage != nil {
-				s.span.SetAttributes(
-					attribute.Int("gen_ai.usage.input_tokens", int(usage.GetPromptTokens())),
-					attribute.Int("gen_ai.usage.output_tokens", int(usage.GetCompletionTokens())),
-					attribute.Int("gen_ai.usage.total_tokens", int(usage.GetTotalTokens())),
-				)
+			if !s.firstChunkReceived && s.span != nil {
+				s.span.SetAttributes(attribute.String("gen_ai.completion.start_time", time.Now().UTC().Format(time.RFC3339)))
+				s.firstChunkReceived = true
 			}
 
-			s.span.SetAttributes(
-				attribute.String("gen_ai.response.id", s.response.proto.GetId()),
-				attribute.String("gen_ai.response.model", s.response.proto.GetModel()),
-				attribute.String("gen_ai.response.finish_reasons", s.response.FinishReason()),
-			)
+			s.response.index = autoDetectMultiOutputChunks(s.response.index, chunk.GetOutputs())
+			s.response.processChunk(chunk)
 
-			s.span.End()
+			if !yield(s.response, nil) {
+				return
+			}
 		}
+	}
+}
 
-		return s.response, nil, err
+func (s *ChatStream) finishSpan(err error) {
+	if s.span == nil {
+		return
 	}
 
-	if !s.firstChunkReceived && s.span != nil {
-		s.span.SetAttributes(attribute.String("gen_ai.completion.start_time", time.Now().UTC().Format(time.RFC3339)))
-		s.firstChunkReceived = true
+	if !errors.Is(err, io.EOF) {
+		s.span.RecordError(err)
+		return
 	}
 
-	s.response.index = autoDetectMultiOutputChunks(s.response.index, chunk.GetOutputs())
-	s.response.processChunk(chunk)
+	if usage := s.response.Usage(); usage != nil {
+		s.span.SetAttributes(
+			attribute.Int("gen_ai.usage.input_tokens", int(usage.GetPromptTokens())),
+			attribute.Int("gen_ai.usage.output_tokens", int(usage.GetCompletionTokens())),
+			attribute.Int("gen_ai.usage.total_tokens", int(usage.GetTotalTokens())),
+		)
+	}
 
-	return s.response, newChunk(chunk, s.response.index), nil
+	s.span.SetAttributes(
+		attribute.String("gen_ai.response.id", s.response.proto.GetId()),
+		attribute.String("gen_ai.response.model", s.response.proto.GetModel()),
+		attribute.String("gen_ai.response.finish_reasons", s.response.FinishReason()),
+	)
+
+	s.span.End()
+	s.span = nil
 }
 
 func autoDetectMultiOutputChunks(index *int32, outputs []*xaipb.CompletionOutputChunk) *int32 {

@@ -1,9 +1,7 @@
 package main
 
 import (
-	"errors"
 	"fmt"
-	"io"
 	"log"
 
 	"github.com/zchee/tumix/model/xai"
@@ -44,18 +42,20 @@ func main() {
 	defer stream.Close()
 
 	fmt.Print("Streaming reply: ")
-	for {
-		aggregate, chunk, err := stream.Recv()
-		if errors.Is(err, io.EOF) {
-			fmt.Println()
-			fmt.Printf("finish reason: %s\n", aggregate.FinishReason())
-			break
-		}
+	lastLen := 0
+	for resp, err := range stream.Recv() {
 		if err != nil {
 			log.Fatalf("stream recv: %v", err)
 		}
-		if chunk != nil {
-			fmt.Print(chunk.Content())
+		if resp != nil {
+			content := resp.Content()
+			if len(content) > lastLen {
+				fmt.Print(content[lastLen:])
+				lastLen = len(content)
+			}
 		}
 	}
+
+	fmt.Println()
+	fmt.Printf("finish reason: %s\n", stream.Response().FinishReason())
 }
