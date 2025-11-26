@@ -267,6 +267,40 @@ func BenchmarkChatSessionStreamMixed(b *testing.B) {
 	}
 }
 
+func BenchmarkChatStructuredToolCalls(b *testing.B) {
+	resp := newResponse(&xaipb.GetChatCompletionResponse{
+		Outputs: []*xaipb.CompletionOutput{
+			{
+				Index: 0,
+				Message: &xaipb.CompletionMessage{
+					Role: xaipb.MessageRole_ROLE_ASSISTANT,
+					Content: "{\"result\":true,\"values\":[1,2,3],\"nested\":{\"k\":\"v\"}}",
+					ToolCalls: []*xaipb.ToolCall{
+						{Tool: &xaipb.ToolCall_Function{Function: &xaipb.FunctionCall{Name: "fn1", Arguments: `{"a":1}`}}},
+						{Tool: &xaipb.ToolCall_Function{Function: &xaipb.FunctionCall{Name: "fn2", Arguments: `{"b":2}`}}},
+					},
+				},
+				FinishReason: xaipb.FinishReason_REASON_TOOL_CALLS,
+			},
+		},
+	}, nil)
+
+	b.ReportAllocs()
+	for b.Loop() {
+		var out struct {
+			Result bool     `json:"result"`
+			Values []int    `json:"values"`
+			Nested struct {
+				K string `json:"k"`
+			} `json:"nested"`
+		}
+		if err := resp.DecodeJSON(&out); err != nil {
+			b.Fatalf("decode error: %v", err)
+		}
+		_ = len(resp.ToolCalls())
+	}
+}
+
 func BenchmarkResponseToolCalls(b *testing.B) {
 	const (
 		outputs   = 6
