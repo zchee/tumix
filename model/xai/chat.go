@@ -442,6 +442,7 @@ type Response struct {
 	contentBuffers    []*strings.Builder
 	reasoningBuffers  []*strings.Builder
 	encryptedBuffers  []*strings.Builder
+	toolCallBufs      [][]*xaipb.ToolCall
 	buffersAreInProto bool
 }
 
@@ -611,10 +612,17 @@ func (r *Response) flushBuffers() {
 		}
 	}
 
+	for idx, tc := range r.toolCallBufs {
+		if len(tc) > 0 && idx < len(r.proto.GetOutputs()) {
+			r.proto.Outputs[idx].Message.ToolCalls = tc
+		}
+	}
+
 	r.buffersAreInProto = true
 	releaseBuilders(&r.contentBuffers)
 	releaseBuilders(&r.reasoningBuffers)
 	releaseBuilders(&r.encryptedBuffers)
+	releaseToolCalls(&r.toolCallBufs)
 }
 
 //nolint:gocognit // TODO(zchee): fix nolint.
@@ -629,6 +637,29 @@ func (r *Response) processChunk(chunk *xaipb.GetChatCompletionChunk) {
 		r.proto.Citations = append(slices.Grow(r.proto.GetCitations(), len(citations)), citations...)
 	}
 
+	maxOutputIdx := -1
+	for _, c := range chunk.GetOutputs() {
+		idx := int(c.GetIndex())
+		if idx > maxOutputIdx {
+			maxOutputIdx = idx
+		}
+	}
+
+	if len(r.proto.Outputs) == 0 && maxOutputIdx >= 0 {
+		r.proto.Outputs = make([]*xaipb.CompletionOutput, maxOutputIdx+1)
+		r.contentBuffers = make([]*strings.Builder, maxOutputIdx+1)
+		r.reasoningBuffers = make([]*strings.Builder, maxOutputIdx+1)
+		r.encryptedBuffers = make([]*strings.Builder, maxOutputIdx+1)
+		r.toolCallBufs = make([][]*xaipb.ToolCall, maxOutputIdx+1)
+
+		for i := range r.proto.Outputs {
+			r.proto.Outputs[i] = &xaipb.CompletionOutput{
+				Index:   int32(i),
+				Message: &xaipb.CompletionMessage{},
+			}
+		}
+	}
+
 	for _, c := range chunk.GetOutputs() {
 		idx := int(c.GetIndex())
 		delta := c.GetDelta()
@@ -637,8 +668,10 @@ func (r *Response) processChunk(chunk *xaipb.GetChatCompletionChunk) {
 		target.Index = c.GetIndex()
 		msg.Role = delta.GetRole()
 		if calls := delta.GetToolCalls(); len(calls) > 0 {
-			msg.ToolCalls = slices.Grow(msg.GetToolCalls(), len(calls))
-			msg.ToolCalls = append(msg.ToolCalls, calls...)
+			dst := ensureToolCalls(&r.toolCallBufs, idx, len(msg.GetToolCalls())+len(calls))
+			dst = append(dst[:len(msg.GetToolCalls())], msg.GetToolCalls()...)
+			dst = append(dst, calls...)
+			r.toolCallBufs[idx] = dst
 		}
 		target.FinishReason = c.GetFinishReason()
 
@@ -989,6 +1022,33 @@ func releaseBuilders(bufs *[]*strings.Builder) {
 		}
 		b.Reset()
 		builderPool.Put(b)
+		(*bufs)[i] = nil
+	}
+}
+
+func ensureToolCalls(bufs *[][]*xaipb.ToolCall, idx int, need int) []*xaipb.ToolCall {
+	if idx < 0 {
+		return nil
+	}
+
+	if idx >= len(*bufs) {
+		extra := idx + 1 - len(*bufs)
+		*bufs = slices.Grow(*bufs, extra)
+		*bufs = (*bufs)[:idx+1]
+	}
+
+	buf := (*bufs)[idx]
+	if cap(buf) < need {
+		newBuf := make([]*xaipb.ToolCall, len(buf), need)
+		copy(newBuf, buf)
+		buf = newBuf
+	}
+
+	return buf[:len(buf)]
+}
+
+func releaseToolCalls(bufs *[][]*xaipb.ToolCall) {
+	for i := range *bufs {
 		(*bufs)[i] = nil
 	}
 }
