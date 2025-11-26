@@ -67,8 +67,10 @@ func NewAnthropicModel(_ context.Context, modelName, apiKey string, opts ...opti
 	}, nil
 }
 
+// Name implements [model.LLM].
 func (m *anthropicModel) Name() string { return m.name }
 
+// GenerateContent implements [model.LLM].
 func (m *anthropicModel) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
 	m.ensureUserContent(req)
 	if req.Config == nil {
