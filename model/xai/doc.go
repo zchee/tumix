@@ -14,13 +14,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Command tumix implements a [TUMIX: Multi-Agent Test-Time Scaling with Tool-Use Mixture] in Go.
+// Package xai is a Go language port of the [xai-org/xai-sdk-python].
 //
-// [TUMIX: Multi-Agent Test-Time Scaling with Tool-Use Mixture]: https://arxiv.org/abs/2510.01279
-package main
-
-import (
-	"google.golang.org/adk/agent"
-)
-
-var _ agent.Agent
+// It provides a Go SDK for interacting with xAI services using gRPC.
+//
+// [xai-org/xai-sdk-python]: https://github.com/xai-org/xai-sdk-python
+package xai

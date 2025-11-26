@@ -14,13 +14,27 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Command tumix implements a [TUMIX: Multi-Agent Test-Time Scaling with Tool-Use Mixture] in Go.
-//
-// [TUMIX: Multi-Agent Test-Time Scaling with Tool-Use Mixture]: https://arxiv.org/abs/2510.01279
-package main
+package xai
 
 import (
-	"google.golang.org/adk/agent"
+	"context"
+
+	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/emptypb"
+
+	xaipb "github.com/zchee/tumix/model/xai/api/v1"
 )
 
-var _ agent.Agent
+// AuthClient provides access to Auth RPCs.
+type AuthClient struct {
+	auth xaipb.AuthClient
+}
+
+// GetAPIKeyInfo returns metadata for the current API key.
+func (c *AuthClient) GetAPIKeyInfo(ctx context.Context, opts ...grpc.CallOption) (*xaipb.ApiKey, error) {
+	resp, err := c.auth.GetApiKeyInfo(ctx, &emptypb.Empty{}, opts...)
+	if err != nil {
+		return nil, WrapError(err)
+	}
+	return resp, nil
+}

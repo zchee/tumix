@@ -35,6 +35,7 @@ jobs:
           check-latest: true
           cache-dependency-path: |
             go.sum
+            model/xai/go.sum
             tools/go.sum
 
       # https://github.com/actions/cache
@@ -56,6 +57,11 @@ jobs:
         run: |
           ./tools/bin/gotestsum -f standard-verbose --junitfile tumix.junit.xml -- -race -count=1 -shuffle=on -cover -covermode=atomic -coverpkg=./... -coverprofile=coverage.out -tags='osusergo,netgo,static' -ldflags='-s -w -buildid=' ./...
 
+      - name: Run Unit tests to model/xai
+        working-directory: model/xai
+        run: |
+          ../../tools/bin/gotestsum -f standard-verbose --junitfile model-xai.junit.xml -- -race -count=1 -shuffle=on -cover -covermode=atomic -coverpkg=./... -coverprofile=coverage.out -tags='osusergo,netgo,static' -ldflags='-s -w -buildid=' ./...
+
       # https://github.com/codecov/codecov-action
       - name: Upload Coverage report to CodeCov
         uses: codecov/codecov-action@v5
@@ -65,6 +71,49 @@ jobs:
           files: ./coverage.out,./model/xai/coverage.out
           disable_file_fixes: true
           verbose: true
+
+  lint:
+    runs-on: ubuntu-24.04
+
+    steps:
+      # https://github.com/actions/checkout
+      - name: Checkout branch
+        uses: actions/checkout@v6
+
+      # https://github.com/actions/setup-go
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+          check-latest: true
+          cache-dependency-path: |
+            go.sum
+            model/xai/go.sum
+            tools/go.sum
+
+      # https://github.com/actions/cache
+      - name: Cache tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            ./tools/bin/golangci-lint
+          key: ${{ runner.os }}-go-${{ hashFiles('tools/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-tools-
+
+      - name: Download dependency modules
+        run: |
+          go mod download -x
+          GOBIN=$PWD/tools/bin go -C tools install -v -x tool
+
+      - name: Run lint
+        run: |
+          ./tools/bin/golangci-lint run -v ./...
+
+      - name: Run lint to model/xai
+        working-directory: model/xai
+        run: |
+          ../../tools/bin/golangci-lint run -v ./...
 
   vet:
     runs-on: ubuntu-24.04
@@ -82,6 +131,7 @@ jobs:
           check-latest: true
           cache-dependency-path: |
             go.sum
+            model/xai/go.sum
             tools/go.sum
 
       - name: Download dependency modules
@@ -89,5 +139,10 @@ jobs:
           go mod download -x
 
       - name: Run go vet
+        run: |
+          go vet ./...
+
+      - name: Run go vet to model/xai
+        working-directory: model/xai
         run: |
           go vet ./...

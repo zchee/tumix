@@ -14,13 +14,31 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Command tumix implements a [TUMIX: Multi-Agent Test-Time Scaling with Tool-Use Mixture] in Go.
-//
-// [TUMIX: Multi-Agent Test-Time Scaling with Tool-Use Mixture]: https://arxiv.org/abs/2510.01279
-package main
+package xai
 
 import (
-	"google.golang.org/adk/agent"
+	"testing"
+
+	xaipb "github.com/zchee/tumix/model/xai/api/v1"
 )
 
-var _ agent.Agent
+type demoStruct struct {
+	Name string `json:"name"`
+}
+
+func TestWithJSONStruct(t *testing.T) {
+	s := chatSessionForTest()
+	WithJSONStruct[*demoStruct]()(s.request, nil)
+	if s.request.GetResponseFormat() == nil || s.request.GetResponseFormat().GetFormatType() != xaipb.FormatType_FORMAT_TYPE_JSON_SCHEMA {
+		t.Fatalf("response format not set")
+	}
+}
+
+// chatSessionForTest builds a minimal ChatSession with a dummy request.
+func chatSessionForTest() *ChatSession {
+	return &ChatSession{
+		request: &xaipb.GetCompletionsRequest{
+			Model: "grok-4-1-fast-reasoning",
+		},
+	}
+}

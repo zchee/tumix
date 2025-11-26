@@ -14,13 +14,22 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Command tumix implements a [TUMIX: Multi-Agent Test-Time Scaling with Tool-Use Mixture] in Go.
-//
-// [TUMIX: Multi-Agent Test-Time Scaling with Tool-Use Mixture]: https://arxiv.org/abs/2510.01279
-package main
+package xai
 
 import (
-	"google.golang.org/adk/agent"
+	"testing"
+
+	xaipb "github.com/zchee/tumix/model/xai/api/v1"
 )
 
-var _ agent.Agent
+func TestWithJSONSchema(t *testing.T) {
+	schema := `{"type":"object"}`
+	req := &xaipb.GetCompletionsRequest{}
+	WithJSONSchema(schema)(req, nil)
+	if req.GetResponseFormat() == nil || req.GetResponseFormat().GetFormatType() != xaipb.FormatType_FORMAT_TYPE_JSON_SCHEMA {
+		t.Fatalf("response format not set to json schema")
+	}
+	if req.GetResponseFormat().GetSchema() != schema {
+		t.Fatalf("schema not propagated")
+	}
+}

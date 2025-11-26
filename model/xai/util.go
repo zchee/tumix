@@ -14,13 +14,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Command tumix implements a [TUMIX: Multi-Agent Test-Time Scaling with Tool-Use Mixture] in Go.
-//
-// [TUMIX: Multi-Agent Test-Time Scaling with Tool-Use Mixture]: https://arxiv.org/abs/2510.01279
-package main
+package xai
 
-import (
-	"google.golang.org/adk/agent"
-)
+func ptr[T any](v T) *T {
+	return &v
+}
 
-var _ agent.Agent
+func deref[T any](v *T) T {
+	if v == nil {
+		var zero T
+		return zero
+	}
+	return *v
+}

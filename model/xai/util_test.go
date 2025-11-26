@@ -14,13 +14,22 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Command tumix implements a [TUMIX: Multi-Agent Test-Time Scaling with Tool-Use Mixture] in Go.
-//
-// [TUMIX: Multi-Agent Test-Time Scaling with Tool-Use Mixture]: https://arxiv.org/abs/2510.01279
-package main
+package xai
 
 import (
-	"google.golang.org/adk/agent"
+	"testing"
 )
 
-var _ agent.Agent
+func TestPtrAndDeref(t *testing.T) {
+	v := 42
+	if got := ptr(v); got == nil || *got != v {
+		t.Fatalf("ptr(%d) = %v", v, got)
+	}
+
+	if got := deref(ptr("ok")); got != "ok" {
+		t.Fatalf("deref pointer returned %q", got)
+	}
+	if got := deref[string](nil); got != "" {
+		t.Fatalf("deref nil returned %q", got)
+	}
+}
