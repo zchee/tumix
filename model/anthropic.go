@@ -302,7 +302,7 @@ func genaiToAnthropicMessages(system *genai.Content, contents []*genai.Content) 
 		mp := anthropic.MessageParam{
 			Content: make([]anthropic.ContentBlockParamUnion, 0, len(c.Parts)),
 		}
-		if role == "user" {
+		if role == genai.RoleUser {
 			mp.Role = anthropic.MessageParamRoleUser
 		} else {
 			// treat everything else as assistant to satisfy API constraint (only user/assistant allowed).
