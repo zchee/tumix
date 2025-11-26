@@ -18,6 +18,7 @@ package model
 
 import (
 	"context"
+	json "encoding/json/v2"
 	"net"
 	"net/http"
 	"testing"
@@ -113,6 +114,9 @@ func TestXAIModel_Generate(t *testing.T) {
 	gotText := server.lastRequest.GetMessages()[0].GetContent()[0].GetText()
 	if gotText != "What is the capital of France?" {
 		t.Fatalf("request message text = %q, want %q", gotText, "What is the capital of France?")
+	}
+	if gotRole := server.lastRequest.GetMessages()[0].GetRole(); gotRole != xaipb.MessageRole_ROLE_USER {
+		t.Fatalf("request message role = %v, want %v", gotRole, xaipb.MessageRole_ROLE_USER)
 	}
 }
 
@@ -275,6 +279,200 @@ func TestGenAI2XAIChatOptions(t *testing.T) {
 	}
 	if !req.GetLogprobs() {
 		t.Fatal("logprobs not set")
+	}
+}
+
+func TestXAIModel_SystemInstructionMapped(t *testing.T) {
+	t.Parallel()
+
+	req := &model.LLMRequest{
+		Contents: genai.Text("Hello"),
+		Config: &genai.GenerateContentConfig{
+			SystemInstruction: genai.NewContentFromText("stay brief", "system"),
+			HTTPOptions:       &genai.HTTPOptions{Headers: make(http.Header)},
+		},
+	}
+
+	fakeResp := &xaipb.GetChatCompletionResponse{
+		Outputs: []*xaipb.CompletionOutput{
+			{
+				Index:        0,
+				FinishReason: xaipb.FinishReason_REASON_STOP,
+				Message: &xaipb.CompletionMessage{
+					Role:    xaipb.MessageRole_ROLE_ASSISTANT,
+					Content: "Hi!",
+				},
+			},
+		},
+	}
+
+	server := &stubChatServer{completionResp: fakeResp}
+	m, cleanup := newTestXAIModel(t, server, "grok-1")
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+
+	for range m.GenerateContent(ctx, req, false) {
+	}
+
+	msgs := server.lastRequest.GetMessages()
+	if len(msgs) < 2 {
+		t.Fatalf("messages len = %d, want >=2", len(msgs))
+	}
+
+	sys := msgs[0]
+	if sys.GetRole() != xaipb.MessageRole_ROLE_SYSTEM {
+		t.Fatalf("system role = %v, want %v", sys.GetRole(), xaipb.MessageRole_ROLE_SYSTEM)
+	}
+	if got := sys.GetContent()[0].GetText(); got != "stay brief" {
+		t.Fatalf("system text = %q, want %q", got, "stay brief")
+	}
+}
+
+func TestXAIModel_FunctionCallConversion(t *testing.T) {
+	t.Parallel()
+
+	req := &model.LLMRequest{
+		Contents: []*genai.Content{
+			genai.NewContentFromText("call tool", genai.RoleUser),
+			{
+				Role: genai.RoleModel,
+				Parts: []*genai.Part{
+					{
+						FunctionCall: &genai.FunctionCall{
+							ID:   "call-1",
+							Name: "get_weather",
+							Args: map[string]any{"city": "Tokyo"},
+						},
+					},
+				},
+			},
+		},
+		Config: &genai.GenerateContentConfig{},
+	}
+
+	fakeResp := &xaipb.GetChatCompletionResponse{
+		Outputs: []*xaipb.CompletionOutput{
+			{
+				Index:        0,
+				FinishReason: xaipb.FinishReason_REASON_STOP,
+				Message: &xaipb.CompletionMessage{
+					Role:    xaipb.MessageRole_ROLE_ASSISTANT,
+					Content: "ok",
+				},
+			},
+		},
+	}
+
+	server := &stubChatServer{completionResp: fakeResp}
+	m, cleanup := newTestXAIModel(t, server, "grok-4-1-fast-reasoning")
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+
+	for range m.GenerateContent(ctx, req, false) {
+	}
+
+	var assistant *xaipb.Message
+	for _, msg := range server.lastRequest.GetMessages() {
+		if msg.GetRole() == xaipb.MessageRole_ROLE_ASSISTANT && len(msg.GetToolCalls()) > 0 {
+			assistant = msg
+			break
+		}
+	}
+	if assistant == nil {
+		t.Fatalf("assistant message with tool calls not found in %+v", server.lastRequest.GetMessages())
+	}
+
+	call := assistant.GetToolCalls()[0].GetFunction()
+	if call.GetName() != "get_weather" {
+		t.Fatalf("function name = %q, want %q", call.GetName(), "get_weather")
+	}
+	args := map[string]any{}
+	if err := json.Unmarshal([]byte(call.GetArguments()), &args); err != nil {
+		t.Fatalf("unmarshal args: %v", err)
+	}
+	if got := args["city"]; got != "Tokyo" {
+		t.Fatalf("args[city] = %v, want %q", got, "Tokyo")
+	}
+	if assistant.GetToolCalls()[0].GetId() != "call-1" {
+		t.Fatalf("tool call id = %q, want call-1", assistant.GetToolCalls()[0].GetId())
+	}
+}
+
+func TestXAIModel_FunctionResponseConversion(t *testing.T) {
+	t.Parallel()
+
+	req := &model.LLMRequest{
+		Contents: []*genai.Content{
+			{
+				Role: "tool",
+				Parts: []*genai.Part{
+					{
+						FunctionResponse: &genai.FunctionResponse{
+							ID:       "call-2",
+							Name:     "get_weather",
+							Response: map[string]any{"ok": true},
+						},
+					},
+				},
+			},
+		},
+		Config: &genai.GenerateContentConfig{},
+	}
+
+	fakeResp := &xaipb.GetChatCompletionResponse{
+		Outputs: []*xaipb.CompletionOutput{
+			{
+				Index:        0,
+				FinishReason: xaipb.FinishReason_REASON_STOP,
+				Message: &xaipb.CompletionMessage{
+					Role:    xaipb.MessageRole_ROLE_ASSISTANT,
+					Content: "ack",
+				},
+			},
+		},
+	}
+
+	server := &stubChatServer{completionResp: fakeResp}
+	m, cleanup := newTestXAIModel(t, server, "grok-1")
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+
+	for range m.GenerateContent(ctx, req, false) {
+	}
+
+	var toolMsg *xaipb.Message
+	for _, msg := range server.lastRequest.GetMessages() {
+		if msg.GetRole() == xaipb.MessageRole_ROLE_TOOL {
+			toolMsg = msg
+			break
+		}
+	}
+	if toolMsg == nil {
+		t.Fatalf("tool message not found in %+v", server.lastRequest.GetMessages())
+	}
+	if len(toolMsg.GetContent()) == 0 {
+		t.Fatalf("tool message has no content: %+v", toolMsg)
+	}
+
+	payload := toolMsg.GetContent()[0].GetText()
+	got := map[string]any{}
+	if err := json.Unmarshal([]byte(payload), &got); err != nil {
+		t.Fatalf("unmarshal tool payload: %v", err)
+	}
+	if got["name"] != "get_weather" {
+		t.Fatalf("payload name = %v, want get_weather", got["name"])
+	}
+	if got["tool_call_id"] != "call-2" {
+		t.Fatalf("payload tool_call_id = %v, want call-2", got["tool_call_id"])
+	}
+	if resp, ok := got["response"].(map[string]any); !ok || resp["ok"] != true {
+		t.Fatalf("payload response = %v, want map[ok:true]", got["response"])
 	}
 }
 
