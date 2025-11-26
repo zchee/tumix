@@ -79,12 +79,19 @@ func (m *xaiModel) GenerateContent(ctx context.Context, req *model.LLMRequest, s
 	}
 	m.addHeaders(req.Config.HTTPOptions.Headers)
 
+	msgs, err := xai.GenAIContentsToMessages(req.Config.SystemInstruction, req.Contents)
+	if err != nil {
+		return func(yield func(*model.LLMResponse, error) bool) {
+			yield(nil, err)
+		}
+	}
+
 	if stream {
-		return m.generateStream(ctx, req)
+		return m.generateStream(ctx, req, msgs)
 	}
 
 	return func(yield func(*model.LLMResponse, error) bool) {
-		resp, err := m.generate(ctx, req)
+		resp, err := m.generate(ctx, req, msgs)
 		yield(resp, err)
 	}
 }
@@ -95,31 +102,12 @@ func (m *xaiModel) addHeaders(headers http.Header) {
 }
 
 // generate calls the model synchronously returning result from the first candidate.
-func (m *xaiModel) generate(ctx context.Context, req *model.LLMRequest) (*model.LLMResponse, error) {
-	msgs := make([]*xaipb.Message, len(req.Contents))
-
-	var sb strings.Builder
-	for i, content := range req.Contents {
-		sb.Reset()
-		for part := range slices.Values(content.Parts) {
-			sb.WriteString(part.Text)
-		}
-
-		msgs[i] = &xaipb.Message{
-			Content: []*xaipb.Content{
-				{
-					Content: &xaipb.Content_Text{
-						Text: sb.String(),
-					},
-				},
-			},
-		}
+func (m *xaiModel) generate(ctx context.Context, req *model.LLMRequest, msgs []*xaipb.Message) (*model.LLMResponse, error) {
+	options := []xai.ChatOption{xai.WithMessages(msgs...)}
+	if opt := genAI2XAIChatOptions(req.Config); opt != nil {
+		options = append(options, opt)
 	}
-	options := []xai.ChatOption{
-		xai.WithMessages(msgs...),
-		genAI2XAIChatOptions(req.Config),
-	}
-	sess := m.client.Chat.Create(m.name, options...)
+	sess := m.client.Chat.Create(m.modelName(req), options...)
 
 	resp, err := sess.Completion(ctx)
 	if err != nil {
@@ -135,34 +123,15 @@ func (m *xaiModel) generate(ctx context.Context, req *model.LLMRequest) (*model.
 }
 
 // generateStream returns a stream of responses from the model.
-func (m *xaiModel) generateStream(ctx context.Context, req *model.LLMRequest) iter.Seq2[*model.LLMResponse, error] {
+func (m *xaiModel) generateStream(ctx context.Context, req *model.LLMRequest, msgs []*xaipb.Message) iter.Seq2[*model.LLMResponse, error] {
 	aggregator := NewStreamingResponseAggregator()
 
 	return func(yield func(*model.LLMResponse, error) bool) {
-		msgs := make([]*xaipb.Message, len(req.Contents))
-		var sb strings.Builder
-		for i, content := range req.Contents {
-			sb.Reset()
-			for part := range slices.Values(content.Parts) {
-				sb.WriteString(part.Text)
-			}
-
-			msgs[i] = &xaipb.Message{
-				Content: []*xaipb.Content{
-					{
-						Content: &xaipb.Content_Text{
-							Text: sb.String(),
-						},
-					},
-				},
-			}
+		options := []xai.ChatOption{xai.WithMessages(msgs...)}
+		if opt := genAI2XAIChatOptions(req.Config); opt != nil {
+			options = append(options, opt)
 		}
-
-		options := []xai.ChatOption{
-			xai.WithMessages(msgs...),
-			genAI2XAIChatOptions(req.Config),
-		}
-		sess := m.client.Chat.Create(m.name, options...)
+		sess := m.client.Chat.Create(m.modelName(req), options...)
 
 		stream, err := sess.Stream(ctx)
 		if err != nil {
@@ -196,6 +165,15 @@ func (m *xaiModel) maybeAppendUserContent(req *model.LLMRequest) {
 	if last := req.Contents[len(req.Contents)-1]; last != nil && last.Role != genai.RoleUser {
 		req.Contents = append(req.Contents, genai.NewContentFromText("Continue processing previous requests as instructed. Exit or provide a summary if no more outputs are needed.", genai.RoleUser))
 	}
+}
+
+func (m *xaiModel) modelName(req *model.LLMRequest) string {
+	if req != nil {
+		if name := strings.TrimSpace(req.Model); name != "" {
+			return name
+		}
+	}
+	return m.name
 }
 
 func genAI2XAIChatOptions(config *genai.GenerateContentConfig) xai.ChatOption {
