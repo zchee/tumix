@@ -26,6 +26,33 @@ import (
 	xaipb "github.com/zchee/tumix/model/xai/api/v1"
 )
 
+func (r *Response) reset() {
+	r.proto.Id = ""
+	r.proto.Model = ""
+	r.proto.Created = nil
+	r.proto.SystemFingerprint = ""
+	r.proto.Usage = nil
+	r.proto.Citations = r.proto.GetCitations()[:0]
+	for _, out := range r.proto.GetOutputs() {
+		if out == nil {
+			continue
+		}
+		if msg := out.GetMessage(); msg != nil {
+			msg.Content = ""
+			msg.ReasoningContent = ""
+			msg.EncryptedContent = ""
+			msg.ToolCalls = msg.GetToolCalls()[:0]
+			msg.Role = 0
+		}
+		out.FinishReason = 0
+	}
+	r.index = nil
+	r.contentBuffers = nil
+	r.reasoningBuffers = nil
+	r.encryptedBuffers = nil
+	r.buffersAreInProto = true
+}
+
 func BenchmarkResponseProcessChunkSingle(b *testing.B) {
 	chunk := &xaipb.GetChatCompletionChunk{
 		Outputs: []*xaipb.CompletionOutputChunk{metadataChunk(0)},

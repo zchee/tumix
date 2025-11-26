@@ -437,33 +437,6 @@ func newResponse(protoResp *xaipb.GetChatCompletionResponse, index *int32) *Resp
 	}
 }
 
-func (r *Response) reset() {
-	r.proto.Id = ""
-	r.proto.Model = ""
-	r.proto.Created = nil
-	r.proto.SystemFingerprint = ""
-	r.proto.Usage = nil
-	r.proto.Citations = r.proto.GetCitations()[:0]
-	for _, out := range r.proto.GetOutputs() {
-		if out == nil {
-			continue
-		}
-		if msg := out.GetMessage(); msg != nil {
-			msg.Content = ""
-			msg.ReasoningContent = ""
-			msg.EncryptedContent = ""
-			msg.ToolCalls = msg.GetToolCalls()[:0]
-			msg.Role = 0
-		}
-		out.FinishReason = 0
-	}
-	r.index = nil
-	r.contentBuffers = nil
-	r.reasoningBuffers = nil
-	r.encryptedBuffers = nil
-	r.buffersAreInProto = true
-}
-
 // Proto returns the underlying protobuf message (materializing buffered chunks).
 func (r *Response) Proto() *xaipb.GetChatCompletionResponse {
 	r.flushBuffers()
