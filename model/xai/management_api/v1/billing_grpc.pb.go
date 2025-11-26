@@ -8,7 +8,6 @@ package v1
 
 import (
 	context "context"
-
 	analytics "github.com/zchee/tumix/model/xai/shared/analytics"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
@@ -229,43 +228,33 @@ type UnimplementedUISvcServer struct{}
 func (UnimplementedUISvcServer) SetBillingInfo(context.Context, *SetBillingInfoReq) (*SetBillingInfoResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetBillingInfo not implemented")
 }
-
 func (UnimplementedUISvcServer) GetBillingInfo(context.Context, *GetBillingInfoReq) (*GetBillingInfoResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetBillingInfo not implemented")
 }
-
 func (UnimplementedUISvcServer) ListPaymentMethods(context.Context, *ListPaymentMethodsReq) (*ListPaymentMethodsResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListPaymentMethods not implemented")
 }
-
 func (UnimplementedUISvcServer) SetDefaultPaymentMethod(context.Context, *SetDefaultPaymentMethodReq) (*SetDefaultPaymentMethodResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetDefaultPaymentMethod not implemented")
 }
-
 func (UnimplementedUISvcServer) GetAmountToPay(context.Context, *GetAmountToPayReq) (*GetAmountToPayResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetAmountToPay not implemented")
 }
-
 func (UnimplementedUISvcServer) AnalyzeBillingItems(context.Context, *AnalyzeBillingItemsRequest) (*analytics.AnalyticsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AnalyzeBillingItems not implemented")
 }
-
 func (UnimplementedUISvcServer) ListInvoices(context.Context, *ListInvoicesReq) (*ListInvoicesResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListInvoices not implemented")
 }
-
 func (UnimplementedUISvcServer) ListPrepaidBalanceChanges(context.Context, *ListPrepaidBalanceChangesReq) (*ListPrepaidBalanceChangesResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListPrepaidBalanceChanges not implemented")
 }
-
 func (UnimplementedUISvcServer) TopUpOrGetExistingPendingChange(context.Context, *TopUpOrGetExistingPendingChangeReq) (*TopUpOrGetExistingPendingChangeResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method TopUpOrGetExistingPendingChange not implemented")
 }
-
 func (UnimplementedUISvcServer) GetSpendingLimits(context.Context, *GetSpendingLimitsReq) (*GetSpendingLimitsResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSpendingLimits not implemented")
 }
-
 func (UnimplementedUISvcServer) SetSoftSpendingLimit(context.Context, *SetSoftSpendingLimitReq) (*SetSoftSpendingLimitResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetSoftSpendingLimit not implemented")
 }
