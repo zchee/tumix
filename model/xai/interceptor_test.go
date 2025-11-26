@@ -78,6 +78,7 @@ type noopClientStream struct {
 	recvCalls int
 }
 
+//nolint:nilnil
 func (n *noopClientStream) Header() (metadata.MD, error) { return nil, nil }
 
 func (n *noopClientStream) Trailer() metadata.MD { return nil }
