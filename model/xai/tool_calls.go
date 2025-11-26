@@ -30,6 +30,7 @@ func ToolCallArguments(tc *xaipb.ToolCall, out any) error {
 	if tc == nil {
 		return errors.New("tool call is nil")
 	}
+
 	fn := tc.GetFunction()
 	if fn == nil {
 		return errors.New("tool call does not contain a function")
@@ -37,7 +38,8 @@ func ToolCallArguments(tc *xaipb.ToolCall, out any) error {
 	if fn.GetArguments() == "" {
 		return errors.New("tool call arguments empty")
 	}
-	return sonic.ConfigFastest.Unmarshal([]byte(fn.GetArguments()), out)
+
+	return sonic.ConfigFastest.UnmarshalFromString(fn.GetArguments(), out)
 }
 
 // ToolCallJSON returns the raw JSON arguments string (empty if absent).

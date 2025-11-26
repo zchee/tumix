@@ -18,7 +18,6 @@ package xai
 
 import (
 	"context"
-	stdjson "encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -138,6 +137,13 @@ func (s *ChatSession) streamN(ctx context.Context, n int32) (*ChatStream, error)
 	resp := &xaipb.GetChatCompletionResponse{}
 	if n > 1 {
 		resp.Outputs = make([]*xaipb.CompletionOutput, n)
+	}
+
+	intPtrIf := func(condition bool) *int32 {
+		if !condition {
+			return nil
+		}
+		return ptr(int32(0))
 	}
 
 	return &ChatStream{
@@ -463,7 +469,7 @@ func (r *Response) Content() string {
 // DecodeJSON unmarshals the response content into the provided destination.
 // Useful when using structured outputs or JSON response_format.
 func (r *Response) DecodeJSON(out any) error {
-	return sonic.ConfigFastest.Unmarshal([]byte(r.Content()), out)
+	return sonic.ConfigFastest.UnmarshalFromString(r.Content(), out)
 }
 
 // ReasoningContent returns any reasoning trace text.
@@ -896,14 +902,6 @@ func autoDetectMultiOutputChunks(index *int32, outputs []*xaipb.CompletionOutput
 	return index
 }
 
-func intPtrIf(condition bool) *int32 {
-	if !condition {
-		return nil
-	}
-
-	return ptr(int32(0))
-}
-
 func ensureBuilder(bufs *[]*strings.Builder, idx int) *strings.Builder {
 	if idx < 0 {
 		return nil
@@ -972,6 +970,7 @@ func computeChunkLengths(chunks []*xaipb.CompletionOutputChunk, hasIdx bool, idx
 		contentTotal += len(delta.GetContent())
 		reasoningTotal += len(delta.GetReasoningContent())
 	}
+
 	return contentTotal, reasoningTotal
 }
 
@@ -979,11 +978,13 @@ func encodeToolCalls(tc []*xaipb.ToolCall) string {
 	if len(tc) == 0 {
 		return ""
 	}
-	data, err := stdjson.Marshal(tc)
+
+	data, err := sonic.ConfigFastest.MarshalToString(tc)
 	if err != nil {
 		return ""
 	}
-	return string(data)
+
+	return data
 }
 
 func splitResponses(resp *xaipb.GetChatCompletionResponse, n int32) []*Response {

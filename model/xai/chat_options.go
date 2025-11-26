@@ -448,7 +448,7 @@ func (s *ChatSession) parseWithRequest(ctx context.Context, out any, req *xaipb.
 	}
 	span.SetAttributes(s.makeSpanResponseAttributes([]*Response{resp})...)
 
-	if err := sonic.ConfigFastest.Unmarshal([]byte(resp.Content()), out); err != nil {
+	if err := sonic.ConfigFastest.UnmarshalFromString(resp.Content(), out); err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		span.RecordError(err)
 		return resp, err
@@ -474,9 +474,9 @@ func schemaBytesForType(t reflect.Type) ([]byte, error) {
 		return cached.([]byte), nil
 	}
 
-	refl := &jsonschema.Reflector{}
+	reflector := &jsonschema.Reflector{}
 	zero := reflect.New(t).Elem().Interface()
-	schema := refl.Reflect(zero)
+	schema := reflector.Reflect(zero)
 	if schema == nil {
 		return nil, errors.New("schema reflection returned nil")
 	}
@@ -486,5 +486,6 @@ func schemaBytesForType(t reflect.Type) ([]byte, error) {
 		return nil, err
 	}
 	jsonSchemaCache.Store(t, b)
+
 	return b, nil
 }
