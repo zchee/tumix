@@ -335,6 +335,15 @@ linters:
         path: model/xai
 
       - linters:
+          - goheader
+        path: model/xai/internal/grpccodec/mem
+
+      - linters:
+          - unparam
+        text: "(\\*Reader).Close" # io.Closer
+        path: model/xai/internal/grpccodec/mem
+
+      - linters:
           - decorder
           - revive
           - wrapcheck
