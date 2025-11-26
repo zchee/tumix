@@ -23,8 +23,6 @@ import (
 	"google.golang.org/grpc/encoding"
 	grpcmem "google.golang.org/grpc/mem"
 
-	// Guarantee that the built-in proto is called registered before this one
-	// so that it can be replaced.
 	_ "google.golang.org/grpc/encoding/proto"
 
 	"github.com/zchee/tumix/model/xai/internal/grpccodec/mem"

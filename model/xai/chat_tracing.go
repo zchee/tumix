@@ -17,10 +17,10 @@
 package xai
 
 import (
+	json "encoding/json/v2"
 	"strconv"
 	"strings"
 
-	"github.com/bytedance/sonic"
 	"go.opentelemetry.io/otel/attribute"
 
 	xaipb "github.com/zchee/tumix/model/xai/api/v1"
@@ -251,10 +251,10 @@ func encodeToolCalls(tc []*xaipb.ToolCall) string {
 		return ""
 	}
 
-	data, err := sonic.ConfigFastest.MarshalToString(tc)
+	data, err := json.Marshal(tc)
 	if err != nil {
 		return ""
 	}
 
-	return data
+	return string(data)
 }

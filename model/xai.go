@@ -18,6 +18,7 @@ package model
 
 import (
 	"context"
+	json "encoding/json/v2"
 	"fmt"
 	"iter"
 	"net/http"
@@ -25,7 +26,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/bytedance/sonic"
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
 
@@ -206,7 +206,7 @@ func genAI2XAIChatOptions(config *genai.GenerateContentConfig) xai.ChatOption {
 			return "", false
 		}
 
-		b, err := sonic.ConfigFastest.Marshal(v)
+		b, err := json.Marshal(v)
 		if err != nil {
 			return "", false
 		}
@@ -433,11 +433,11 @@ func xai2LLMResponse(resp *xai.Response) *model.LLMResponse {
 			rawArgs := fc.GetArguments()
 			if rawArgs != "" {
 				var obj map[string]any
-				if err := sonic.ConfigFastest.UnmarshalFromString(rawArgs, &obj); err == nil {
+				if err := json.Unmarshal([]byte(rawArgs), &obj); err == nil {
 					args = obj
 				} else {
 					var generic any
-					if err2 := sonic.ConfigFastest.UnmarshalFromString(rawArgs, &generic); err2 == nil {
+					if err2 := json.Unmarshal([]byte(rawArgs), &generic); err2 == nil {
 						args = map[string]any{"value": generic}
 					} else {
 						args["raw"] = rawArgs

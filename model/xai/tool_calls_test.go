@@ -17,16 +17,15 @@
 package xai
 
 import (
+	json "encoding/json/v2"
 	"testing"
-
-	"github.com/bytedance/sonic"
 
 	xaipb "github.com/zchee/tumix/model/xai/api/v1"
 )
 
 func TestToolCallArguments(t *testing.T) {
 	args := map[string]any{"x": 1, "y": "z"}
-	bytes, err := sonic.ConfigFastest.Marshal(args)
+	bytes, err := json.Marshal(args)
 	if err != nil {
 		t.Fatal(err)
 	}

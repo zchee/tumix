@@ -17,11 +17,10 @@
 package xai
 
 import (
+	json "encoding/json/v2"
 	"slices"
 	"strings"
 	"sync"
-
-	"github.com/bytedance/sonic"
 
 	xaipb "github.com/zchee/tumix/model/xai/api/v1"
 )
@@ -68,7 +67,7 @@ func (r *Response) Content() string {
 // DecodeJSON unmarshals the response content into the provided destination.
 // Useful when using structured outputs or JSON response_format.
 func (r *Response) DecodeJSON(out any) error {
-	return sonic.ConfigFastest.UnmarshalFromString(r.Content(), out)
+	return json.Unmarshal([]byte(r.Content()), out)
 }
 
 // ReasoningContent returns any reasoning trace text.

@@ -17,10 +17,9 @@
 package xai
 
 import (
+	"encoding/json/jsontext"
 	"reflect"
 	"testing"
-
-	"github.com/bytedance/sonic"
 
 	xaipb "github.com/zchee/tumix/model/xai/api/v1"
 )
@@ -62,7 +61,7 @@ func TestSchemaBytesCacheReused(t *testing.T) {
 	if hdr1, hdr2 := reflect.ValueOf(first).Pointer(), reflect.ValueOf(second).Pointer(); hdr1 != hdr2 {
 		t.Fatalf("expected cached schema slice to be reused")
 	}
-	if !sonic.ConfigFastest.Valid(first) {
+	if !jsontext.Value(first).IsValid() {
 		t.Fatalf("schema is not valid JSON: %s", string(first))
 	}
 }
