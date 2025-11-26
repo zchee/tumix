@@ -16,6 +16,7 @@ replace (
 )
 
 require (
+	github.com/bytedance/gopkg v0.1.3
 	github.com/bytedance/sonic v1.14.3-0.20251120112852-388df2d3cca6 // @main
 	github.com/eino-contrib/jsonschema v1.0.2
 	github.com/gaudiy/vtprotobuf v0.6.1-0.20251122131602-5bc3a6fc1d03
@@ -31,7 +32,6 @@ require (
 require (
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
-	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/bytedance/sonic/loader v0.4.1-0.20251120112852-388df2d3cca6 // indirect; @main
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect

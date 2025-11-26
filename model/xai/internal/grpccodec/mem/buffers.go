@@ -30,6 +30,8 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+
+	"github.com/bytedance/gopkg/lang/dirtmake"
 )
 
 // A Buffer represents a reference counted piece of data (in bytes) that can be
@@ -98,7 +100,7 @@ func NewBuffer(data *[]byte, pool BufferPool) Buffer {
 	// is acquired from the pool, but fewer bytes than the buffering threshold
 	// are written to it, the buffer will not be returned to the pool.
 	if pool == nil || IsBelowBufferPoolingThreshold(cap(*data)) {
-		return (SliceBuffer)(*data)
+		return SliceBuffer(*data)
 	}
 	b := newBuffer()
 	b.origData = data
@@ -117,9 +119,9 @@ func NewBuffer(data *[]byte, pool BufferPool) Buffer {
 // pool when all references to the returned Buffer are released.
 func Copy(data []byte, pool BufferPool) Buffer {
 	if IsBelowBufferPoolingThreshold(len(data)) {
-		buf := make(SliceBuffer, len(data))
+		buf := dirtmake.Bytes(len(data), len(data))
 		copy(buf, data)
-		return buf
+		return SliceBuffer(buf)
 	}
 
 	buf := pool.Get(len(data))
@@ -170,7 +172,7 @@ func (b *buffer) Len() int {
 	return len(b.ReadOnlyData())
 }
 
-func (b *buffer) split(n int) (Buffer, Buffer) {
+func (b *buffer) split(n int) (buf, splited Buffer) {
 	if b.refs == nil {
 		panic("Cannot split freed buffer")
 	}

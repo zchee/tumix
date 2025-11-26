@@ -188,7 +188,7 @@ func TestBuffer_CopyRefAndFree(t *testing.T) {
 	}
 
 	buf.Ref()
-	if got := buf.ReadOnlyData(); !bytes.Equal(got, []byte(data)) {
+	if got := buf.ReadOnlyData(); !bytes.Equal(got, data) {
 		t.Fatalf("New reference to the Buffer contains data %s, want %s", string(got), string(data))
 	}
 

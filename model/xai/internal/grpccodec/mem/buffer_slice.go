@@ -22,6 +22,8 @@ package mem
 import (
 	"fmt"
 	"io"
+
+	"github.com/bytedance/gopkg/lang/dirtmake"
 )
 
 const (
@@ -77,11 +79,14 @@ func (s BufferSlice) Free() {
 // returning the number of bytes copied. Has the same semantics as the copy
 // builtin in that it will copy as many bytes as it can, stopping when either dst
 // is full or s runs out of data, returning the minimum of s.Len() and len(dst).
+//
+//nolint:unparam // TODO(zchee): why `off` always 0?
 func (s BufferSlice) CopyTo(dst []byte) int {
 	off := 0
 	for _, b := range s {
 		off += copy(dst[off:], b.ReadOnlyData())
 	}
+
 	return off
 }
 
@@ -92,7 +97,7 @@ func (s BufferSlice) Materialize() []byte {
 	if l == 0 {
 		return nil
 	}
-	out := make([]byte, l)
+	out := dirtmake.Bytes(l, l)
 	s.CopyTo(out)
 	return out
 }
@@ -158,6 +163,8 @@ func (r *Reader) Reset(s BufferSlice) {
 
 // Close frees the underlying BufferSlice and never returns an error. Subsequent
 // calls to Read will return (0, io.EOF).
+//
+//nolint:unparam
 func (r *Reader) Close() error {
 	r.data.Free()
 	r.data = nil
@@ -258,7 +265,7 @@ func ReadAll(r io.Reader, pool BufferPool) (BufferSlice, error) {
 		_, err := wt.WriteTo(w)
 		return result, err
 	}
-nextBuffer:
+
 	for {
 		buf := pool.Get(readAllBufSize)
 		// We asked for 32KiB but may have been given a bigger buffer.
@@ -283,7 +290,7 @@ nextBuffer:
 			}
 			if len(*buf) == usedCap {
 				result = append(result, NewBuffer(buf, pool))
-				continue nextBuffer
+				break
 			}
 		}
 	}

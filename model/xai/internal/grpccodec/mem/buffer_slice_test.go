@@ -32,7 +32,7 @@ import (
 
 const (
 	minReadSize = 1
-	// Should match the constant in buffer_slice.go (another package)
+	// Should match the constant in buffer_slice.go (another package).
 	readAllBufSize = 32 * 1024 // 32 KiB
 )
 
@@ -146,7 +146,7 @@ func TestBufferSlice_Reader(t *testing.T) {
 		if n > 0 {
 			gotData = append(gotData, buf[:n]...)
 		}
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
@@ -352,7 +352,7 @@ func TestBufferSlice_ReadAll_Reads(t *testing.T) {
 				t.Fatalf("ReadAll() returned %d bufs, wanted %d bufs", len(data), tc.wantBufs)
 			}
 			// all but last should be full buffers
-			for i := 0; i < len(data)-1; i++ {
+			for i := range len(data) - 1 {
 				if data[i].Len() != readAllBufSize {
 					t.Fatalf("ReadAll() returned data length %d, wanted %d", data[i].Len(), readAllBufSize)
 				}
@@ -495,6 +495,8 @@ func TestBufferSlice_Iteration(t *testing.T) {
 		{
 			name: "empty",
 			operations: func(t *testing.T, r *mem.Reader) {
+				t.Helper()
+
 				if r.Remaining() != 0 {
 					t.Fatalf("Remaining() = %v, want 0", r.Remaining())
 				}
@@ -518,6 +520,8 @@ func TestBufferSlice_Iteration(t *testing.T) {
 			name:    "single_buffer",
 			buffers: [][]byte{[]byte("0123456789")},
 			operations: func(t *testing.T, r *mem.Reader) {
+				t.Helper()
+
 				if r.Remaining() != 10 {
 					t.Fatalf("Remaining() = %v, want 10", r.Remaining())
 				}
@@ -568,6 +572,8 @@ func TestBufferSlice_Iteration(t *testing.T) {
 			name:    "multiple_buffers",
 			buffers: [][]byte{[]byte("012"), []byte("345"), []byte("6789")},
 			operations: func(t *testing.T, r *mem.Reader) {
+				t.Helper()
+
 				if r.Remaining() != 10 {
 					t.Fatalf("Remaining() = %v, want 10", r.Remaining())
 				}
@@ -604,6 +610,8 @@ func TestBufferSlice_Iteration(t *testing.T) {
 			name:    "close",
 			buffers: [][]byte{[]byte("0123456789")},
 			operations: func(t *testing.T, r *mem.Reader) {
+				t.Helper()
+
 				r.Close()
 				if r.Remaining() != 0 {
 					t.Fatalf("Remaining() after Close = %v, want 0", r.Remaining())
@@ -614,6 +622,8 @@ func TestBufferSlice_Iteration(t *testing.T) {
 			name:    "reset",
 			buffers: [][]byte{[]byte("0123")},
 			operations: func(t *testing.T, r *mem.Reader) {
+				t.Helper()
+
 				newSlice := mem.BufferSlice{mem.SliceBuffer([]byte("56789"))}
 				r.Reset(newSlice)
 				if r.Remaining() != 5 {
@@ -632,6 +642,8 @@ func TestBufferSlice_Iteration(t *testing.T) {
 			name:    "zero_ops",
 			buffers: [][]byte{[]byte("01234")},
 			operations: func(t *testing.T, c *mem.Reader) {
+				t.Helper()
+
 				if c.Remaining() != 5 {
 					t.Fatalf("Remaining() = %v, want 5", c.Remaining())
 				}

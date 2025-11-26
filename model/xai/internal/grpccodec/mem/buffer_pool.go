@@ -20,8 +20,10 @@
 package mem
 
 import (
-	"sort"
+	"slices"
 	"sync"
+
+	"github.com/bytedance/gopkg/lang/dirtmake"
 )
 
 var (
@@ -44,7 +46,7 @@ type BufferPool interface {
 	//
 	// The provided pointer must hold a prefix of the buffer obtained via
 	// BufferPool.Get to ensure the buffer's entire capacity can be re-used.
-	Put(*[]byte)
+	Put(buf *[]byte)
 }
 
 var defaultBufferPoolSizes = []int{
@@ -79,7 +81,7 @@ func DefaultBufferPool() BufferPool {
 // NewTieredBufferPool returns a BufferPool implementation that uses multiple
 // underlying pools of the given pool sizes.
 func NewTieredBufferPool(poolSizes ...int) BufferPool {
-	sort.Ints(poolSizes)
+	slices.Sort(poolSizes)
 	pools := make([]*sizedBufferPool, len(poolSizes))
 	for i, s := range poolSizes {
 		pools[i] = newSizedBufferPool(s)
@@ -105,8 +107,14 @@ func (p *tieredBufferPool) Put(buf *[]byte) {
 }
 
 func (p *tieredBufferPool) getPool(size int) BufferPool {
-	poolIdx := sort.Search(len(p.sizedPools), func(i int) bool {
-		return p.sizedPools[i].defaultSize >= size
+	poolIdx, _ := slices.BinarySearchFunc(p.sizedPools, size, func(elem *sizedBufferPool, target int) int {
+		if elem.defaultSize < target {
+			return -1
+		}
+		if elem.defaultSize > target {
+			return 1
+		}
+		return 0
 	})
 
 	if poolIdx == len(p.sizedPools) {
@@ -132,7 +140,7 @@ type sizedBufferPool struct {
 func (p *sizedBufferPool) Get(size int) *[]byte {
 	buf, ok := p.pool.Get().(*[]byte)
 	if !ok {
-		buf := make([]byte, size, p.defaultSize)
+		buf := dirtmake.Bytes(size, p.defaultSize)
 		return &buf
 	}
 	b := *buf
@@ -181,7 +189,7 @@ func (p *simpleBufferPool) Get(size int) *[]byte {
 		p.pool.Put(bs)
 	}
 
-	b := make([]byte, size)
+	b := dirtmake.Bytes(size, size)
 	return &b
 }
 
@@ -196,7 +204,7 @@ type NopBufferPool struct{}
 
 // Get returns a buffer with specified length from the pool.
 func (NopBufferPool) Get(length int) *[]byte {
-	b := make([]byte, length)
+	b := dirtmake.Bytes(length, length)
 	return &b
 }
 
