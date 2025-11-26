@@ -47,9 +47,9 @@ func (r *Response) reset() {
 		out.FinishReason = 0
 	}
 	r.index = nil
-	r.contentBuffers = nil
-	r.reasoningBuffers = nil
-	r.encryptedBuffers = nil
+	releaseBuilders(&r.contentBuffers)
+	releaseBuilders(&r.reasoningBuffers)
+	releaseBuilders(&r.encryptedBuffers)
 	r.buffersAreInProto = true
 }
 
@@ -170,6 +170,10 @@ func BenchmarkSpanAttributesManyMessages(b *testing.B) {
 			Content: []*xaipb.Content{
 				TextContent("msg-" + strconv.Itoa(i)),
 			},
+			ToolCalls: []*xaipb.ToolCall{
+				{Tool: &xaipb.ToolCall_Function{Function: &xaipb.FunctionCall{Name: "fn", Arguments: `{"k":1}`}}},
+			},
+			EncryptedContent: "enc" + strconv.Itoa(i),
 		})
 	}
 
@@ -247,6 +251,22 @@ func BenchmarkChatSessionStreamAggregate(b *testing.B) {
 	}
 }
 
+func BenchmarkChatSessionStreamMixed(b *testing.B) {
+	chunks := streamingChunksWithReasoning(8, 4, 2, "chunk-", "why-")
+	resp := newResponse(&xaipb.GetChatCompletionResponse{}, nil)
+
+	b.ReportAllocs()
+	for b.Loop() {
+		for _, ch := range chunks {
+			resp.processChunk(ch)
+		}
+		_ = resp.Content()
+		_ = resp.ReasoningContent()
+		_ = resp.ToolCalls()
+		resp.reset()
+	}
+}
+
 func BenchmarkResponseToolCalls(b *testing.B) {
 	const (
 		outputs   = 6
@@ -303,6 +323,37 @@ func streamingChunks(nChunks, outputs int, contentPrefix string) []*xaipb.GetCha
 					ToolCalls: []*xaipb.ToolCall{
 						{Tool: &xaipb.ToolCall_Function{Function: &xaipb.FunctionCall{Name: "fn", Arguments: `{"x":1}`}}},
 					},
+				},
+				FinishReason: xaipb.FinishReason_REASON_STOP,
+			})
+		}
+		chunks = append(chunks, &xaipb.GetChatCompletionChunk{Outputs: outs})
+	}
+
+	return chunks
+}
+
+func streamingChunksWithReasoning(nChunks, outputs, toolCalls int, contentPrefix, reasonPrefix string) []*xaipb.GetChatCompletionChunk {
+	chunks := make([]*xaipb.GetChatCompletionChunk, 0, nChunks)
+	for i := range rangeN(nChunks) {
+		outs := make([]*xaipb.CompletionOutputChunk, 0, outputs)
+		for j := range rangeN(outputs) {
+			calls := make([]*xaipb.ToolCall, 0, toolCalls)
+			for k := range rangeN(toolCalls) {
+				calls = append(calls, &xaipb.ToolCall{
+					Tool: &xaipb.ToolCall_Function{Function: &xaipb.FunctionCall{
+						Name:      "fn",
+						Arguments: `{"x":` + strconv.Itoa(k%3+1) + `}`,
+					}},
+				})
+			}
+			outs = append(outs, &xaipb.CompletionOutputChunk{
+				Index: int32(j),
+				Delta: &xaipb.Delta{
+					Role:             xaipb.MessageRole_ROLE_ASSISTANT,
+					Content:          contentPrefix + strconv.Itoa(i) + "-" + strconv.Itoa(j),
+					ReasoningContent: reasonPrefix + strconv.Itoa(i) + "-" + strconv.Itoa(j),
+					ToolCalls:        calls,
 				},
 				FinishReason: xaipb.FinishReason_REASON_STOP,
 			})

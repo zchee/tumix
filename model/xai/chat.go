@@ -294,9 +294,11 @@ func (s *ChatSession) makeSpanRequestAttributes() []attribute.KeyValue {
 		}
 		attrs = append(attrs, attribute.String(prefix+".content", contentBuf.String()))
 
-		if tcs := msg.GetToolCalls(); len(tcs) > 0 {
-			if encoded := encodeToolCalls(tcs); encoded != "" {
-				attrs = append(attrs, attribute.String(prefix+".tool_calls", encoded))
+		if msg.GetRole() == xaipb.MessageRole_ROLE_ASSISTANT {
+			if tcs := msg.GetToolCalls(); len(tcs) > 0 {
+				if encoded := encodeToolCalls(tcs); encoded != "" {
+					attrs = append(attrs, attribute.String(prefix+".tool_calls", encoded))
+				}
 			}
 		}
 	}
