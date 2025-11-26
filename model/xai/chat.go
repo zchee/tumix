@@ -28,6 +28,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/proto"
@@ -288,7 +289,7 @@ func (s *ChatSession) makeSpanRequestAttributes() []attribute.KeyValue {
 		attrs = append(attrs, attribute.String(prefix+".content", contentBuf.String()))
 
 		if tcs := msg.GetToolCalls(); len(tcs) > 0 {
-			if b, err := json.Marshal(tcs); err == nil {
+			if b, err := sonic.ConfigFastest.Marshal(tcs); err == nil {
 				attrs = append(attrs, attribute.String(prefix+".tool_calls", string(b)))
 			}
 		}
@@ -456,7 +457,7 @@ func (r *Response) Content() string {
 // DecodeJSON unmarshals the response content into the provided destination.
 // Useful when using structured outputs or JSON response_format.
 func (r *Response) DecodeJSON(out any) error {
-	return json.Unmarshal([]byte(r.Content()), out)
+	return sonic.ConfigFastest.Unmarshal([]byte(r.Content()), out)
 }
 
 // ReasoningContent returns any reasoning trace text.
@@ -585,11 +586,9 @@ func (r *Response) processChunk(chunk *xaipb.GetChatCompletionChunk) {
 	r.proto.Id = chunk.GetId()
 	r.proto.Model = chunk.GetModel()
 	r.proto.SystemFingerprint = chunk.GetSystemFingerprint()
-	r.proto.Citations = append(r.proto.Citations, chunk.GetCitations()...)
 
 	if citations := chunk.GetCitations(); len(citations) > 0 {
-		r.proto.Citations = slices.Grow(r.proto.GetCitations(), len(citations))
-		r.proto.Citations = append(r.proto.Citations, citations...)
+		r.proto.Citations = append(slices.Grow(r.proto.Citations, len(citations)), citations...)
 	}
 
 	for _, c := range chunk.GetOutputs() {
@@ -715,7 +714,7 @@ func (c *Chunk) ReasoningContent() string {
 // ToolCalls returns tool calls for this chunk.
 func (c *Chunk) ToolCalls() []*xaipb.ToolCall {
 	idx, hasIdx := deref(c.index), c.index != nil
-	total := 0
+	var calls []*xaipb.ToolCall
 	for out := range slices.Values(c.proto.GetOutputs()) {
 		delta := out.GetDelta()
 		if delta.GetRole() != xaipb.MessageRole_ROLE_ASSISTANT {
@@ -724,23 +723,9 @@ func (c *Chunk) ToolCalls() []*xaipb.ToolCall {
 		if hasIdx && out.GetIndex() != idx {
 			continue
 		}
-		total += len(delta.GetToolCalls())
-	}
-
-	if total == 0 {
-		return nil
-	}
-
-	calls := make([]*xaipb.ToolCall, 0, total)
-	for out := range slices.Values(c.proto.GetOutputs()) {
-		delta := out.GetDelta()
-		if delta.GetRole() != xaipb.MessageRole_ROLE_ASSISTANT {
-			continue
+		if toolCalls := delta.GetToolCalls(); len(toolCalls) > 0 {
+			calls = append(slices.Grow(calls, len(toolCalls)), toolCalls...)
 		}
-		if hasIdx && out.GetIndex() != idx {
-			continue
-		}
-		calls = append(calls, delta.GetToolCalls()...)
 	}
 
 	return calls
