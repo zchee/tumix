@@ -18,7 +18,7 @@ package xai
 
 import (
 	"context"
-	json "encoding/json/v2"
+	stdjson "encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -289,8 +289,8 @@ func (s *ChatSession) makeSpanRequestAttributes() []attribute.KeyValue {
 		attrs = append(attrs, attribute.String(prefix+".content", contentBuf.String()))
 
 		if tcs := msg.GetToolCalls(); len(tcs) > 0 {
-			if b, err := sonic.ConfigFastest.Marshal(tcs); err == nil {
-				attrs = append(attrs, attribute.String(prefix+".tool_calls", string(b)))
+			if encoded := encodeToolCalls(tcs); encoded != "" {
+				attrs = append(attrs, attribute.String(prefix+".tool_calls", encoded))
 			}
 		}
 	}
@@ -344,8 +344,8 @@ func (s *ChatSession) makeSpanResponseAttributes(responses []*Response) []attrib
 		}
 
 		if tcs := resp.ToolCalls(); len(tcs) > 0 {
-			if b, err := json.Marshal(tcs); err == nil {
-				attrs = append(attrs, attribute.String(prefix+".tool_calls", string(b)))
+			if encoded := encodeToolCalls(tcs); encoded != "" {
+				attrs = append(attrs, attribute.String(prefix+".tool_calls", encoded))
 			}
 		}
 	}
@@ -671,41 +671,85 @@ func (r *Response) processChunk(chunk *xaipb.GetChatCompletionChunk) {
 
 // Chunk wraps GetChatCompletionChunk with helpers.
 type Chunk struct {
-	proto *xaipb.GetChatCompletionChunk
-	index *int32
+	proto        *xaipb.GetChatCompletionChunk
+	index        *int32
+	hasIndex     bool
+	indexValue   int32
+	contentLen   int
+	reasoningLen int
 }
 
 func newChunk(protoChunk *xaipb.GetChatCompletionChunk, index *int32) *Chunk {
+	idxVal, hasIdx := deref(index), index != nil
+	contentLen, reasoningLen := computeChunkLengths(protoChunk.GetOutputs(), hasIdx, idxVal)
 	return &Chunk{
-		proto: protoChunk,
-		index: index,
+		proto:        protoChunk,
+		index:        index,
+		hasIndex:     hasIdx,
+		indexValue:   idxVal,
+		contentLen:   contentLen,
+		reasoningLen: reasoningLen,
 	}
 }
 
 // Content concatenates chunk content for the tracked index (or all when multi-output).
 func (c *Chunk) Content() string {
-	return concatChunkText(c.proto.GetOutputs(), c.index, func(delta *xaipb.Delta) string {
-		return delta.GetContent()
-	})
+	if c.contentLen == 0 {
+		return ""
+	}
+	buf := make([]byte, c.contentLen)
+	pos := 0
+	for out := range slices.Values(c.proto.GetOutputs()) {
+		delta := out.GetDelta()
+		if delta.GetRole() != xaipb.MessageRole_ROLE_ASSISTANT {
+			continue
+		}
+		if c.hasIndex && out.GetIndex() != c.indexValue {
+			continue
+		}
+		part := delta.GetContent()
+		if part == "" {
+			continue
+		}
+		pos += copy(buf[pos:], part)
+	}
+	return string(buf)
 }
 
 // ReasoningContent concatenates reasoning content for tracked outputs.
 func (c *Chunk) ReasoningContent() string {
-	return concatChunkText(c.proto.GetOutputs(), c.index, func(delta *xaipb.Delta) string {
-		return delta.GetReasoningContent()
-	})
+	if c.reasoningLen == 0 {
+		return ""
+	}
+	buf := make([]byte, c.reasoningLen)
+	pos := 0
+	for out := range slices.Values(c.proto.GetOutputs()) {
+		delta := out.GetDelta()
+		if delta.GetRole() != xaipb.MessageRole_ROLE_ASSISTANT {
+			continue
+		}
+		if c.hasIndex && out.GetIndex() != c.indexValue {
+			continue
+		}
+		part := delta.GetReasoningContent()
+		if part == "" {
+			continue
+		}
+		pos += copy(buf[pos:], part)
+	}
+
+	return string(buf)
 }
 
 // ToolCalls returns tool calls for this chunk.
 func (c *Chunk) ToolCalls() []*xaipb.ToolCall {
-	idx, hasIdx := deref(c.index), c.index != nil
 	var calls []*xaipb.ToolCall
 	for out := range slices.Values(c.proto.GetOutputs()) {
 		delta := out.GetDelta()
 		if delta.GetRole() != xaipb.MessageRole_ROLE_ASSISTANT {
 			continue
 		}
-		if hasIdx && out.GetIndex() != idx {
+		if c.hasIndex && out.GetIndex() != c.indexValue {
 			continue
 		}
 		if toolCalls := delta.GetToolCalls(); len(toolCalls) > 0 {
@@ -916,9 +960,7 @@ var builderPool = sync.Pool{
 	},
 }
 
-func concatChunkText(chunks []*xaipb.CompletionOutputChunk, idx *int32, pick func(*xaipb.Delta) string) string {
-	idxVal, hasIdx := deref(idx), idx != nil
-	total := 0
+func computeChunkLengths(chunks []*xaipb.CompletionOutputChunk, hasIdx bool, idxVal int32) (contentTotal, reasoningTotal int) {
 	for out := range slices.Values(chunks) {
 		delta := out.GetDelta()
 		if delta.GetRole() != xaipb.MessageRole_ROLE_ASSISTANT {
@@ -927,32 +969,21 @@ func concatChunkText(chunks []*xaipb.CompletionOutputChunk, idx *int32, pick fun
 		if hasIdx && out.GetIndex() != idxVal {
 			continue
 		}
-		part := pick(delta)
-		if part == "" {
-			continue
-		}
-		total += len(part)
+		contentTotal += len(delta.GetContent())
+		reasoningTotal += len(delta.GetReasoningContent())
 	}
-	if total == 0 {
+	return contentTotal, reasoningTotal
+}
+
+func encodeToolCalls(tc []*xaipb.ToolCall) string {
+	if len(tc) == 0 {
 		return ""
 	}
-	buf := make([]byte, total)
-	pos := 0
-	for out := range slices.Values(chunks) {
-		delta := out.GetDelta()
-		if delta.GetRole() != xaipb.MessageRole_ROLE_ASSISTANT {
-			continue
-		}
-		if hasIdx && out.GetIndex() != idxVal {
-			continue
-		}
-		part := pick(delta)
-		if part == "" {
-			continue
-		}
-		pos += copy(buf[pos:], part)
+	data, err := stdjson.Marshal(tc)
+	if err != nil {
+		return ""
 	}
-	return string(buf)
+	return string(data)
 }
 
 func splitResponses(resp *xaipb.GetChatCompletionResponse, n int32) []*Response {
