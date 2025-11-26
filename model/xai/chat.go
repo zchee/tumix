@@ -666,8 +666,12 @@ func (r *Response) processChunk(chunk *xaipb.GetChatCompletionChunk) {
 			existing := msg.GetToolCalls()
 			need := len(existing) + len(calls)
 			if cap(existing) < need {
-				newCap := need + need>>1 // grow by 1.5x to cut reallocs across chunks
-				buf := make([]*xaipb.ToolCall, len(existing), newCap)
+				const maxGrowth = 64
+				grow := need - cap(existing)
+				if grow > maxGrowth {
+					grow = maxGrowth
+				}
+				buf := make([]*xaipb.ToolCall, len(existing), cap(existing)+grow)
 				copy(buf, existing)
 				existing = buf
 				msg.ToolCalls = buf
