@@ -110,7 +110,7 @@ func TestXAIModel_Generate(t *testing.T) {
 	if server.lastRequest == nil {
 		t.Fatal("GetCompletion was not invoked")
 	}
-	gotText := server.lastRequest.Messages[0].GetContent()[0].GetText()
+	gotText := server.lastRequest.GetMessages()[0].GetContent()[0].GetText()
 	if gotText != "What is the capital of France?" {
 		t.Fatalf("request message text = %q, want %q", gotText, "What is the capital of France?")
 	}
@@ -213,6 +213,8 @@ func TestXAIModel_MaybeAppendUserContent(t *testing.T) {
 	m := &xaiModel{}
 
 	t.Run("appends_when_empty", func(t *testing.T) {
+		t.Parallel()
+
 		req := &model.LLMRequest{}
 		m.maybeAppendUserContent(req)
 		if got := req.Contents[len(req.Contents)-1].Role; got != genai.RoleUser {
@@ -221,6 +223,8 @@ func TestXAIModel_MaybeAppendUserContent(t *testing.T) {
 	})
 
 	t.Run("appends_when_last_not_user", func(t *testing.T) {
+		t.Parallel()
+
 		req := &model.LLMRequest{
 			Contents: []*genai.Content{genai.NewContentFromText("assistant output", genai.RoleModel)},
 		}
@@ -257,14 +261,14 @@ func TestGenAI2XAIChatOptions(t *testing.T) {
 
 	opt(req, session)
 
-	if req.Temperature == nil || *req.Temperature != temp {
-		t.Fatalf("temperature = %v, want %v", req.Temperature, temp)
+	if req.Temperature == nil || req.GetTemperature() != temp {
+		t.Fatalf("temperature = %v, want %v", req.GetTemperature(), temp)
 	}
-	if req.TopP == nil || *req.TopP != topP {
-		t.Fatalf("topP = %v, want %v", req.TopP, topP)
+	if req.TopP == nil || req.GetTopP() != topP {
+		t.Fatalf("topP = %v, want %v", req.GetTopP(), topP)
 	}
-	if req.MaxTokens == nil || *req.MaxTokens != maxTokens {
-		t.Fatalf("maxTokens = %v, want %v", req.MaxTokens, maxTokens)
+	if req.MaxTokens == nil || req.GetMaxTokens() != maxTokens {
+		t.Fatalf("maxTokens = %v, want %v", req.GetMaxTokens(), maxTokens)
 	}
 	if got := req.GetStop(); !cmp.Equal(got, stop) {
 		t.Fatalf("stop sequences = %v, want %v", got, stop)
@@ -304,10 +308,11 @@ func (s *stubChatServer) GetCompletionChunk(req *xaipb.GetCompletionsRequest, st
 	return nil
 }
 
-func newTestXAIModel(t *testing.T, server *stubChatServer, modelName string) (*xaiModel, func()) {
+func newTestXAIModel(t *testing.T, server *stubChatServer, modelName string) (m *xaiModel, cleanup func()) {
 	t.Helper()
 
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	var lc net.ListenConfig
+	lis, err := lc.Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
@@ -336,7 +341,7 @@ func newTestXAIModel(t *testing.T, server *stubChatServer, modelName string) (*x
 		t.Fatalf("NewClient: %v", err)
 	}
 
-	cleanup := func() {
+	cleanup = func() {
 		_ = client.Close()
 		grpcServer.Stop()
 		_ = lis.Close()
