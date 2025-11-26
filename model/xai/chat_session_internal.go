@@ -63,7 +63,7 @@ func (s *ChatSession) streamN(ctx context.Context, n int32) (*ChatStream, error)
 	req := proto.Clone(s.request).(*xaipb.GetCompletionsRequest)
 	req.N = ptr(n)
 
-	stream, err := s.stub.GetCompletionChunk(ctx, req)
+	stream, err := s.chat.GetCompletionChunk(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +100,7 @@ func (s *ChatSession) deferN(ctx context.Context, n int32, timeout, interval tim
 		interval = defaultDeferredInterval
 	}
 
-	startResp, err := s.stub.StartDeferredCompletion(ctx, req)
+	startResp, err := s.chat.StartDeferredCompletion(ctx, req)
 	if err != nil {
 		return nil, WrapError(err)
 	}
@@ -111,7 +111,7 @@ func (s *ChatSession) deferN(ctx context.Context, n int32, timeout, interval tim
 			return nil, fmt.Errorf("deferred request timed out after %s", timeout)
 		}
 
-		res, err := s.stub.GetDeferredCompletion(ctx, &xaipb.GetDeferredRequest{
+		res, err := s.chat.GetDeferredCompletion(ctx, &xaipb.GetDeferredRequest{
 			RequestId: startResp.GetRequestId(),
 		})
 		if err != nil {
@@ -132,7 +132,7 @@ func (s *ChatSession) deferN(ctx context.Context, n int32, timeout, interval tim
 }
 
 func (s *ChatSession) invokeCompletion(ctx context.Context, req *xaipb.GetCompletionsRequest) (*Response, error) {
-	resp, err := s.stub.GetCompletion(ctx, req)
+	resp, err := s.chat.GetCompletion(ctx, req)
 	if err != nil {
 		return nil, WrapError(err)
 	}

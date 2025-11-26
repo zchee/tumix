@@ -33,7 +33,7 @@ func (c *ChatClient) Create(model string, opts ...ChatOption) *ChatSession {
 		Model: model,
 	}
 	session := &ChatSession{
-		stub:    c.chat,
+		chat:    c.chat,
 		request: req,
 	}
 	for _, opt := range opts {

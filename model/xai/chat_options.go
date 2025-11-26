@@ -218,7 +218,7 @@ func WithMaxTurns(maxTurns int32) ChatOption {
 
 // ChatSession represents an active chat session.
 type ChatSession struct {
-	stub           xaipb.ChatClient
+	chat           xaipb.ChatClient
 	request        *xaipb.GetCompletionsRequest
 	conversationID string
 }
