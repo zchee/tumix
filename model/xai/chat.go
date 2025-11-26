@@ -505,11 +505,31 @@ func (r *Response) Role() string {
 // ToolCalls returns tool calls from all assistant outputs.
 func (r *Response) ToolCalls() []*xaipb.ToolCall {
 	r.flushBuffers()
-	calls := make([]*xaipb.ToolCall, 0, len(r.proto.GetOutputs()))
-	for out := range slices.Values(r.proto.GetOutputs()) {
-		if out.GetMessage().GetRole() == xaipb.MessageRole_ROLE_ASSISTANT {
-			calls = append(calls, out.GetMessage().GetToolCalls()...)
+	outputs := r.proto.GetOutputs()
+	if len(outputs) == 0 {
+		return nil
+	}
+
+	total := 0
+	for out := range slices.Values(outputs) {
+		msg := out.GetMessage()
+		if msg == nil || msg.GetRole() != xaipb.MessageRole_ROLE_ASSISTANT {
+			continue
 		}
+		total += len(msg.GetToolCalls())
+	}
+
+	if total == 0 {
+		return nil
+	}
+
+	calls := make([]*xaipb.ToolCall, 0, total)
+	for out := range slices.Values(outputs) {
+		msg := out.GetMessage()
+		if msg == nil || msg.GetRole() != xaipb.MessageRole_ROLE_ASSISTANT {
+			continue
+		}
+		calls = append(calls, msg.GetToolCalls()...)
 	}
 
 	return calls

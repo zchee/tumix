@@ -223,6 +223,48 @@ func BenchmarkChatSessionStreamAggregate(b *testing.B) {
 	}
 }
 
+func BenchmarkResponseToolCalls(b *testing.B) {
+	const (
+		outputs   = 6
+		toolCalls = 10
+	)
+
+	buildToolCalls := func(idx int) []*xaipb.ToolCall {
+		calls := make([]*xaipb.ToolCall, 0, toolCalls)
+		for j := range rangeN(toolCalls) {
+			calls = append(calls, &xaipb.ToolCall{
+				Id: "call-" + strconv.Itoa(idx*toolCalls+j),
+				Tool: &xaipb.ToolCall_Function{
+					Function: &xaipb.FunctionCall{
+						Name:      "fn",
+						Arguments: `{"a":1,"b":2}`,
+					},
+				},
+			})
+		}
+		return calls
+	}
+
+	outs := make([]*xaipb.CompletionOutput, 0, outputs)
+	for i := range rangeN(outputs) {
+		outs = append(outs, &xaipb.CompletionOutput{
+			Index: int32(i),
+			Message: &xaipb.CompletionMessage{
+				Role:      xaipb.MessageRole_ROLE_ASSISTANT,
+				ToolCalls: buildToolCalls(i),
+			},
+		})
+	}
+	resp := newResponse(&xaipb.GetChatCompletionResponse{Outputs: outs}, nil)
+
+	b.ReportAllocs()
+	for b.Loop() {
+		if got := len(resp.ToolCalls()); got == 0 {
+			b.Fatalf("unexpected zero tool calls")
+		}
+	}
+}
+
 func streamingChunks(nChunks, outputs int, contentPrefix string) []*xaipb.GetChatCompletionChunk {
 	chunks := make([]*xaipb.GetChatCompletionChunk, 0, nChunks)
 	for i := range rangeN(nChunks) {
