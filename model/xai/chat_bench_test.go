@@ -50,6 +50,7 @@ func (r *Response) reset() {
 	releaseBuilders(&r.contentBuffers)
 	releaseBuilders(&r.reasoningBuffers)
 	releaseBuilders(&r.encryptedBuffers)
+	releaseToolCallScratch(&r.toolCallScratch)
 	r.buffersAreInProto = true
 }
 
@@ -273,7 +274,7 @@ func BenchmarkChatStructuredToolCalls(b *testing.B) {
 			{
 				Index: 0,
 				Message: &xaipb.CompletionMessage{
-					Role: xaipb.MessageRole_ROLE_ASSISTANT,
+					Role:    xaipb.MessageRole_ROLE_ASSISTANT,
 					Content: "{\"result\":true,\"values\":[1,2,3],\"nested\":{\"k\":\"v\"}}",
 					ToolCalls: []*xaipb.ToolCall{
 						{Tool: &xaipb.ToolCall_Function{Function: &xaipb.FunctionCall{Name: "fn1", Arguments: `{"a":1}`}}},
@@ -288,8 +289,8 @@ func BenchmarkChatStructuredToolCalls(b *testing.B) {
 	b.ReportAllocs()
 	for b.Loop() {
 		var out struct {
-			Result bool     `json:"result"`
-			Values []int    `json:"values"`
+			Result bool  `json:"result"`
+			Values []int `json:"values"`
 			Nested struct {
 				K string `json:"k"`
 			} `json:"nested"`

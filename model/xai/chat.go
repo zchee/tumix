@@ -447,6 +447,7 @@ type Response struct {
 	contentBuffers    []*strings.Builder
 	reasoningBuffers  []*strings.Builder
 	encryptedBuffers  []*strings.Builder
+	toolCallScratch   [][]*xaipb.ToolCall
 	buffersAreInProto bool
 }
 
@@ -457,6 +458,7 @@ func newResponse(protoResp *xaipb.GetChatCompletionResponse, index *int32) *Resp
 		contentBuffers:    nil,
 		reasoningBuffers:  nil,
 		encryptedBuffers:  nil,
+		toolCallScratch:   nil,
 		buffersAreInProto: true,
 	}
 }
@@ -647,6 +649,7 @@ func (r *Response) processChunk(chunk *xaipb.GetChatCompletionChunk) {
 		r.contentBuffers = make([]*strings.Builder, maxOutputIdx+1)
 		r.reasoningBuffers = make([]*strings.Builder, maxOutputIdx+1)
 		r.encryptedBuffers = make([]*strings.Builder, maxOutputIdx+1)
+		r.toolCallScratch = make([][]*xaipb.ToolCall, maxOutputIdx+1)
 
 		i := int32(0)
 		for range r.proto.GetOutputs() {
@@ -666,20 +669,10 @@ func (r *Response) processChunk(chunk *xaipb.GetChatCompletionChunk) {
 		target.Index = c.GetIndex()
 		msg.Role = delta.GetRole()
 		if calls := delta.GetToolCalls(); len(calls) > 0 {
-			existing := msg.GetToolCalls()
-			need := len(existing) + len(calls)
-			if cap(existing) < need {
-				const maxGrowth = 64
-				grow := need - cap(existing)
-				if grow > maxGrowth {
-					grow = maxGrowth
-				}
-				buf := make([]*xaipb.ToolCall, len(existing), cap(existing)+grow)
-				copy(buf, existing)
-				existing = buf
-				msg.ToolCalls = buf
-			}
-			msg.ToolCalls = append(existing, calls...)
+			scratch := ensureToolCallScratch(&r.toolCallScratch, idx, len(calls))
+			scratch = append(scratch, calls...)
+			r.toolCallScratch[idx] = scratch
+			msg.ToolCalls = scratch
 		}
 		target.FinishReason = c.GetFinishReason()
 
@@ -1031,6 +1024,45 @@ func releaseBuilders(bufs *[]*strings.Builder) {
 		b.Reset()
 		builderPool.Put(b)
 		(*bufs)[i] = nil
+	}
+}
+
+func ensureToolCallScratch(bufs *[][]*xaipb.ToolCall, idx, incoming int) []*xaipb.ToolCall {
+	if idx >= len(*bufs) {
+		*bufs = append(*bufs, make([][]*xaipb.ToolCall, idx+1-len(*bufs))...)
+	}
+
+	scratch := (*bufs)[idx]
+	if incoming == 0 {
+		return scratch
+	}
+
+	if cap(scratch) >= len(scratch)+incoming {
+		return scratch
+	}
+
+	const (
+		minToolCallSpare = 3
+		maxToolCallSpare = 32
+	)
+	reserve := incoming
+	if len(scratch) == 0 && incoming == 1 {
+		reserve += minToolCallSpare
+	}
+	if reserve > incoming+maxToolCallSpare {
+		reserve = incoming + maxToolCallSpare
+	}
+
+	scratch = slices.Grow(scratch, reserve)
+	(*bufs)[idx] = scratch
+	return scratch
+}
+
+func releaseToolCallScratch(bufs *[][]*xaipb.ToolCall) {
+	for i := range *bufs {
+		if scratch := (*bufs)[i]; scratch != nil {
+			(*bufs)[i] = scratch[:0]
+		}
 	}
 }
 
