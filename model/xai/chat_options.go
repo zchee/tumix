@@ -209,6 +209,13 @@ func WithEncryptedContent(enabled bool) ChatOption {
 	}
 }
 
+// WithMaxTurns sets the maximum number of turns for the conversation.
+func WithMaxTurns(maxTurns int32) ChatOption {
+	return func(req *xaipb.GetCompletionsRequest, _ *ChatSession) {
+		req.MaxTurns = &maxTurns
+	}
+}
+
 // ChatSession represents an active chat session.
 type ChatSession struct {
 	stub           xaipb.ChatClient
