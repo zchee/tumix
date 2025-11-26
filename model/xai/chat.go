@@ -219,7 +219,7 @@ func (s *ChatSession) invokeCompletion(ctx context.Context, req *xaipb.GetComple
 //nolint:cyclop,gocyclo,gocognit // TODO(zchee): fix nolint
 func (s *ChatSession) makeSpanRequestAttributes() []attribute.KeyValue {
 	msgs := s.request.GetMessages()
-	attrs := make([]attribute.KeyValue, 0, 18+len(msgs)*4)
+	attrs := make([]attribute.KeyValue, 0, 18+len(msgs)*6)
 
 	attrs = append(attrs,
 		attribute.String("gen_ai.operation.name", "chat"),
@@ -299,6 +299,9 @@ func (s *ChatSession) makeSpanRequestAttributes() []attribute.KeyValue {
 				if encoded := encodeToolCalls(tcs); encoded != "" {
 					attrs = append(attrs, attribute.String(prefix+".tool_calls", encoded))
 				}
+			}
+			if enc := msg.GetEncryptedContent(); enc != "" {
+				attrs = append(attrs, attribute.String(prefix+".encrypted_content", enc))
 			}
 		}
 	}
