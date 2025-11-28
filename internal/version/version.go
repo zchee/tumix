@@ -16,5 +16,16 @@
 
 package version
 
+import (
+	"fmt"
+	"runtime"
+	"strings"
+)
+
 // Version exposes the current version of tumix.
 const Version = "0.1.0"
+
+// UserAgent returns the User-Agent header value for tumix API requests.
+func UserAgent(apiName string) string {
+	return fmt.Sprintf("tumix/%s/%s %s", Version, apiName, strings.TrimPrefix(runtime.Version(), "go"))
+}
