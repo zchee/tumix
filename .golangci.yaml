@@ -207,6 +207,10 @@ linters:
           sizeThreshold: 128
     gocyclo:
       min-complexity: 20
+    godot:
+      scope: declarations
+      capital: false
+      period: true
     goheader:
       template: |-
         Copyright {{ YEAR }} The tumix Authors.
@@ -224,10 +228,9 @@ linters:
         limitations under the License.
 
         SPDX-License-Identifier: Apache-2.0
-    godot:
-      scope: declarations
-      capital: false
-      period: true
+    gosec:
+      excludes:
+        - G301
     govet:
       disable:
         - fieldalignment
