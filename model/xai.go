@@ -36,9 +36,9 @@ import (
 )
 
 type xaiModel struct {
-	client             *xai.Client
-	name               string
-	versionHeaderValue string
+	client    *xai.Client
+	name      string
+	userAgent string
 }
 
 var _ model.LLM = (*xaiModel)(nil)
@@ -49,13 +49,13 @@ func NewXAIModel(_ context.Context, modelName string, opts ...xai.ClientOption) 
 		return nil, fmt.Errorf("new xAI client: %w", err)
 	}
 
-	// Create header value once, when the model is created
-	headerValue := fmt.Sprintf("tumix/%s %s", version.Version, strings.TrimPrefix(runtime.Version(), "go"))
+	// Create userAgent header value once, when the model is created
+	userAgent := fmt.Sprintf("tumix/%s %s", version.Version, strings.TrimPrefix(runtime.Version(), "go"))
 
 	return &xaiModel{
-		client:             client,
-		name:               modelName,
-		versionHeaderValue: headerValue,
+		client:    client,
+		name:      modelName,
+		userAgent: userAgent,
 	}, nil
 }
 
@@ -97,7 +97,7 @@ func (m *xaiModel) GenerateContent(ctx context.Context, req *model.LLMRequest, s
 
 // addHeaders sets the user-agent header.
 func (m *xaiModel) addHeaders(headers http.Header) {
-	headers.Set("User-Agent", m.versionHeaderValue)
+	headers.Set("User-Agent", m.userAgent)
 }
 
 // generate calls the model synchronously returning result from the first candidate.

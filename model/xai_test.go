@@ -546,8 +546,8 @@ func newTestXAIModel(t *testing.T, server *stubChatServer, modelName string) (m 
 	}
 
 	return &xaiModel{
-		client:             client,
-		name:               modelName,
-		versionHeaderValue: "tumix/test go1.25",
+		client:    client,
+		name:      modelName,
+		userAgent: "tumix/test go1.25",
 	}, cleanup
 }
