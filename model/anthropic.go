@@ -328,7 +328,7 @@ func genaiToAnthropicMessages(system *genai.Content, contents []*genai.Content) 
 				}
 				mp.Content = append(mp.Content, anthropic.ContentBlockParamUnion{
 					OfToolUse: &anthropic.ToolUseBlockParam{
-						ID:    ensureToolID(fc.ID, idx, pi),
+						ID:    toolID(fc.ID, idx, pi),
 						Name:  fc.Name,
 						Input: args,
 						Type:  constant.ValueOf[constant.ToolUse](),
@@ -346,7 +346,7 @@ func genaiToAnthropicMessages(system *genai.Content, contents []*genai.Content) 
 				}
 				mp.Content = append(mp.Content, anthropic.ContentBlockParamUnion{
 					OfToolResult: &anthropic.ToolResultBlockParam{
-						ToolUseID: ensureToolID(fr.ID, idx, pi),
+						ToolUseID: toolID(fr.ID, idx, pi),
 						Content: []anthropic.ToolResultBlockParamContentUnion{
 							{OfText: &anthropic.TextBlockParam{Type: constant.ValueOf[constant.Text](), Text: string(contentJSON)}},
 						},
@@ -379,7 +379,7 @@ func joinTextParts(parts []*genai.Part) string {
 	return sb.String()
 }
 
-func ensureToolID(id string, contentIdx, partIdx int) string {
+func toolID(id string, contentIdx, partIdx int) string {
 	if strings.TrimSpace(id) != "" {
 		return id
 	}
