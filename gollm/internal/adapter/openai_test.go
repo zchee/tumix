@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package gollm
+package adapter
 
 import (
 	json "encoding/json/v2"
@@ -27,51 +27,6 @@ import (
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
 )
-
-func TestOpenAIEnsureUserContent(t *testing.T) {
-	t.Run("adds_default_when_empty", func(t *testing.T) {
-		req := &model.LLMRequest{}
-
-		ensureUserContent(req)
-
-		if len(req.Contents) != 1 {
-			t.Fatalf("ensureUserContent added %d contents, want 1", len(req.Contents))
-		}
-		if req.Contents[0].Role != genai.RoleUser {
-			t.Fatalf("role = %q, want %q", req.Contents[0].Role, genai.RoleUser)
-		}
-		if got, want := req.Contents[0].Parts[0].Text, "Handle the requests as specified in the System Instruction."; got != want {
-			t.Fatalf("default text = %q, want %q", got, want)
-		}
-	})
-
-	t.Run("appends_when_last_not_user", func(t *testing.T) {
-		req := &model.LLMRequest{
-			Contents: []*genai.Content{genai.NewContentFromText("system guidance", "system")},
-		}
-
-		ensureUserContent(req)
-
-		if got, want := len(req.Contents), 2; got != want {
-			t.Fatalf("len(contents) = %d, want %d", got, want)
-		}
-		if req.Contents[1].Role != genai.RoleUser {
-			t.Fatalf("role = %q, want %q", req.Contents[1].Role, genai.RoleUser)
-		}
-	})
-
-	t.Run("no_change_when_last_user", func(t *testing.T) {
-		req := &model.LLMRequest{
-			Contents: []*genai.Content{genai.NewContentFromText("hello", genai.RoleUser)},
-		}
-
-		ensureUserContent(req)
-
-		if got, want := len(req.Contents), 1; got != want {
-			t.Fatalf("len(contents) = %d, want %d", got, want)
-		}
-	})
-}
 
 func TestGenaiToOpenAIMessages(t *testing.T) {
 	contents := []*genai.Content{
@@ -96,9 +51,9 @@ func TestGenaiToOpenAIMessages(t *testing.T) {
 		},
 	}
 
-	msgs, err := genaiToOpenAIMessages(contents)
+	msgs, err := GenaiToOpenAIMessages(contents)
 	if err != nil {
-		t.Fatalf("genaiToOpenAIMessages err = %v", err)
+		t.Fatalf("GenaiToOpenAIMessages err = %v", err)
 	}
 
 	if got, want := len(msgs), 3; got != want {
@@ -140,7 +95,7 @@ func TestGenaiToOpenAIMessages(t *testing.T) {
 	if got, want := fn.Function.Name, "lookup"; got != want {
 		t.Fatalf("function name = %q, want %q", got, want)
 	}
-	if got, want := fn.Function.Arguments, `{"q":"foo"}`; got != want {
+	if got, want := fn.Function.Arguments, `{"q":"foo"}` ; got != want {
 		t.Fatalf("function args = %q, want %q", got, want)
 	}
 }
@@ -172,9 +127,9 @@ func TestOpenAIResponseToLLM(t *testing.T) {
 	if err := json.Unmarshal([]byte(raw), &resp); err != nil {
 		t.Fatalf("unmarshal chat completion: %v", err)
 	}
-	got, err := openAIResponseToLLM(&resp)
+	got, err := OpenAIResponseToLLM(&resp)
 	if err != nil {
-		t.Fatalf("openAIResponseToLLM err = %v", err)
+		t.Fatalf("OpenAIResponseToLLM err = %v", err)
 	}
 
 	want := &model.LLMResponse{
@@ -200,7 +155,7 @@ func TestOpenAIResponseToLLM(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(want, got); diff != "" {
-		t.Fatalf("openAIResponseToLLM diff (-want +got):\n%s", diff)
+		t.Fatalf("OpenAIResponseToLLM diff (-want +got):\n%s", diff)
 	}
 }
 
@@ -226,9 +181,9 @@ func TestOpenAIResponseToLLM_LegacyFunctionCall(t *testing.T) {
 		t.Fatalf("unmarshal legacy chat completion: %v", err)
 	}
 
-	got, err := openAIResponseToLLM(&resp)
+	got, err := OpenAIResponseToLLM(&resp)
 	if err != nil {
-		t.Fatalf("openAIResponseToLLM err = %v", err)
+		t.Fatalf("OpenAIResponseToLLM err = %v", err)
 	}
 
 	if len(got.Content.Parts) != 1 || got.Content.Parts[0].FunctionCall == nil {
@@ -244,7 +199,7 @@ func TestOpenAIResponseToLLM_LegacyFunctionCall(t *testing.T) {
 }
 
 func TestOpenAIStreamAggregator(t *testing.T) {
-	agg := newOpenAIStreamAggregator()
+	agg := NewOpenAIStreamAggregator()
 
 	chunk1 := openai.ChatCompletionChunk{
 		Choices: []openai.ChatCompletionChunkChoice{{

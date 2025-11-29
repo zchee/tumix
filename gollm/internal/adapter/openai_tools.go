@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package gollm
+package adapter
 
 import (
 	"encoding/json/v2"
@@ -27,7 +27,7 @@ import (
 	"google.golang.org/genai"
 )
 
-func genaiToolsToOpenAI(tools []*genai.Tool, cfg *genai.ToolConfig) (params []openai.ChatCompletionToolUnionParam, choiceOpt *openai.ChatCompletionToolChoiceOptionUnionParam) {
+func GenaiToolsToOpenAI(tools []*genai.Tool, cfg *genai.ToolConfig) (params []openai.ChatCompletionToolUnionParam, choiceOpt *openai.ChatCompletionToolChoiceOptionUnionParam) {
 	if len(tools) == 0 {
 		return nil, nil
 	}
