@@ -65,7 +65,7 @@ func AnthropicMessageToLLMResponse(msg *anthropic.Message) (*model.LLMResponse, 
 
 	return &model.LLMResponse{
 		Content: &genai.Content{
-			Role:  string(genai.RoleModel),
+			Role:  genai.RoleModel,
 			Parts: parts,
 		},
 		UsageMetadata: llmUsage,

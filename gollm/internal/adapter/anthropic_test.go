@@ -52,7 +52,7 @@ func TestAnthropicMessageToLLMResponse_TextAndToolCall(t *testing.T) {
 
 	want := &model.LLMResponse{
 		Content: &genai.Content{
-			Role: string(genai.RoleModel),
+			Role: genai.RoleModel,
 			Parts: []*genai.Part{
 				genai.NewPartFromText("The capital is "),
 				{FunctionCall: &genai.FunctionCall{ID: "tool-1", Name: "get_weather", Args: map[string]any{"city": "Paris"}}},

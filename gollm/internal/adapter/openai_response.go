@@ -149,8 +149,8 @@ func (a *OpenAIStreamAggregator) Process(chunk *openai.ChatCompletionChunk) []*m
 		a.text.WriteString(delta.Content)
 		out = append(out, &model.LLMResponse{
 			Content: &genai.Content{
-				Role:  string(genai.RoleModel),
 				Parts: []*genai.Part{genai.NewPartFromText(delta.Content)},
+				Role:  genai.RoleModel,
 			},
 			Partial: true,
 		})

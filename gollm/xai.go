@@ -21,8 +21,6 @@ import (
 	"fmt"
 	"iter"
 	"net/http"
-	"runtime"
-	"strings"
 
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
@@ -57,7 +55,7 @@ func NewXAILLM(_ context.Context, authKey AuthMethod, modelName string, opts ...
 	}
 
 	// Create userAgent header value once, when the model is created
-	userAgent := fmt.Sprintf("tumix/%s %s", version.Version, strings.TrimPrefix(runtime.Version(), "go"))
+	userAgent := version.UserAgent("xai")
 
 	return &xaiLLM{
 		client:    client,
@@ -107,11 +105,13 @@ func (m *xaiLLM) addHeaders(headers http.Header) {
 
 // generate calls the model synchronously returning result from the first candidate.
 func (m *xaiLLM) generate(ctx context.Context, req *model.LLMRequest, msgs []*xaipb.Message) (*model.LLMResponse, error) {
-	options := []xai.ChatOption{xai.WithMessages(msgs...)}
-	if opt := adapter.GenAI2XAIChatOptions(req.Config); opt != nil {
-		options = append(options, opt)
+	opts := []xai.ChatOption{
+		xai.WithMessages(msgs...),
 	}
-	sess := m.client.Chat.Create(resolveModelName(req, m.name), options...)
+	if opt := adapter.GenAI2XAIChatOptions(req.Config); opt != nil {
+		opts = append(opts, opt)
+	}
+	sess := m.client.Chat.Create(resolveModelName(req, m.name), opts...)
 
 	resp, err := sess.Completion(ctx)
 	if err != nil {
@@ -131,11 +131,13 @@ func (m *xaiLLM) generateStream(ctx context.Context, req *model.LLMRequest, msgs
 	aggregator := adapter.NewXAIStreamAggregator()
 
 	return func(yield func(*model.LLMResponse, error) bool) {
-		options := []xai.ChatOption{xai.WithMessages(msgs...)}
-		if opt := adapter.GenAI2XAIChatOptions(req.Config); opt != nil {
-			options = append(options, opt)
+		opts := []xai.ChatOption{
+			xai.WithMessages(msgs...),
 		}
-		sess := m.client.Chat.Create(resolveModelName(req, m.name), options...)
+		if opt := adapter.GenAI2XAIChatOptions(req.Config); opt != nil {
+			opts = append(opts, opt)
+		}
+		sess := m.client.Chat.Create(resolveModelName(req, m.name), opts...)
 
 		stream, err := sess.Stream(ctx)
 		if err != nil {

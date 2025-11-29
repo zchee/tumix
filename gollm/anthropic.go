@@ -191,7 +191,7 @@ func (m *anthropicLLM) stream(ctx context.Context, params *anthropic.MessageNewP
 					if t, ok := delta.(anthropic.TextDelta); ok && t.Text != "" {
 						if !yield(&model.LLMResponse{
 							Content: &genai.Content{
-								Role:  string(genai.RoleModel),
+								Role:  genai.RoleModel,
 								Parts: []*genai.Part{genai.NewPartFromText(adapter.AccText(acc))},
 							},
 							Partial: true,

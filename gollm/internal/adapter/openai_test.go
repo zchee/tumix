@@ -32,7 +32,7 @@ func TestGenaiToOpenAIMessages(t *testing.T) {
 	contents := []*genai.Content{
 		genai.NewContentFromText("hello", genai.RoleUser),
 		{
-			Role: string(genai.RoleModel),
+			Role: genai.RoleModel,
 			Parts: []*genai.Part{
 				genai.NewPartFromText("thinking"),
 				{
