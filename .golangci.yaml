@@ -242,6 +242,7 @@ linters:
         SPDX-License-Identifier: Apache-2.0
     gosec:
       excludes:
+        - G104
         - G301
     govet:
       disable:
@@ -348,23 +349,23 @@ linters:
           - gosec
           - revive
           - wrapcheck
-        path: model/xai
+        path: gollm/xai
 
       - linters:
           - goheader
-        path: model/xai/internal/grpccodec/mem
+        path: gollm/xai/internal/grpccodec/mem
 
       - linters:
           - unparam
         text: "(\\*Reader).Close" # io.Closer
-        path: model/xai/internal/grpccodec/mem
+        path: gollm/xai/internal/grpccodec/mem
 
       - linters:
           - decorder
           - revive
           - wrapcheck
           - cyclop
-        path: model/xai/examples
+        path: gollm/xai/examples
 
       - linters:
           - errcheck

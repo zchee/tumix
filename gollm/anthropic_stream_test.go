@@ -1,3 +1,19 @@
+// Copyright 2025 The tumix Authors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package gollm
 
 import (
@@ -30,12 +46,11 @@ func TestAnthropicStreamAggregator_TextAndStop(t *testing.T) {
 	}
 
 	delta := anthropic.MessageStreamEventUnion{}
-	_ = json.Unmarshal([]byte(`{
+	if err := json.Unmarshal([]byte(`{
 	  "type": "content_block_delta",
 	  "index": 0,
 	  "delta": {"type": "text_delta", "text": "Hi"}
-	}`), &delta)
-	if err != nil {
+	}`), &delta); err != nil {
 		t.Fatalf("Process delta: %v", err)
 	}
 	if len(resp) == 1 {
@@ -45,7 +60,9 @@ func TestAnthropicStreamAggregator_TextAndStop(t *testing.T) {
 	}
 
 	stop := anthropic.MessageStreamEventUnion{}
-	_ = json.Unmarshal([]byte(`{"type":"message_stop"}`), &stop)
+	if err := json.Unmarshal([]byte(`{"type":"message_stop"}`), &stop); err != nil {
+		t.Fatalf("unmarshal json: %v", err)
+	}
 	resp, err = agg.Process(stop)
 	if err != nil {
 		t.Fatalf("Process stop: %v", err)

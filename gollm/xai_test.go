@@ -25,12 +25,12 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/zchee/tumix/gollm/internal/adapter"
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/zchee/tumix/gollm/internal/adapter"
 	"github.com/zchee/tumix/gollm/xai"
 	xaipb "github.com/zchee/tumix/gollm/xai/api/v1"
 )
@@ -238,7 +238,6 @@ func TestXAIModel_MaybeAppendUserContent(t *testing.T) {
 	}
 
 	for name, tt := range tests {
-		tt := tt
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 

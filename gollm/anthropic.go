@@ -414,13 +414,9 @@ func newAnthropicStreamAggregator() *anthropicStreamAggregator {
 	return &anthropicStreamAggregator{}
 }
 
-func (a *anthropicStreamAggregator) reset() {
-	a.acc = anthropic.Message{}
-}
-
 func (a *anthropicStreamAggregator) Process(event anthropic.MessageStreamEventUnion) ([]*model.LLMResponse, error) {
 	if err := a.acc.Accumulate(event); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("accumulate event: %w", err)
 	}
 
 	var out []*model.LLMResponse

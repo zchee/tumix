@@ -143,17 +143,6 @@ func (m *xaiLLM) generateStream(ctx context.Context, req *model.LLMRequest, msgs
 	}
 }
 
-// maybeAppendUserContent appends a user content, so that model can continue to output.
-func (m *xaiLLM) maybeAppendUserContent(req *model.LLMRequest) {
-	if len(req.Contents) == 0 {
-		req.Contents = append(req.Contents, genai.NewContentFromText("Handle the requests as specified in the System Instruction.", genai.RoleUser))
-	}
-
-	if last := req.Contents[len(req.Contents)-1]; last != nil && last.Role != genai.RoleUser {
-		req.Contents = append(req.Contents, genai.NewContentFromText("Continue processing previous requests as instructed. Exit or provide a summary if no more outputs are needed.", genai.RoleUser))
-	}
-}
-
 func (m *xaiLLM) modelName(req *model.LLMRequest) string {
 	return adapter.ModelName(m.name, req)
 }

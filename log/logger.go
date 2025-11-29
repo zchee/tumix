@@ -73,6 +73,6 @@ func doLog(ctx context.Context, level slog.Level, msg string, args ...any) {
 		runtime.Callers(3, pcs[:])
 		record := slog.NewRecord(time.Now(), level, msg, pcs[0])
 		record.Add(args...)
-		logger.Handler().Handle(ctx, record) //nolint:errcheck,gosec
+		logger.Handler().Handle(ctx, record) //nolint:errcheck
 	}
 }

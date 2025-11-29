@@ -24,12 +24,15 @@ import (
 	"github.com/google/go-cmp/cmp"
 	openai "github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/respjson"
-	"github.com/zchee/tumix/gollm/internal/adapter"
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
+
+	"github.com/zchee/tumix/gollm/internal/adapter"
 )
 
 func TestOpenAIEnsureUserContent(t *testing.T) {
+	t.Parallel()
+
 	tests := map[string]struct {
 		req      *model.LLMRequest
 		wantLen  int
@@ -61,7 +64,6 @@ func TestOpenAIEnsureUserContent(t *testing.T) {
 	}
 
 	for name, tt := range tests {
-		tt := tt
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
@@ -82,6 +84,8 @@ func TestOpenAIEnsureUserContent(t *testing.T) {
 }
 
 func TestGenaiToOpenAIMessages(t *testing.T) {
+	t.Parallel()
+
 	contents := []*genai.Content{
 		genai.NewContentFromText("hello", genai.RoleUser),
 		{
@@ -154,6 +158,8 @@ func TestGenaiToOpenAIMessages(t *testing.T) {
 }
 
 func TestOpenAIResponseToLLM(t *testing.T) {
+	t.Parallel()
+
 	const raw = `{
 		"id": "chatcmpl-1",
 		"object": "chat.completion",
@@ -213,6 +219,8 @@ func TestOpenAIResponseToLLM(t *testing.T) {
 }
 
 func TestOpenAIResponseToLLM_LegacyFunctionCall(t *testing.T) {
+	t.Parallel()
+
 	const raw = `{
 		"id": "chatcmpl-legacy",
 		"object": "chat.completion",
@@ -252,6 +260,8 @@ func TestOpenAIResponseToLLM_LegacyFunctionCall(t *testing.T) {
 }
 
 func TestOpenAIStreamAggregator(t *testing.T) {
+	t.Parallel()
+
 	agg := newOpenAIStreamAggregator()
 
 	chunk1 := openai.ChatCompletionChunk{
