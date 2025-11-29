@@ -171,7 +171,7 @@ func TestGenAI2XAIChatOptionsNilOrNoEffect(t *testing.T) {
 	}
 }
 
-func TestXAI2LLMResponse(t *testing.T) {
+func TestXAIResponseToLLM(t *testing.T) {
 	tests := map[string]struct {
 		resp    *xaipb.GetChatCompletionResponse
 		assertf func(t *testing.T, got *genai.Content, llm *genai.GenerateContentResponseUsageMetadata, meta map[string]any, fr genai.FinishReason)
@@ -261,7 +261,7 @@ func TestXAI2LLMResponse(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			xresp := newTestXAIResponse(t, tc.resp)
-			llm := XAI2LLMResponse(xresp)
+			llm := XAIResponseToLLM(xresp)
 			if llm.ErrorCode != "" {
 				t.Fatalf("unexpected error: %s", llm.ErrorMessage)
 			}
@@ -273,8 +273,8 @@ func TestXAI2LLMResponse(t *testing.T) {
 	}
 }
 
-func TestXAI2LLMResponseNil(t *testing.T) {
-	got := XAI2LLMResponse(nil)
+func TestXAIResponseToLLMNil(t *testing.T) {
+	got := XAIResponseToLLM(nil)
 	if got.ErrorCode != "NIL_RESPONSE" {
 		t.Fatalf("ErrorCode = %q, want NIL_RESPONSE", got.ErrorCode)
 	}

@@ -132,7 +132,7 @@ func TestAnthropicLLMBuildParams(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			system, msgs, convErr := adapter.GenaiToAnthropicMessages(tc.req.Config.SystemInstruction, tc.req.Contents)
+			system, msgs, convErr := adapter.GenAIToAnthropicMessages(tc.req.Config.SystemInstruction, tc.req.Contents)
 			if convErr != nil {
 				t.Fatalf("GenaiToAnthropicMessages() error: %v", convErr)
 			}

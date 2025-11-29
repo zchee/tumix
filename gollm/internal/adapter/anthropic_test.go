@@ -77,7 +77,7 @@ func TestGenaiToAnthropicMessages_SystemAndUser(t *testing.T) {
 		genai.NewContentFromText("hello", genai.RoleUser),
 	}
 
-	systemBlocks, msgs, err := GenaiToAnthropicMessages(sys, contents)
+	systemBlocks, msgs, err := GenAIToAnthropicMessages(sys, contents)
 	if err != nil {
 		t.Fatalf("GenaiToAnthropicMessages err = %v", err)
 	}

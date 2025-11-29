@@ -26,8 +26,8 @@ import (
 	"google.golang.org/genai"
 )
 
-// Convert ADK genai content to Anthropics message params.
-func GenaiToAnthropicMessages(system *genai.Content, contents []*genai.Content) ([]anthropic.TextBlockParam, []anthropic.MessageParam, error) {
+// GenAIToAnthropicMessages convert [*genai.Content] to Anthropics message params.
+func GenAIToAnthropicMessages(system *genai.Content, contents []*genai.Content) ([]anthropic.TextBlockParam, []anthropic.MessageParam, error) {
 	var systemBlocks []anthropic.TextBlockParam
 	if system != nil {
 		text := joinTextParts(system.Parts)

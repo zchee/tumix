@@ -26,7 +26,7 @@ import (
 	"google.golang.org/genai"
 )
 
-func GenaiToOpenAIMessages(contents []*genai.Content) ([]openai.ChatCompletionMessageParamUnion, error) {
+func GenAIToOpenAIMessages(contents []*genai.Content) ([]openai.ChatCompletionMessageParamUnion, error) {
 	var msgs []openai.ChatCompletionMessageParamUnion
 	var text strings.Builder
 

@@ -121,7 +121,7 @@ func (m *openAILLM) GenerateContent(ctx context.Context, req *model.LLMRequest, 
 // It converts genai contents to OpenAI messages and applies generation config,
 // returning an error when no messages remain after conversion.
 func (m *openAILLM) chatCompletionParams(req *model.LLMRequest) (*openai.ChatCompletionNewParams, error) {
-	msgs, err := adapter.GenaiToOpenAIMessages(req.Contents)
+	msgs, err := adapter.GenAIToOpenAIMessages(req.Contents)
 	if err != nil {
 		return nil, fmt.Errorf("convert content: %w", err)
 	}

@@ -231,7 +231,7 @@ func GenAI2XAIChatOptions(config *genai.GenerateContentConfig) xai.ChatOption {
 	return opt
 }
 
-func XAI2LLMResponse(resp *xai.Response) *model.LLMResponse {
+func XAIResponseToLLM(resp *xai.Response) *model.LLMResponse {
 	if resp == nil {
 		return &model.LLMResponse{
 			ErrorCode:    "NIL_RESPONSE",
@@ -357,7 +357,7 @@ func (s *XAIStreamAggregator) Process(_ context.Context, xaiResp *xai.Response) 
 			return
 		}
 
-		resp := XAI2LLMResponse(xaiResp)
+		resp := XAIResponseToLLM(xaiResp)
 		resp.TurnComplete = mapXAIFinishReason(xaiResp.FinishReason()) != ""
 		// Aggregate the response and check if an intermediate event to yield was created
 		if aggrResp := s.aggregateResponse(resp); aggrResp != nil {

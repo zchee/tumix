@@ -123,7 +123,7 @@ func (m *xaiLLM) generate(ctx context.Context, req *model.LLMRequest, msgs []*xa
 		return nil, fmt.Errorf("empty response")
 	}
 
-	return adapter.XAI2LLMResponse(resp), nil
+	return adapter.XAIResponseToLLM(resp), nil
 }
 
 // generateStream returns a stream of responses from the model.

@@ -93,7 +93,7 @@ func (m *anthropicLLM) GenerateContent(ctx context.Context, req *model.LLMReques
 	// Keep the same user-agent used during client construction to satisfy ADK expectations.
 	req.Config.HTTPOptions.Headers.Set("User-Agent", m.userAgent)
 
-	system, msgs, err := adapter.GenaiToAnthropicMessages(req.Config.SystemInstruction, req.Contents)
+	system, msgs, err := adapter.GenAIToAnthropicMessages(req.Config.SystemInstruction, req.Contents)
 	if err != nil {
 		return func(yield func(*model.LLMResponse, error) bool) {
 			yield(nil, err)
@@ -157,7 +157,7 @@ func (m *anthropicLLM) buildParams(req *model.LLMRequest, system []anthropic.Tex
 		params.TopK = param.NewOpt(int64(*req.Config.TopK))
 	}
 	if len(req.Config.Tools) > 0 {
-		tools, tc := adapter.GenaiToolsToAnthropic(req.Config.Tools, req.Config.ToolConfig)
+		tools, tc := adapter.GenAIToolsToAnthropic(req.Config.Tools, req.Config.ToolConfig)
 		params.Tools = tools
 		if tc != nil {
 			params.ToolChoice = *tc

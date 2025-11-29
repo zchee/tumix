@@ -51,7 +51,7 @@ func TestGenaiToOpenAIMessages(t *testing.T) {
 		},
 	}
 
-	msgs, err := GenaiToOpenAIMessages(contents)
+	msgs, err := GenAIToOpenAIMessages(contents)
 	if err != nil {
 		t.Fatalf("GenaiToOpenAIMessages err = %v", err)
 	}

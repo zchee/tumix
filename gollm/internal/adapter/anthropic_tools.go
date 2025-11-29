@@ -23,8 +23,8 @@ import (
 	"google.golang.org/genai"
 )
 
-// Convert ADK tool declarations to Anthropics definitions.
-func GenaiToolsToAnthropic(tools []*genai.Tool, cfg *genai.ToolConfig) ([]anthropic.ToolUnionParam, *anthropic.ToolChoiceUnionParam) {
+// GenAIToolsToAnthropic convert [*genai.Tool] declarations to Anthropics definitions.
+func GenAIToolsToAnthropic(tools []*genai.Tool, cfg *genai.ToolConfig) ([]anthropic.ToolUnionParam, *anthropic.ToolChoiceUnionParam) {
 	if len(tools) == 0 {
 		return nil, nil
 	}
