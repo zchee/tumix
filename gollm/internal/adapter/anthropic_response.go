@@ -28,7 +28,7 @@ import (
 	"google.golang.org/genai"
 )
 
-// Convert a non-streaming Anthropics message to an ADK response.
+// AnthropicMessageToLLMResponse converts a non-streaming Anthropic message into an ADK LLM response.
 func AnthropicMessageToLLMResponse(msg *anthropic.Message) (*model.LLMResponse, error) {
 	if msg == nil {
 		return nil, errors.New("nil anthropic message")
@@ -86,6 +86,7 @@ func mapAnthropicFinishReason(reason anthropic.StopReason) genai.FinishReason {
 	}
 }
 
+// AccText concatenates all text blocks from an Anthropic message.
 func AccText(msg *anthropic.Message) string {
 	if msg == nil {
 		return ""

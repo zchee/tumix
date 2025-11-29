@@ -26,7 +26,7 @@ import (
 	"google.golang.org/genai"
 )
 
-// GenAIToAnthropicMessages convert [*genai.Content] to Anthropics message params.
+// GenAIToAnthropicMessages converts GenAI contents into Anthropic message parameters.
 func GenAIToAnthropicMessages(system *genai.Content, contents []*genai.Content) ([]anthropic.TextBlockParam, []anthropic.MessageParam, error) {
 	var systemBlocks []anthropic.TextBlockParam
 	if system != nil {

@@ -23,7 +23,7 @@ import (
 	"google.golang.org/genai"
 )
 
-// GenAIToolsToAnthropic convert [*genai.Tool] declarations to Anthropics definitions.
+// GenAIToolsToAnthropic converts GenAI tool declarations to Anthropic tool definitions and choice hints.
 func GenAIToolsToAnthropic(tools []*genai.Tool, cfg *genai.ToolConfig) ([]anthropic.ToolUnionParam, *anthropic.ToolChoiceUnionParam) {
 	if len(tools) == 0 {
 		return nil, nil
