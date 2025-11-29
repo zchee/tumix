@@ -29,6 +29,7 @@ import (
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
 
+	"github.com/zchee/tumix/gollm/internal/adapter"
 	"github.com/zchee/tumix/gollm/internal/httputil"
 	"github.com/zchee/tumix/internal/version"
 )
@@ -92,7 +93,7 @@ func (m *anthropicLLM) GenerateContent(ctx context.Context, req *model.LLMReques
 	// Keep the same user-agent used during client construction to satisfy ADK expectations.
 	req.Config.HTTPOptions.Headers.Set("User-Agent", m.userAgent)
 
-	system, msgs, err := genaiToAnthropicMessages(req.Config.SystemInstruction, req.Contents)
+	system, msgs, err := adapter.GenaiToAnthropicMessages(req.Config.SystemInstruction, req.Contents)
 	if err != nil {
 		return func(yield func(*model.LLMResponse, error) bool) {
 			yield(nil, err)
@@ -116,7 +117,7 @@ func (m *anthropicLLM) GenerateContent(ctx context.Context, req *model.LLMReques
 			yield(nil, err)
 			return
 		}
-		llmResp, convErr := anthropicMessageToLLMResponse(resp)
+		llmResp, convErr := adapter.AnthropicMessageToLLMResponse(resp)
 		if convErr != nil {
 			yield(nil, convErr)
 			return
@@ -152,7 +153,7 @@ func (m *anthropicLLM) buildParams(req *model.LLMRequest, system []anthropic.Tex
 		params.TopK = param.NewOpt(int64(*req.Config.TopK))
 	}
 	if len(req.Config.Tools) > 0 {
-		tools, tc := genaiToolsToAnthropic(req.Config.Tools, req.Config.ToolConfig)
+		tools, tc := adapter.GenaiToolsToAnthropic(req.Config.Tools, req.Config.ToolConfig)
 		params.Tools = tools
 		if tc != nil {
 			params.ToolChoice = *tc
@@ -183,7 +184,7 @@ func (m *anthropicLLM) stream(ctx context.Context, params *anthropic.MessageNewP
 						if !yield(&model.LLMResponse{
 							Content: &genai.Content{
 								Role:  string(genai.RoleModel),
-								Parts: []*genai.Part{genai.NewPartFromText(accText(acc))},
+								Parts: []*genai.Part{genai.NewPartFromText(adapter.AccText(acc))},
 							},
 							Partial: true,
 						}, nil) {
@@ -192,7 +193,7 @@ func (m *anthropicLLM) stream(ctx context.Context, params *anthropic.MessageNewP
 					}
 				}
 			case anthropic.MessageStopEvent:
-				resp, err := anthropicMessageToLLMResponse(acc)
+				resp, err := adapter.AnthropicMessageToLLMResponse(acc)
 				if err != nil {
 					yield(nil, err)
 					return

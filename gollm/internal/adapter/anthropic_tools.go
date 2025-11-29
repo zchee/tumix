@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package gollm
+package adapter
 
 import (
 	anthropic "github.com/anthropics/anthropic-sdk-go"
@@ -24,7 +24,7 @@ import (
 )
 
 // Convert ADK tool declarations to Anthropics definitions.
-func genaiToolsToAnthropic(tools []*genai.Tool, cfg *genai.ToolConfig) ([]anthropic.ToolUnionParam, *anthropic.ToolChoiceUnionParam) {
+func GenaiToolsToAnthropic(tools []*genai.Tool, cfg *genai.ToolConfig) ([]anthropic.ToolUnionParam, *anthropic.ToolChoiceUnionParam) {
 	if len(tools) == 0 {
 		return nil, nil
 	}

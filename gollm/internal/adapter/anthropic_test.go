@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package gollm
+package adapter
 
 import (
 	json "encoding/json/v2"
@@ -45,9 +45,9 @@ func TestAnthropicMessageToLLMResponse_TextAndToolCall(t *testing.T) {
 		t.Fatalf("unmarshal anthropic message: %v", err)
 	}
 
-	got, err := anthropicMessageToLLMResponse(&msg)
+	got, err := AnthropicMessageToLLMResponse(&msg)
 	if err != nil {
-		t.Fatalf("anthropicMessageToLLMResponse() err = %v", err)
+		t.Fatalf("AnthropicMessageToLLMResponse() err = %v", err)
 	}
 
 	want := &model.LLMResponse{
@@ -67,7 +67,7 @@ func TestAnthropicMessageToLLMResponse_TextAndToolCall(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(want, got); diff != "" {
-		t.Fatalf("anthropicMessageToLLMResponse diff (-want +got):\n%s", diff)
+		t.Fatalf("AnthropicMessageToLLMResponse diff (-want +got):\n%s", diff)
 	}
 }
 
@@ -77,9 +77,9 @@ func TestGenaiToAnthropicMessages_SystemAndUser(t *testing.T) {
 		genai.NewContentFromText("hello", genai.RoleUser),
 	}
 
-	systemBlocks, msgs, err := genaiToAnthropicMessages(sys, contents)
+	systemBlocks, msgs, err := GenaiToAnthropicMessages(sys, contents)
 	if err != nil {
-		t.Fatalf("genaiToAnthropicMessages err = %v", err)
+		t.Fatalf("GenaiToAnthropicMessages err = %v", err)
 	}
 
 	if len(systemBlocks) != 1 || systemBlocks[0].Text != "system guidance" {
