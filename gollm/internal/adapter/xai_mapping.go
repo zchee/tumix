@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package gollm
+package adapter
 
 import (
 	"context"
@@ -33,10 +33,11 @@ import (
 	xaipb "github.com/zchee/tumix/gollm/xai/api/v1"
 )
 
-func genAI2XAIChatOptions(config *genai.GenerateContentConfig) xai.ChatOption {
+func GenAI2XAIChatOptions(config *genai.GenerateContentConfig) xai.ChatOption {
 	if config == nil {
 		return nil
 	}
+// ... (rest of function)
 
 	sb := new(strings.Builder)
 	enc := jsontext.NewEncoder(sb)
@@ -231,7 +232,7 @@ func genAI2XAIChatOptions(config *genai.GenerateContentConfig) xai.ChatOption {
 	return opt
 }
 
-func xai2LLMResponse(resp *xai.Response) *model.LLMResponse {
+func XAI2LLMResponse(resp *xai.Response) *model.LLMResponse {
 	if resp == nil {
 		return &model.LLMResponse{
 			ErrorCode:    "NIL_RESPONSE",
@@ -338,18 +339,18 @@ func xai2LLMResponse(resp *xai.Response) *model.LLMResponse {
 	}
 }
 
-type xAIStreamAggregator struct {
+type XAIStreamAggregator struct {
 	text        string
 	thoughtText string
 	response    *model.LLMResponse
 	role        string
 }
 
-func newXAIStreamAggregator() *xAIStreamAggregator {
-	return &xAIStreamAggregator{}
+func NewXAIStreamAggregator() *XAIStreamAggregator {
+	return &XAIStreamAggregator{}
 }
 
-func (s *xAIStreamAggregator) Process(_ context.Context, xaiResp *xai.Response) iter.Seq2[*model.LLMResponse, error] {
+func (s *XAIStreamAggregator) Process(_ context.Context, xaiResp *xai.Response) iter.Seq2[*model.LLMResponse, error] {
 	return func(yield func(*model.LLMResponse, error) bool) {
 		if xaiResp.Content() == "" {
 			// shouldn't happen?
@@ -357,7 +358,7 @@ func (s *xAIStreamAggregator) Process(_ context.Context, xaiResp *xai.Response) 
 			return
 		}
 
-		resp := xai2LLMResponse(xaiResp)
+		resp := XAI2LLMResponse(xaiResp)
 		resp.TurnComplete = mapXAIFinishReason(xaiResp.FinishReason()) != ""
 		// Aggregate the response and check if an intermediate event to yield was created
 		if aggrResp := s.aggregateResponse(resp); aggrResp != nil {
@@ -372,7 +373,7 @@ func (s *xAIStreamAggregator) Process(_ context.Context, xaiResp *xai.Response) 
 	}
 }
 
-func (s *xAIStreamAggregator) aggregateResponse(llmResponse *model.LLMResponse) *model.LLMResponse {
+func (s *XAIStreamAggregator) aggregateResponse(llmResponse *model.LLMResponse) *model.LLMResponse {
 	s.response = llmResponse
 
 	var part0 *genai.Part
@@ -417,7 +418,7 @@ func (s *xAIStreamAggregator) aggregateResponse(llmResponse *model.LLMResponse) 
 	return nil
 }
 
-func (s *xAIStreamAggregator) Close() *model.LLMResponse {
+func (s *XAIStreamAggregator) Close() *model.LLMResponse {
 	if (s.text != "" || s.thoughtText != "") && s.response != nil {
 		var parts []*genai.Part
 		if s.thoughtText != "" {
@@ -442,7 +443,7 @@ func (s *xAIStreamAggregator) Close() *model.LLMResponse {
 	return nil
 }
 
-func (s *xAIStreamAggregator) clear() {
+func (s *XAIStreamAggregator) clear() {
 	s.response = nil
 	s.text = ""
 	s.thoughtText = ""

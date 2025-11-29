@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/zchee/tumix/gollm/internal/adapter"
 	"github.com/zchee/tumix/gollm/xai"
 	xaipb "github.com/zchee/tumix/gollm/xai/api/v1"
 )
@@ -256,7 +257,7 @@ func TestGenAI2XAIChatOptions(t *testing.T) {
 	req := &xaipb.GetCompletionsRequest{}
 	session := &xai.ChatSession{}
 
-	opt := genAI2XAIChatOptions(cfg)
+	opt := adapter.GenAI2XAIChatOptions(cfg)
 	if opt == nil {
 		t.Fatal("genAI2XAIChatOptions returned nil")
 	}

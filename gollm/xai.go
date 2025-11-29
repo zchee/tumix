@@ -27,6 +27,7 @@ import (
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
 
+	"github.com/zchee/tumix/gollm/internal/adapter"
 	"github.com/zchee/tumix/gollm/xai"
 	xaipb "github.com/zchee/tumix/gollm/xai/api/v1"
 	"github.com/zchee/tumix/internal/version"
@@ -107,7 +108,7 @@ func (m *xaiLLM) addHeaders(headers http.Header) {
 // generate calls the model synchronously returning result from the first candidate.
 func (m *xaiLLM) generate(ctx context.Context, req *model.LLMRequest, msgs []*xaipb.Message) (*model.LLMResponse, error) {
 	options := []xai.ChatOption{xai.WithMessages(msgs...)}
-	if opt := genAI2XAIChatOptions(req.Config); opt != nil {
+	if opt := adapter.GenAI2XAIChatOptions(req.Config); opt != nil {
 		options = append(options, opt)
 	}
 	sess := m.client.Chat.Create(resolveModelName(req, m.name), options...)
@@ -122,16 +123,16 @@ func (m *xaiLLM) generate(ctx context.Context, req *model.LLMRequest, msgs []*xa
 		return nil, fmt.Errorf("empty response")
 	}
 
-	return xai2LLMResponse(resp), nil
+	return adapter.XAI2LLMResponse(resp), nil
 }
 
 // generateStream returns a stream of responses from the model.
 func (m *xaiLLM) generateStream(ctx context.Context, req *model.LLMRequest, msgs []*xaipb.Message) iter.Seq2[*model.LLMResponse, error] {
-	aggregator := newXAIStreamAggregator()
+	aggregator := adapter.NewXAIStreamAggregator()
 
 	return func(yield func(*model.LLMResponse, error) bool) {
 		options := []xai.ChatOption{xai.WithMessages(msgs...)}
-		if opt := genAI2XAIChatOptions(req.Config); opt != nil {
+		if opt := adapter.GenAI2XAIChatOptions(req.Config); opt != nil {
 			options = append(options, opt)
 		}
 		sess := m.client.Chat.Create(resolveModelName(req, m.name), options...)
