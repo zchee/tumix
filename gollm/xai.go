@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"iter"
 	"net/http"
+	"reflect"
 	"runtime"
 	"slices"
 	"strings"
@@ -125,7 +126,7 @@ func (m *xaiLLM) generate(ctx context.Context, req *model.LLMRequest, msgs []*xa
 
 // generateStream returns a stream of responses from the model.
 func (m *xaiLLM) generateStream(ctx context.Context, req *model.LLMRequest, msgs []*xaipb.Message) iter.Seq2[*model.LLMResponse, error] {
-	aggregator := NewStreamingResponseAggregator()
+	aggregator := newXAIStreamAggregator()
 
 	return func(yield func(*model.LLMResponse, error) bool) {
 		options := []xai.ChatOption{xai.WithMessages(msgs...)}
@@ -145,7 +146,7 @@ func (m *xaiLLM) generateStream(ctx context.Context, req *model.LLMRequest, msgs
 				return
 			}
 
-			for llmResponse, err := range aggregator.ProcessResponse(ctx, resp) {
+			for llmResponse, err := range aggregator.Process(ctx, resp) {
 				if !yield(llmResponse, err) {
 					return // Consumer stopped
 				}
@@ -444,11 +445,12 @@ func xai2LLMResponse(resp *xai.Response) *model.LLMResponse {
 	}
 
 	role := strings.ToLower(strings.TrimPrefix(resp.Role(), "ROLE_"))
+	// NOTE(zchee): genai support only "user" and "model" roles.
 	switch role {
 	case "user":
-		role = string(genai.RoleUser)
+		role = genai.RoleUser
 	default:
-		role = string(genai.RoleModel)
+		role = genai.RoleModel
 	}
 
 	finishReason := mapXAIFinishReason(resp.FinishReason())
@@ -479,6 +481,130 @@ func xai2LLMResponse(resp *xai.Response) *model.LLMResponse {
 		UsageMetadata:  usageMetadata,
 		FinishReason:   finishReason,
 	}
+}
+
+type xAIStreamAggregator struct {
+	text        string
+	thoughtText string
+	response    *model.LLMResponse
+	role        string
+}
+
+func newXAIStreamAggregator() *xAIStreamAggregator {
+	return &xAIStreamAggregator{}
+}
+
+func (s *xAIStreamAggregator) Process(_ context.Context, xaiResp *xai.Response) iter.Seq2[*model.LLMResponse, error] {
+	return func(yield func(*model.LLMResponse, error) bool) {
+		if xaiResp.Content() == "" {
+			// shouldn't happen?
+			yield(nil, fmt.Errorf("empty response"))
+			return
+		}
+
+		resp := xai2LLMResponse(xaiResp)
+		resp.TurnComplete = mapXAIFinishReason(xaiResp.FinishReason()) != ""
+		// Aggregate the response and check if an intermediate event to yield was created
+		if aggrResp := s.aggregateResponse(resp); aggrResp != nil {
+			if !yield(aggrResp, nil) {
+				return // Consumer stopped
+			}
+		}
+		// Yield the processed response
+		if !yield(resp, nil) {
+			return // Consumer stopped
+		}
+	}
+}
+
+func (s *xAIStreamAggregator) aggregateResponse(llmResponse *model.LLMResponse) *model.LLMResponse {
+	s.response = llmResponse
+
+	var part0 *genai.Part
+	if llmResponse.Content != nil && len(llmResponse.Content.Parts) > 0 {
+		part0 = llmResponse.Content.Parts[0]
+		s.role = llmResponse.Content.Role
+	}
+
+	// If part is text append it
+	if part0 != nil && part0.Text != "" {
+		delta := appendDelta(part0.Text, func() *string {
+			if part0.Thought {
+				return &s.thoughtText
+			}
+			return &s.text
+		}())
+		if part0.Thought {
+			s.thoughtText += delta
+		} else {
+			s.text += delta
+		}
+		llmResponse.Partial = true
+		return nil
+	}
+
+	// gemini 3 in streaming returns a last response with an empty part. We need to filter it out.
+	// TODO(zchee): This logic for the gemini 3.
+	if part0 != nil && reflect.ValueOf(*part0).IsZero() {
+		llmResponse.Partial = true
+		return nil
+	}
+
+	// If there is aggregated text and there is no content or parts return aggregated response
+	if (s.thoughtText != "" || s.text != "") &&
+		(llmResponse.Content == nil ||
+			len(llmResponse.Content.Parts) == 0 ||
+			// don't yield the merged text event when receiving audio data
+			(len(llmResponse.Content.Parts) > 0 && llmResponse.Content.Parts[0].InlineData == nil)) {
+		return s.Close()
+	}
+
+	return nil
+}
+
+func (s *xAIStreamAggregator) Close() *model.LLMResponse {
+	if (s.text != "" || s.thoughtText != "") && s.response != nil {
+		var parts []*genai.Part
+		if s.thoughtText != "" {
+			parts = append(parts, &genai.Part{Text: s.thoughtText, Thought: true})
+		}
+		if s.text != "" {
+			parts = append(parts, &genai.Part{Text: s.text, Thought: false})
+		}
+
+		response := &model.LLMResponse{
+			Content:           &genai.Content{Parts: parts, Role: s.role},
+			ErrorCode:         s.response.ErrorCode,
+			ErrorMessage:      s.response.ErrorMessage,
+			UsageMetadata:     s.response.UsageMetadata,
+			GroundingMetadata: s.response.GroundingMetadata,
+			FinishReason:      s.response.FinishReason,
+		}
+		s.clear()
+		return response
+	}
+	s.clear()
+	return nil
+}
+
+func (s *xAIStreamAggregator) clear() {
+	s.response = nil
+	s.text = ""
+	s.thoughtText = ""
+	s.role = ""
+}
+
+func appendDelta(incoming string, acc *string) string {
+	if acc == nil || incoming == "" {
+		return incoming
+	}
+
+	if after, ok := strings.CutPrefix(incoming, *acc); ok {
+		return after
+	}
+
+	// If the incoming text is not a superset, treat it as fresh chunk to avoid data loss.
+	return incoming
 }
 
 func mapXAIFinishReason(fr string) genai.FinishReason {
