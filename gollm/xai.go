@@ -30,21 +30,25 @@ import (
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
 
-	"github.com/zchee/tumix/internal/version"
 	"github.com/zchee/tumix/gollm/xai"
 	xaipb "github.com/zchee/tumix/gollm/xai/api/v1"
+	"github.com/zchee/tumix/internal/version"
 )
 
-type xaiModel struct {
+// xaiLLM implements the adk [model.LLM] interface using xAI SDK.
+type xaiLLM struct {
 	client    *xai.Client
 	name      string
 	userAgent string
 }
 
-var _ model.LLM = (*xaiModel)(nil)
+var _ model.LLM = (*xaiLLM)(nil)
 
-func NewXAIModel(_ context.Context, modelName string, opts ...xai.ClientOption) (model.LLM, error) {
-	client, err := xai.NewClient("", opts...)
+// NewXAILLM creates a new xAI-backed LLM.
+//
+// If apiKey is empty, the xAI SDK falls back to the XAI_API_KEY environment variable.
+func NewXAILLM(_ context.Context, apiKey, modelName string, opts ...xai.ClientOption) (model.LLM, error) {
+	client, err := xai.NewClient(apiKey, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("new xAI client: %w", err)
 	}
@@ -52,7 +56,7 @@ func NewXAIModel(_ context.Context, modelName string, opts ...xai.ClientOption) 
 	// Create userAgent header value once, when the model is created
 	userAgent := fmt.Sprintf("tumix/%s %s", version.Version, strings.TrimPrefix(runtime.Version(), "go"))
 
-	return &xaiModel{
+	return &xaiLLM{
 		client:    client,
 		name:      modelName,
 		userAgent: userAgent,
@@ -60,12 +64,10 @@ func NewXAIModel(_ context.Context, modelName string, opts ...xai.ClientOption) 
 }
 
 // Name implements [model.LLM].
-func (m *xaiModel) Name() string {
-	return m.name
-}
+func (m *xaiLLM) Name() string { return m.name }
 
 // GenerateContent implements [model.LLM].
-func (m *xaiModel) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
+func (m *xaiLLM) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
 	m.maybeAppendUserContent(req)
 	if req.Config == nil {
 		req.Config = &genai.GenerateContentConfig{}
@@ -96,12 +98,12 @@ func (m *xaiModel) GenerateContent(ctx context.Context, req *model.LLMRequest, s
 }
 
 // addHeaders sets the user-agent header.
-func (m *xaiModel) addHeaders(headers http.Header) {
+func (m *xaiLLM) addHeaders(headers http.Header) {
 	headers.Set("User-Agent", m.userAgent)
 }
 
 // generate calls the model synchronously returning result from the first candidate.
-func (m *xaiModel) generate(ctx context.Context, req *model.LLMRequest, msgs []*xaipb.Message) (*model.LLMResponse, error) {
+func (m *xaiLLM) generate(ctx context.Context, req *model.LLMRequest, msgs []*xaipb.Message) (*model.LLMResponse, error) {
 	options := []xai.ChatOption{xai.WithMessages(msgs...)}
 	if opt := genAI2XAIChatOptions(req.Config); opt != nil {
 		options = append(options, opt)
@@ -122,7 +124,7 @@ func (m *xaiModel) generate(ctx context.Context, req *model.LLMRequest, msgs []*
 }
 
 // generateStream returns a stream of responses from the model.
-func (m *xaiModel) generateStream(ctx context.Context, req *model.LLMRequest, msgs []*xaipb.Message) iter.Seq2[*model.LLMResponse, error] {
+func (m *xaiLLM) generateStream(ctx context.Context, req *model.LLMRequest, msgs []*xaipb.Message) iter.Seq2[*model.LLMResponse, error] {
 	aggregator := NewStreamingResponseAggregator()
 
 	return func(yield func(*model.LLMResponse, error) bool) {
@@ -156,7 +158,7 @@ func (m *xaiModel) generateStream(ctx context.Context, req *model.LLMRequest, ms
 }
 
 // maybeAppendUserContent appends a user content, so that model can continue to output.
-func (m *xaiModel) maybeAppendUserContent(req *model.LLMRequest) {
+func (m *xaiLLM) maybeAppendUserContent(req *model.LLMRequest) {
 	if len(req.Contents) == 0 {
 		req.Contents = append(req.Contents, genai.NewContentFromText("Handle the requests as specified in the System Instruction.", genai.RoleUser))
 	}
@@ -166,7 +168,7 @@ func (m *xaiModel) maybeAppendUserContent(req *model.LLMRequest) {
 	}
 }
 
-func (m *xaiModel) modelName(req *model.LLMRequest) string {
+func (m *xaiLLM) modelName(req *model.LLMRequest) string {
 	if req != nil {
 		if name := strings.TrimSpace(req.Model); name != "" {
 			return name

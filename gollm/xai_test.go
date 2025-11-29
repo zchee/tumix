@@ -214,7 +214,7 @@ func TestXAIModel_GenerateStream(t *testing.T) {
 func TestXAIModel_MaybeAppendUserContent(t *testing.T) {
 	t.Parallel()
 
-	m := &xaiModel{}
+	m := &xaiLLM{}
 
 	t.Run("appends_when_empty", func(t *testing.T) {
 		t.Parallel()
@@ -506,7 +506,7 @@ func (s *stubChatServer) GetCompletionChunk(req *xaipb.GetCompletionsRequest, st
 	return nil
 }
 
-func newTestXAIModel(t *testing.T, server *stubChatServer, modelName string) (m *xaiModel, cleanup func()) {
+func newTestXAIModel(t *testing.T, server *stubChatServer, modelName string) (m *xaiLLM, cleanup func()) {
 	t.Helper()
 
 	var lc net.ListenConfig
@@ -545,7 +545,7 @@ func newTestXAIModel(t *testing.T, server *stubChatServer, modelName string) (m 
 		_ = lis.Close()
 	}
 
-	return &xaiModel{
+	return &xaiLLM{
 		client:    client,
 		name:      modelName,
 		userAgent: "tumix/test go1.25",

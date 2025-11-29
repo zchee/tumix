@@ -37,14 +37,14 @@ import (
 	"github.com/zchee/tumix/internal/version"
 )
 
-// anthropicModel implements the adk model.LLM interface using Anthropics Messages API.
-type anthropicModel struct {
+// anthropicLLM implements the adk [model.LLM] interface using Anthropics SDK.
+type anthropicLLM struct {
 	client    *anthropic.Client
 	name      string
 	userAgent string
 }
 
-var _ model.LLM = (*anthropicModel)(nil)
+var _ model.LLM = (*anthropicLLM)(nil)
 
 // NewAnthropicLLM creates a new Anthropics-backed LLM.
 //
@@ -69,9 +69,9 @@ func NewAnthropicLLM(_ context.Context, authKey AuthMethod, modelName string, op
 
 	// opts are allowed to override by order
 	opts = append(ropts, opts...)
-	client := anthropic.NewClient(ropts...)
+	client := anthropic.NewClient(opts...)
 
-	return &anthropicModel{
+	return &anthropicLLM{
 		client:    &client,
 		name:      modelName,
 		userAgent: userAgent,
@@ -79,10 +79,10 @@ func NewAnthropicLLM(_ context.Context, authKey AuthMethod, modelName string, op
 }
 
 // Name implements [model.LLM].
-func (m *anthropicModel) Name() string { return m.name }
+func (m *anthropicLLM) Name() string { return m.name }
 
 // GenerateContent implements [model.LLM].
-func (m *anthropicModel) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
+func (m *anthropicLLM) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
 	m.ensureUserContent(req)
 	if req.Config == nil {
 		req.Config = &genai.GenerateContentConfig{}
@@ -129,7 +129,7 @@ func (m *anthropicModel) GenerateContent(ctx context.Context, req *model.LLMRequ
 	}
 }
 
-func (m *anthropicModel) buildParams(req *model.LLMRequest, system []anthropic.TextBlockParam, msgs []anthropic.MessageParam) (*anthropic.MessageNewParams, error) {
+func (m *anthropicLLM) buildParams(req *model.LLMRequest, system []anthropic.TextBlockParam, msgs []anthropic.MessageParam) (*anthropic.MessageNewParams, error) {
 	if len(msgs) == 0 {
 		return nil, errors.New("no messages")
 	}
@@ -166,7 +166,7 @@ func (m *anthropicModel) buildParams(req *model.LLMRequest, system []anthropic.T
 	return params, nil
 }
 
-func (m *anthropicModel) stream(ctx context.Context, params *anthropic.MessageNewParams) iter.Seq2[*model.LLMResponse, error] {
+func (m *anthropicLLM) stream(ctx context.Context, params *anthropic.MessageNewParams) iter.Seq2[*model.LLMResponse, error] {
 	stream := m.client.Messages.NewStreaming(ctx, *params)
 	acc := &anthropic.Message{}
 
@@ -226,7 +226,7 @@ func accText(msg *anthropic.Message) string {
 	return sb.String()
 }
 
-func (m *anthropicModel) modelName(req *model.LLMRequest) string {
+func (m *anthropicLLM) modelName(req *model.LLMRequest) string {
 	if req != nil && strings.TrimSpace(req.Model) != "" {
 		return strings.TrimSpace(req.Model)
 	}
@@ -438,7 +438,7 @@ func genaiToolsToAnthropic(tools []*genai.Tool, cfg *genai.ToolConfig) ([]anthro
 }
 
 // ensureUserContent aligns with ADK behavior of ending with a user turn.
-func (m *anthropicModel) ensureUserContent(req *model.LLMRequest) {
+func (m *anthropicLLM) ensureUserContent(req *model.LLMRequest) {
 	if len(req.Contents) == 0 {
 		req.Contents = append(req.Contents, genai.NewContentFromText("Handle the requests as specified in the System Instruction.", genai.RoleUser))
 		return

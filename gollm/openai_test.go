@@ -31,7 +31,7 @@ import (
 func TestOpenAIEnsureUserContent(t *testing.T) {
 	t.Run("adds_default_when_empty", func(t *testing.T) {
 		req := &model.LLMRequest{}
-		m := &openAIModel{}
+		m := &openAILLM{}
 
 		m.ensureUserContent(req)
 
@@ -50,7 +50,7 @@ func TestOpenAIEnsureUserContent(t *testing.T) {
 		req := &model.LLMRequest{
 			Contents: []*genai.Content{genai.NewContentFromText("system guidance", "system")},
 		}
-		m := &openAIModel{}
+		m := &openAILLM{}
 
 		m.ensureUserContent(req)
 
@@ -66,7 +66,7 @@ func TestOpenAIEnsureUserContent(t *testing.T) {
 		req := &model.LLMRequest{
 			Contents: []*genai.Content{genai.NewContentFromText("hello", genai.RoleUser)},
 		}
-		m := &openAIModel{}
+		m := &openAILLM{}
 
 		m.ensureUserContent(req)
 

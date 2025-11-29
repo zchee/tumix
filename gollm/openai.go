@@ -38,14 +38,14 @@ import (
 	"github.com/zchee/tumix/internal/version"
 )
 
-// openAIModel implements the ADK model.LLM interface using OpenAI Chat Completions.
-type openAIModel struct {
+// openAILLM implements the adk [model.LLM] interface using OpenAI SDK.
+type openAILLM struct {
 	client    openai.Client
 	name      string
 	userAgent string
 }
 
-var _ model.LLM = (*openAIModel)(nil)
+var _ model.LLM = (*openAILLM)(nil)
 
 // NewOpenAILLM creates a new OpenAI-backed LLM.
 //
@@ -69,7 +69,7 @@ func NewOpenAILLM(_ context.Context, apiKey, modelName string, opts ...option.Re
 	opts = append(ropts, opts...)
 	client := openai.NewClient(opts...)
 
-	return &openAIModel{
+	return &openAILLM{
 		client:    client,
 		name:      modelName,
 		userAgent: userAgent,
@@ -77,10 +77,10 @@ func NewOpenAILLM(_ context.Context, apiKey, modelName string, opts ...option.Re
 }
 
 // Name implements [model.LLM].
-func (m *openAIModel) Name() string { return m.name }
+func (m *openAILLM) Name() string { return m.name }
 
 // GenerateContent implements [model.LLM].
-func (m *openAIModel) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
+func (m *openAILLM) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
 	m.ensureUserContent(req)
 	if req.Config == nil {
 		req.Config = &genai.GenerateContentConfig{}
@@ -120,7 +120,7 @@ func (m *openAIModel) GenerateContent(ctx context.Context, req *model.LLMRequest
 	}
 }
 
-func (m *openAIModel) chatCompletionParams(req *model.LLMRequest) (*openai.ChatCompletionNewParams, error) {
+func (m *openAILLM) chatCompletionParams(req *model.LLMRequest) (*openai.ChatCompletionNewParams, error) {
 	msgs, err := genaiToOpenAIMessages(req.Contents)
 	if err != nil {
 		return nil, err
@@ -180,7 +180,7 @@ func (m *openAIModel) chatCompletionParams(req *model.LLMRequest) (*openai.ChatC
 	return &params, nil
 }
 
-func (m *openAIModel) stream(ctx context.Context, params *openai.ChatCompletionNewParams) iter.Seq2[*model.LLMResponse, error] {
+func (m *openAILLM) stream(ctx context.Context, params *openai.ChatCompletionNewParams) iter.Seq2[*model.LLMResponse, error] {
 	stream := m.client.Chat.Completions.NewStreaming(ctx, *params)
 	agg := newOpenAIStreamAggregator()
 
@@ -208,7 +208,7 @@ func (m *openAIModel) stream(ctx context.Context, params *openai.ChatCompletionN
 	}
 }
 
-func (m *openAIModel) modelName(req *model.LLMRequest) string {
+func (m *openAILLM) modelName(req *model.LLMRequest) string {
 	if req != nil {
 		if name := strings.TrimSpace(req.Model); name != "" {
 			return name
@@ -217,7 +217,7 @@ func (m *openAIModel) modelName(req *model.LLMRequest) string {
 	return m.name
 }
 
-func (m *openAIModel) ensureUserContent(req *model.LLMRequest) {
+func (m *openAILLM) ensureUserContent(req *model.LLMRequest) {
 	if len(req.Contents) == 0 {
 		req.Contents = append(req.Contents,
 			genai.NewContentFromText("Handle the requests as specified in the System Instruction.", genai.RoleUser),
