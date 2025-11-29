@@ -18,22 +18,18 @@ package gollm
 
 import (
 	"context"
-	json "encoding/json/v2"
 	"errors"
-	"fmt"
 	"iter"
 	"net/http"
-	"slices"
-	"strings"
 	"time"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/anthropics/anthropic-sdk-go/packages/param"
-	"github.com/anthropics/anthropic-sdk-go/shared/constant"
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
 
+	"github.com/zchee/tumix/gollm/internal/httputil"
 	"github.com/zchee/tumix/internal/version"
 )
 
@@ -54,11 +50,11 @@ var _ model.LLM = (*anthropicLLM)(nil)
 func NewAnthropicLLM(_ context.Context, authKey AuthMethod, modelName string, opts ...option.RequestOption) (model.LLM, error) {
 	userAgent := version.UserAgent("anthropic")
 
-	// TODO(zchee): Ues [option.WithHTTPClient] with OTel tracing transport
+	httpClient := httputil.NewClient(3 * time.Minute)
 	ropts := []option.RequestOption{
+		option.WithHTTPClient(httpClient),
 		option.WithHeader("User-Agent", userAgent),
 		option.WithMaxRetries(2),
-		option.WithRequestTimeout(3 * time.Minute),
 	}
 	switch authKey := authKey.(type) {
 	case AuthMethodAPIKey:
@@ -211,214 +207,4 @@ func (m *anthropicLLM) stream(ctx context.Context, params *anthropic.MessageNewP
 			yield(nil, err)
 		}
 	}
-}
-
-func accText(msg *anthropic.Message) string {
-	if msg == nil {
-		return ""
-	}
-	var sb strings.Builder
-	for block := range slices.Values(msg.Content) {
-		if v, ok := block.AsAny().(anthropic.TextBlock); ok {
-			sb.WriteString(v.Text)
-		}
-	}
-	return sb.String()
-}
-
-// Convert a non-streaming Anthropics message to an ADK response.
-func anthropicMessageToLLMResponse(msg *anthropic.Message) (*model.LLMResponse, error) {
-	if msg == nil {
-		return nil, errors.New("nil anthropic message")
-	}
-
-	parts := make([]*genai.Part, 0, len(msg.Content))
-	for block := range slices.Values(msg.Content) {
-		switch v := block.AsAny().(type) {
-		case anthropic.TextBlock:
-			parts = append(parts, genai.NewPartFromText(v.Text))
-		case anthropic.ToolUseBlock:
-			args := map[string]any{}
-			if len(v.Input) > 0 {
-				if err := json.Unmarshal(v.Input, &args); err != nil {
-					return nil, fmt.Errorf("unmarshal json: %w", err)
-				}
-			}
-			parts = append(parts, &genai.Part{
-				FunctionCall: &genai.FunctionCall{
-					ID:   v.ID,
-					Name: v.Name,
-					Args: args,
-				},
-			})
-		}
-	}
-
-	usage := msg.Usage
-	llmUsage := &genai.GenerateContentResponseUsageMetadata{
-		PromptTokenCount:     int32(usage.InputTokens),
-		CandidatesTokenCount: int32(usage.OutputTokens),
-		TotalTokenCount:      int32(usage.InputTokens + usage.OutputTokens),
-	}
-
-	return &model.LLMResponse{
-		Content: &genai.Content{
-			Role:  string(genai.RoleModel),
-			Parts: parts,
-		},
-		UsageMetadata: llmUsage,
-		FinishReason:  mapAnthropicFinishReason(msg.StopReason),
-	}, nil
-}
-
-func mapAnthropicFinishReason(reason anthropic.StopReason) genai.FinishReason {
-	switch reason {
-	case anthropic.StopReasonStopSequence, anthropic.StopReasonEndTurn:
-		return genai.FinishReasonStop
-	case anthropic.StopReasonMaxTokens:
-		return genai.FinishReasonMaxTokens
-	case anthropic.StopReasonToolUse:
-		return genai.FinishReasonOther
-	default:
-		return genai.FinishReasonUnspecified
-	}
-}
-
-// Convert ADK genai content to Anthropics message params.
-func genaiToAnthropicMessages(system *genai.Content, contents []*genai.Content) ([]anthropic.TextBlockParam, []anthropic.MessageParam, error) {
-	var systemBlocks []anthropic.TextBlockParam
-	if system != nil {
-		text := joinTextParts(system.Parts)
-		if text != "" {
-			systemBlocks = append(systemBlocks, anthropic.TextBlockParam{
-				Type: constant.ValueOf[constant.Text](),
-				Text: text,
-			})
-		}
-	}
-
-	msgs := make([]anthropic.MessageParam, 0, len(contents))
-	for idx, c := range contents {
-		if c == nil {
-			continue
-		}
-		role := strings.ToLower(c.Role)
-		mp := anthropic.MessageParam{
-			Content: make([]anthropic.ContentBlockParamUnion, 0, len(c.Parts)),
-		}
-		if role == genai.RoleUser {
-			mp.Role = anthropic.MessageParamRoleUser
-		} else {
-			// treat everything else as assistant to satisfy API constraint (only user/assistant allowed).
-			mp.Role = anthropic.MessageParamRoleAssistant
-		}
-
-		for pi, part := range c.Parts {
-			if part == nil {
-				continue
-			}
-			switch {
-			case part.Text != "":
-				mp.Content = append(mp.Content, anthropic.NewTextBlock(part.Text))
-
-			case part.FunctionCall != nil:
-				fc := part.FunctionCall
-				if fc.Name == "" {
-					return nil, nil, fmt.Errorf("content[%d] part[%d]: function call missing name", idx, pi)
-				}
-				args := fc.Args
-				if args == nil {
-					args = map[string]any{}
-				}
-				mp.Content = append(mp.Content, anthropic.ContentBlockParamUnion{
-					OfToolUse: &anthropic.ToolUseBlockParam{
-						ID:    toolID(fc.ID, idx, pi),
-						Name:  fc.Name,
-						Input: args,
-						Type:  constant.ValueOf[constant.ToolUse](),
-					},
-				})
-
-			case part.FunctionResponse != nil:
-				fr := part.FunctionResponse
-				if fr.Name == "" {
-					return nil, nil, fmt.Errorf("content[%d] part[%d]: function response missing name", idx, pi)
-				}
-				contentJSON, err := json.Marshal(fr.Response)
-				if err != nil {
-					return nil, nil, fmt.Errorf("marshal json: %w", err)
-				}
-				mp.Content = append(mp.Content, anthropic.ContentBlockParamUnion{
-					OfToolResult: &anthropic.ToolResultBlockParam{
-						ToolUseID: toolID(fr.ID, idx, pi),
-						Content: []anthropic.ToolResultBlockParamContentUnion{
-							{OfText: &anthropic.TextBlockParam{Type: constant.ValueOf[constant.Text](), Text: string(contentJSON)}},
-						},
-						Type: constant.ValueOf[constant.ToolResult](),
-					},
-				})
-
-			default:
-				return nil, nil, fmt.Errorf("content[%d] part[%d]: unsupported part", idx, pi)
-			}
-		}
-
-		if len(mp.Content) == 0 {
-			return nil, nil, fmt.Errorf("content[%d]: empty parts", idx)
-		}
-		msgs = append(msgs, mp)
-	}
-
-	return systemBlocks, msgs, nil
-}
-
-func joinTextParts(parts []*genai.Part) string {
-	var sb strings.Builder
-	for _, p := range parts {
-		if p == nil {
-			continue
-		}
-		sb.WriteString(p.Text)
-	}
-	return sb.String()
-}
-
-// Convert ADK tool declarations to Anthropics definitions.
-func genaiToolsToAnthropic(tools []*genai.Tool, cfg *genai.ToolConfig) ([]anthropic.ToolUnionParam, *anthropic.ToolChoiceUnionParam) {
-	if len(tools) == 0 {
-		return nil, nil
-	}
-
-	out := make([]anthropic.ToolUnionParam, 0, len(tools))
-	for _, t := range tools {
-		for _, decl := range t.FunctionDeclarations {
-			if decl == nil || decl.Name == "" {
-				continue
-			}
-			out = append(out, anthropic.ToolUnionParam{
-				OfTool: &anthropic.ToolParam{
-					Name:        decl.Name,
-					Description: param.NewOpt(decl.Description),
-					InputSchema: anthropic.ToolInputSchemaParam{
-						Type:       constant.ValueOf[constant.Object](),
-						Properties: decl.Parameters,
-					},
-					Type: anthropic.ToolTypeCustom,
-				},
-			})
-		}
-	}
-
-	var tc *anthropic.ToolChoiceUnionParam
-	if cfg != nil && cfg.FunctionCallingConfig != nil {
-		switch cfg.FunctionCallingConfig.Mode {
-		case genai.FunctionCallingConfigModeNone:
-			none := anthropic.NewToolChoiceNoneParam()
-			tc = &anthropic.ToolChoiceUnionParam{OfNone: &none}
-		case genai.FunctionCallingConfigModeAny, genai.FunctionCallingConfigModeAuto:
-			tc = &anthropic.ToolChoiceUnionParam{OfAuto: &anthropic.ToolChoiceAutoParam{Type: constant.ValueOf[constant.Auto]()}}
-		}
-	}
-
-	return out, tc
 }
