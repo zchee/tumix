@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package gollm
+package adapter
 
 import (
 	"encoding/json/v2"
@@ -29,7 +29,7 @@ import (
 )
 
 // Convert a non-streaming Anthropics message to an ADK response.
-func anthropicMessageToLLMResponse(msg *anthropic.Message) (*model.LLMResponse, error) {
+func AnthropicMessageToLLMResponse(msg *anthropic.Message) (*model.LLMResponse, error) {
 	if msg == nil {
 		return nil, errors.New("nil anthropic message")
 	}
@@ -86,7 +86,7 @@ func mapAnthropicFinishReason(reason anthropic.StopReason) genai.FinishReason {
 	}
 }
 
-func accText(msg *anthropic.Message) string {
+func AccText(msg *anthropic.Message) string {
 	if msg == nil {
 		return ""
 	}

@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package gollm
+package adapter
 
 import (
 	"encoding/json/v2"
@@ -27,7 +27,7 @@ import (
 )
 
 // Convert ADK genai content to Anthropics message params.
-func genaiToAnthropicMessages(system *genai.Content, contents []*genai.Content) ([]anthropic.TextBlockParam, []anthropic.MessageParam, error) {
+func GenaiToAnthropicMessages(system *genai.Content, contents []*genai.Content) ([]anthropic.TextBlockParam, []anthropic.MessageParam, error) {
 	var systemBlocks []anthropic.TextBlockParam
 	if system != nil {
 		text := joinTextParts(system.Parts)
@@ -112,15 +112,4 @@ func genaiToAnthropicMessages(system *genai.Content, contents []*genai.Content) 
 	}
 
 	return systemBlocks, msgs, nil
-}
-
-func joinTextParts(parts []*genai.Part) string {
-	var sb strings.Builder
-	for _, p := range parts {
-		if p == nil {
-			continue
-		}
-		sb.WriteString(p.Text)
-	}
-	return sb.String()
 }
