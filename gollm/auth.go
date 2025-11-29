@@ -26,6 +26,7 @@ type AuthMethodAPIKey string
 
 var _ AuthMethod = AuthMethodAPIKey("")
 
+// value returns the API key string for the data plane.
 func (a AuthMethodAPIKey) value() string { return string(a) }
 
 // AuthMethodAPIToken represents API token authentication.
@@ -33,4 +34,5 @@ type AuthMethodAPIToken string
 
 var _ AuthMethod = AuthMethodAPIToken("")
 
+// value returns the API token string for the data plane.
 func (a AuthMethodAPIToken) value() string { return string(a) }

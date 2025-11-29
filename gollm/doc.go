@@ -14,5 +14,5 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Package model implements the LLM model integration.
+// Package gollm provides ADK LLM integrations backed by external providers.
 package gollm
