@@ -33,6 +33,7 @@ import (
 	xaipb "github.com/zchee/tumix/gollm/xai/api/v1"
 )
 
+// GenAI2XAIChatOptions builds a ChatOption that maps GenAI generation config into xAI request fields.
 func GenAI2XAIChatOptions(config *genai.GenerateContentConfig) xai.ChatOption {
 	if config == nil {
 		return nil
@@ -231,6 +232,7 @@ func GenAI2XAIChatOptions(config *genai.GenerateContentConfig) xai.ChatOption {
 	return opt
 }
 
+// XAIResponseToLLM converts an xAI response into an ADK LLMResponse, preserving usage and metadata.
 func XAIResponseToLLM(resp *xai.Response) *model.LLMResponse {
 	if resp == nil {
 		return &model.LLMResponse{
@@ -338,6 +340,7 @@ func XAIResponseToLLM(resp *xai.Response) *model.LLMResponse {
 	}
 }
 
+// XAIStreamAggregator accumulates streaming xAI responses into coherent LLM responses.
 type XAIStreamAggregator struct {
 	text        string
 	thoughtText string
@@ -345,10 +348,12 @@ type XAIStreamAggregator struct {
 	role        string
 }
 
+// NewXAIStreamAggregator constructs a streaming aggregator for xAI responses.
 func NewXAIStreamAggregator() *XAIStreamAggregator {
 	return &XAIStreamAggregator{}
 }
 
+// Process ingests a streaming xAI response and yields partial or complete LLM responses.
 func (s *XAIStreamAggregator) Process(_ context.Context, xaiResp *xai.Response) iter.Seq2[*model.LLMResponse, error] {
 	return func(yield func(*model.LLMResponse, error) bool) {
 		if xaiResp.Content() == "" {
@@ -417,6 +422,7 @@ func (s *XAIStreamAggregator) aggregateResponse(llmResponse *model.LLMResponse) 
 	return nil
 }
 
+// Close returns the final aggregated LLM response and resets the aggregator state.
 func (s *XAIStreamAggregator) Close() *model.LLMResponse {
 	if (s.text != "" || s.thoughtText != "") && s.response != nil {
 		var parts []*genai.Part
