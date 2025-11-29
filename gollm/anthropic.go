@@ -83,7 +83,7 @@ func (m *anthropicLLM) Name() string { return m.name }
 
 // GenerateContent implements [model.LLM].
 func (m *anthropicLLM) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
-	m.ensureUserContent(req)
+	ensureUserContent(req)
 	if req.Config == nil {
 		req.Config = &genai.GenerateContentConfig{}
 	}
@@ -135,7 +135,7 @@ func (m *anthropicLLM) buildParams(req *model.LLMRequest, system []anthropic.Tex
 	}
 
 	params := &anthropic.MessageNewParams{
-		Model:         anthropic.Model(m.modelName(req)),
+		Model:         anthropic.Model(resolveModelName(req, m.name)),
 		Messages:      msgs,
 		System:        system,
 		MaxTokens:     int64(req.Config.MaxOutputTokens),
@@ -224,13 +224,6 @@ func accText(msg *anthropic.Message) string {
 		}
 	}
 	return sb.String()
-}
-
-func (m *anthropicLLM) modelName(req *model.LLMRequest) string {
-	if req != nil && strings.TrimSpace(req.Model) != "" {
-		return strings.TrimSpace(req.Model)
-	}
-	return m.name
 }
 
 // Convert a non-streaming Anthropics message to an ADK response.
@@ -390,13 +383,6 @@ func joinTextParts(parts []*genai.Part) string {
 	return sb.String()
 }
 
-func toolID(id string, contentIdx, partIdx int) string {
-	if strings.TrimSpace(id) != "" {
-		return id
-	}
-	return fmt.Sprintf("tool_%d_%d", contentIdx, partIdx)
-}
-
 // Convert ADK tool declarations to Anthropics definitions.
 func genaiToolsToAnthropic(tools []*genai.Tool, cfg *genai.ToolConfig) ([]anthropic.ToolUnionParam, *anthropic.ToolChoiceUnionParam) {
 	if len(tools) == 0 {
@@ -435,16 +421,4 @@ func genaiToolsToAnthropic(tools []*genai.Tool, cfg *genai.ToolConfig) ([]anthro
 	}
 
 	return out, tc
-}
-
-// ensureUserContent aligns with ADK behavior of ending with a user turn.
-func (m *anthropicLLM) ensureUserContent(req *model.LLMRequest) {
-	if len(req.Contents) == 0 {
-		req.Contents = append(req.Contents, genai.NewContentFromText("Handle the requests as specified in the System Instruction.", genai.RoleUser))
-		return
-	}
-
-	if last := req.Contents[len(req.Contents)-1]; last != nil && last.Role != genai.RoleUser {
-		req.Contents = append(req.Contents, genai.NewContentFromText("Continue processing previous requests as instructed. Exit or provide a summary if no more outputs are needed.", genai.RoleUser))
-	}
 }

@@ -49,10 +49,10 @@ var _ model.LLM = (*openAILLM)(nil)
 
 // NewOpenAILLM creates a new OpenAI-backed LLM.
 //
-// If apiKey is empty, the OpenAI SDK falls back to the OPENAI_API_KEY environment variable.
+// If authKey is nil, the OpenAI SDK falls back to the OPENAI_API_KEY environment variable.
 //
 //nolint:unparam
-func NewOpenAILLM(_ context.Context, apiKey, modelName string, opts ...option.RequestOption) (model.LLM, error) {
+func NewOpenAILLM(_ context.Context, authKey AuthMethod, modelName string, opts ...option.RequestOption) (model.LLM, error) {
 	userAgent := version.UserAgent("openai")
 
 	// TODO(zchee): Ues [option.WithHTTPClient] with OTel tracing transport
@@ -61,8 +61,8 @@ func NewOpenAILLM(_ context.Context, apiKey, modelName string, opts ...option.Re
 		option.WithMaxRetries(2),
 		option.WithRequestTimeout(3 * time.Minute),
 	}
-	if apiKey != "" {
-		ropts = append(ropts, option.WithAPIKey(apiKey))
+	if authKey != nil {
+		ropts = append(ropts, option.WithAPIKey(authKey.value()))
 	}
 
 	// opts are allowed to override by order
@@ -81,7 +81,7 @@ func (m *openAILLM) Name() string { return m.name }
 
 // GenerateContent implements [model.LLM].
 func (m *openAILLM) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
-	m.ensureUserContent(req)
+	ensureUserContent(req)
 	if req.Config == nil {
 		req.Config = &genai.GenerateContentConfig{}
 	}
@@ -130,7 +130,7 @@ func (m *openAILLM) chatCompletionParams(req *model.LLMRequest) (*openai.ChatCom
 	}
 
 	params := openai.ChatCompletionNewParams{
-		Model:    m.modelName(req),
+		Model:    resolveModelName(req, m.name),
 		Messages: msgs,
 	}
 
@@ -205,30 +205,6 @@ func (m *openAILLM) stream(ctx context.Context, params *openai.ChatCompletionNew
 		if final := agg.Final(); final != nil {
 			yield(final, nil)
 		}
-	}
-}
-
-func (m *openAILLM) modelName(req *model.LLMRequest) string {
-	if req != nil {
-		if name := strings.TrimSpace(req.Model); name != "" {
-			return name
-		}
-	}
-	return m.name
-}
-
-func (m *openAILLM) ensureUserContent(req *model.LLMRequest) {
-	if len(req.Contents) == 0 {
-		req.Contents = append(req.Contents,
-			genai.NewContentFromText("Handle the requests as specified in the System Instruction.", genai.RoleUser),
-		)
-		return
-	}
-
-	if last := req.Contents[len(req.Contents)-1]; last != nil && last.Role != genai.RoleUser {
-		req.Contents = append(req.Contents,
-			genai.NewContentFromText("Continue processing previous requests as instructed. Exit or provide a summary if no more outputs are needed.", genai.RoleUser),
-		)
 	}
 }
 

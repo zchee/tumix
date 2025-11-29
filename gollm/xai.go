@@ -47,8 +47,13 @@ var _ model.LLM = (*xaiLLM)(nil)
 
 // NewXAILLM creates a new xAI-backed LLM.
 //
-// If apiKey is empty, the xAI SDK falls back to the XAI_API_KEY environment variable.
-func NewXAILLM(_ context.Context, apiKey, modelName string, opts ...xai.ClientOption) (model.LLM, error) {
+// If authKey is nil, the xAI SDK falls back to the XAI_API_KEY environment variable.
+func NewXAILLM(_ context.Context, authKey AuthMethod, modelName string, opts ...xai.ClientOption) (model.LLM, error) {
+	var apiKey string
+	if authKey != nil {
+		apiKey = authKey.value()
+	}
+
 	client, err := xai.NewClient(apiKey, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("new xAI client: %w", err)
@@ -69,7 +74,7 @@ func (m *xaiLLM) Name() string { return m.name }
 
 // GenerateContent implements [model.LLM].
 func (m *xaiLLM) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
-	m.maybeAppendUserContent(req)
+	ensureUserContent(req)
 	if req.Config == nil {
 		req.Config = &genai.GenerateContentConfig{}
 	}
@@ -109,7 +114,7 @@ func (m *xaiLLM) generate(ctx context.Context, req *model.LLMRequest, msgs []*xa
 	if opt := genAI2XAIChatOptions(req.Config); opt != nil {
 		options = append(options, opt)
 	}
-	sess := m.client.Chat.Create(m.modelName(req), options...)
+	sess := m.client.Chat.Create(resolveModelName(req, m.name), options...)
 
 	resp, err := sess.Completion(ctx)
 	if err != nil {
@@ -133,7 +138,7 @@ func (m *xaiLLM) generateStream(ctx context.Context, req *model.LLMRequest, msgs
 		if opt := genAI2XAIChatOptions(req.Config); opt != nil {
 			options = append(options, opt)
 		}
-		sess := m.client.Chat.Create(m.modelName(req), options...)
+		sess := m.client.Chat.Create(resolveModelName(req, m.name), options...)
 
 		stream, err := sess.Stream(ctx)
 		if err != nil {
@@ -156,26 +161,6 @@ func (m *xaiLLM) generateStream(ctx context.Context, req *model.LLMRequest, msgs
 			yield(closeResult, nil)
 		}
 	}
-}
-
-// maybeAppendUserContent appends a user content, so that model can continue to output.
-func (m *xaiLLM) maybeAppendUserContent(req *model.LLMRequest) {
-	if len(req.Contents) == 0 {
-		req.Contents = append(req.Contents, genai.NewContentFromText("Handle the requests as specified in the System Instruction.", genai.RoleUser))
-	}
-
-	if last := req.Contents[len(req.Contents)-1]; last != nil && last.Role != genai.RoleUser {
-		req.Contents = append(req.Contents, genai.NewContentFromText("Continue processing previous requests as instructed. Exit or provide a summary if no more outputs are needed.", genai.RoleUser))
-	}
-}
-
-func (m *xaiLLM) modelName(req *model.LLMRequest) string {
-	if req != nil {
-		if name := strings.TrimSpace(req.Model); name != "" {
-			return name
-		}
-	}
-	return m.name
 }
 
 func genAI2XAIChatOptions(config *genai.GenerateContentConfig) xai.ChatOption {

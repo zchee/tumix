@@ -31,9 +31,8 @@ import (
 func TestOpenAIEnsureUserContent(t *testing.T) {
 	t.Run("adds_default_when_empty", func(t *testing.T) {
 		req := &model.LLMRequest{}
-		m := &openAILLM{}
 
-		m.ensureUserContent(req)
+		ensureUserContent(req)
 
 		if len(req.Contents) != 1 {
 			t.Fatalf("ensureUserContent added %d contents, want 1", len(req.Contents))
@@ -50,9 +49,8 @@ func TestOpenAIEnsureUserContent(t *testing.T) {
 		req := &model.LLMRequest{
 			Contents: []*genai.Content{genai.NewContentFromText("system guidance", "system")},
 		}
-		m := &openAILLM{}
 
-		m.ensureUserContent(req)
+		ensureUserContent(req)
 
 		if got, want := len(req.Contents), 2; got != want {
 			t.Fatalf("len(contents) = %d, want %d", got, want)
@@ -66,9 +64,8 @@ func TestOpenAIEnsureUserContent(t *testing.T) {
 		req := &model.LLMRequest{
 			Contents: []*genai.Content{genai.NewContentFromText("hello", genai.RoleUser)},
 		}
-		m := &openAILLM{}
 
-		m.ensureUserContent(req)
+		ensureUserContent(req)
 
 		if got, want := len(req.Contents), 1; got != want {
 			t.Fatalf("len(contents) = %d, want %d", got, want)
