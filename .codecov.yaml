@@ -36,7 +36,7 @@ coverage:
 # prettier-ignore
 ignore:
   - "**/*.pb.go" # pb files
-  - model/xai/examples/**/* # examples
+  - gollm/xai/examples/**/* # examples
 
 # https://docs.codecov.com/docs/codecovyml-reference#comment
 comment:

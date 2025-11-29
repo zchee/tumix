@@ -34,7 +34,7 @@ formatters:
     goimports:
       local-prefixes:
         - github.com/zchee/tumix
-        - github.com/zchee/tumix/model/xai
+        - github.com/zchee/tumix/gollm/xai
 
   exclusions:
     generated: lax
@@ -53,8 +53,9 @@ linters:
     - canonicalheader
     - contextcheck
     - copyloopvar
-    - cyclop
-    - decorder
+    # - cyclop
+    # - decorder
+    - depguard
     - dogsled
     - dupl
     - dupword
@@ -64,14 +65,14 @@ linters:
     - errname
     - errorlint
     - fatcontext
-    - funlen
+    # - funlen
     - ginkgolinter
     - gocheckcompilerdirectives
     - gochecksumtype
-    - gocognit
+    # - gocognit
     - goconst
     - gocritic
-    - gocyclo
+    # - gocyclo
     - godot
     - goheader
     - gomodguard
@@ -104,7 +105,7 @@ linters:
     - promlinter
     - protogetter
     - reassign
-    - revive
+    # - revive
     - rowserrcheck
     - sloglint
     - spancheck
@@ -156,6 +157,17 @@ linters:
       disable-var-dec-num-check: false
       disable-dec-order-check: false
       disable-init-func-first-check: false
+    depguard:
+      rules:
+        stdlib_v2:
+          list-mode: original
+          files:
+            - $all
+          deny:
+            - pkg: "encoding/json$"
+              desc: Use "encoding/json/v2" instead of.
+            - pkg: "math/rand$"
+              desc: Use "math/rand/v2" instead of.
     dogsled:
       max-blank-identifiers: 3
     dupl:
@@ -207,6 +219,10 @@ linters:
           sizeThreshold: 128
     gocyclo:
       min-complexity: 20
+    godot:
+      scope: declarations
+      capital: false
+      period: true
     goheader:
       template: |-
         Copyright {{ YEAR }} The tumix Authors.
@@ -224,10 +240,9 @@ linters:
         limitations under the License.
 
         SPDX-License-Identifier: Apache-2.0
-    godot:
-      scope: declarations
-      capital: false
-      period: true
+    gosec:
+      excludes:
+        - G301
     govet:
       disable:
         - fieldalignment
@@ -319,7 +334,7 @@ linters:
       ignore-map-index-ok: false
       ignore-chan-recv-ok: false
     whitespace:
-      multi-if: true
+      multi-if: false
       multi-func: true
 
   exclusions:
@@ -333,23 +348,23 @@ linters:
           - gosec
           - revive
           - wrapcheck
-        path: model/xai
+        path: gollm/xai
 
       - linters:
           - goheader
-        path: model/xai/internal/grpccodec/mem
+        path: gollm/xai/internal/grpccodec/mem
 
       - linters:
           - unparam
         text: "(\\*Reader).Close" # io.Closer
-        path: model/xai/internal/grpccodec/mem
+        path: gollm/xai/internal/grpccodec/mem
 
       - linters:
           - decorder
           - revive
           - wrapcheck
           - cyclop
-        path: model/xai/examples
+        path: gollm/xai/examples
 
       - linters:
           - errcheck

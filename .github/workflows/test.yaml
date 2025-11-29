@@ -35,7 +35,7 @@ jobs:
           check-latest: true
           cache-dependency-path: |
             go.sum
-            model/xai/go.sum
+            gollm/xai/go.sum
             tools/go.sum
 
       # https://github.com/actions/cache
@@ -57,10 +57,10 @@ jobs:
         run: |
           ./tools/bin/gotestsum -f standard-verbose --junitfile tumix.junit.xml -- -race -count=1 -shuffle=on -cover -covermode=atomic -coverpkg=./... -coverprofile=coverage.out -tags='osusergo,netgo,static' -ldflags='-s -w -buildid=' ./...
 
-      - name: Run Unit tests to model/xai
-        working-directory: model/xai
+      - name: Run Unit tests to gollm/xai
+        working-directory: gollm/xai
         run: |
-          ../../tools/bin/gotestsum -f standard-verbose --junitfile model-xai.junit.xml -- -race -count=1 -shuffle=on -cover -covermode=atomic -coverpkg=./... -coverprofile=coverage.out -tags='osusergo,netgo,static' -ldflags='-s -w -buildid=' ./...
+          ../../tools/bin/gotestsum -f standard-verbose --junitfile gollm-xai.junit.xml -- -race -count=1 -shuffle=on -cover -covermode=atomic -coverpkg=./... -coverprofile=coverage.out -tags='osusergo,netgo,static' -ldflags='-s -w -buildid=' ./...
 
       # https://github.com/codecov/codecov-action
       - name: Upload Coverage report to CodeCov
@@ -68,7 +68,7 @@ jobs:
         with:
           use_oidc: true
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage.out,./model/xai/coverage.out
+          files: ./coverage.out,./gollm/xai/coverage.out
           disable_file_fixes: true
           verbose: true
 
@@ -88,7 +88,7 @@ jobs:
           check-latest: true
           cache-dependency-path: |
             go.sum
-            model/xai/go.sum
+            gollm/xai/go.sum
             tools/go.sum
 
       # https://github.com/actions/cache
@@ -110,8 +110,8 @@ jobs:
         run: |
           ./tools/bin/golangci-lint run -v ./...
 
-      - name: Run lint to model/xai
-        working-directory: model/xai
+      - name: Run lint to gollm/xai
+        working-directory: gollm/xai
         run: |
           ../../tools/bin/golangci-lint run -v ./...
 
@@ -131,7 +131,7 @@ jobs:
           check-latest: true
           cache-dependency-path: |
             go.sum
-            model/xai/go.sum
+            gollm/xai/go.sum
             tools/go.sum
 
       - name: Download dependency modules
@@ -142,7 +142,7 @@ jobs:
         run: |
           go vet ./...
 
-      - name: Run go vet to model/xai
-        working-directory: model/xai
+      - name: Run go vet to gollm/xai
+        working-directory: gollm/xai
         run: |
           go vet ./...
