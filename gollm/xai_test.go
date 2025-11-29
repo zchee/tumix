@@ -214,13 +214,11 @@ func TestXAIModel_GenerateStream(t *testing.T) {
 func TestXAIModel_MaybeAppendUserContent(t *testing.T) {
 	t.Parallel()
 
-	m := &xaiLLM{}
-
 	t.Run("appends_when_empty", func(t *testing.T) {
 		t.Parallel()
 
 		req := &model.LLMRequest{}
-		m.maybeAppendUserContent(req)
+		ensureUserContent(req)
 		if got := req.Contents[len(req.Contents)-1].Role; got != genai.RoleUser {
 			t.Fatalf("last role = %q, want user", got)
 		}
@@ -232,7 +230,7 @@ func TestXAIModel_MaybeAppendUserContent(t *testing.T) {
 		req := &model.LLMRequest{
 			Contents: []*genai.Content{genai.NewContentFromText("assistant output", genai.RoleModel)},
 		}
-		m.maybeAppendUserContent(req)
+		ensureUserContent(req)
 		if got := req.Contents[len(req.Contents)-1].Role; got != genai.RoleUser {
 			t.Fatalf("last role = %q, want user", got)
 		}
