@@ -65,6 +65,8 @@ func toolCallsFromMessage(msg *openai.ChatCompletionMessage) []openai.ChatComple
 	}
 }
 
+// OpenAIResponseToLLM converts an OpenAI chat completion response into an ADK LLMResponse,
+// returning an error when the payload is nil or empty.
 func OpenAIResponseToLLM(resp *openai.ChatCompletion) (*model.LLMResponse, error) {
 	if resp == nil {
 		return nil, fmt.Errorf("nil openai response")
@@ -118,6 +120,7 @@ type toolCallState struct {
 	args  strings.Builder
 }
 
+// OpenAIStreamAggregator aggregates streaming chat completion deltas into LLM responses.
 type OpenAIStreamAggregator struct {
 	text         strings.Builder
 	toolCalls    []*toolCallState
@@ -125,10 +128,12 @@ type OpenAIStreamAggregator struct {
 	usage        *openai.CompletionUsage
 }
 
+// NewOpenAIStreamAggregator constructs a streaming aggregator for OpenAI chat responses.
 func NewOpenAIStreamAggregator() *OpenAIStreamAggregator {
 	return &OpenAIStreamAggregator{}
 }
 
+// Process consumes a streaming chunk and emits any partial LLM responses produced by it.
 func (a *OpenAIStreamAggregator) Process(chunk *openai.ChatCompletionChunk) []*model.LLMResponse {
 	if chunk == nil || len(chunk.Choices) == 0 {
 		return nil
@@ -172,6 +177,7 @@ func (a *OpenAIStreamAggregator) Process(chunk *openai.ChatCompletionChunk) []*m
 	return out
 }
 
+// Final returns the terminal aggregated LLM response, or nil when nothing was accumulated.
 func (a *OpenAIStreamAggregator) Final() *model.LLMResponse {
 	if a.text.Len() == 0 && len(a.toolCalls) == 0 && a.finishReason == "" && a.usage == nil {
 		return nil

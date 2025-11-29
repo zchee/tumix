@@ -26,6 +26,7 @@ import (
 	"google.golang.org/genai"
 )
 
+// GenAIToOpenAIMessages converts GenAI content slices into OpenAI chat completion message params.
 func GenAIToOpenAIMessages(contents []*genai.Content) ([]openai.ChatCompletionMessageParamUnion, error) {
 	var msgs []openai.ChatCompletionMessageParamUnion
 	var text strings.Builder
