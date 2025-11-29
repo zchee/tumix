@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"iter"
-	"net/http"
 	"time"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
@@ -80,20 +79,9 @@ func (m *anthropicLLM) Name() string { return m.name }
 
 // GenerateContent implements [model.LLM].
 func (m *anthropicLLM) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
-	ensureUserContent(req)
-	if req.Config == nil {
-		req.Config = &genai.GenerateContentConfig{}
-	}
-	if req.Config.HTTPOptions == nil {
-		req.Config.HTTPOptions = &genai.HTTPOptions{}
-	}
-	if req.Config.HTTPOptions.Headers == nil {
-		req.Config.HTTPOptions.Headers = make(http.Header)
-	}
-	// Keep the same user-agent used during client construction to satisfy ADK expectations.
-	req.Config.HTTPOptions.Headers.Set("User-Agent", m.userAgent)
+	cfg := adapter.NormalizeRequest(req, m.userAgent)
 
-	system, msgs, err := adapter.GenAIToAnthropicMessages(req.Config.SystemInstruction, req.Contents)
+	system, msgs, err := adapter.GenAIToAnthropicMessages(cfg.SystemInstruction, req.Contents)
 	if err != nil {
 		return func(yield func(*model.LLMResponse, error) bool) {
 			yield(nil, err)

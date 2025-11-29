@@ -17,10 +17,9 @@
 package gollm
 
 import (
-	"strings"
-
 	"google.golang.org/adk/model"
-	"google.golang.org/genai"
+
+	"github.com/zchee/tumix/gollm/internal/adapter"
 )
 
 // ensureUserContent aligns with ADK behavior of ending with a user turn.
@@ -28,24 +27,12 @@ import (
 // It appends a default user message if the request content is empty or
 // if the last message is not from the user.
 func ensureUserContent(req *model.LLMRequest) {
-	if len(req.Contents) == 0 {
-		req.Contents = append(req.Contents, genai.NewContentFromText("Handle the requests as specified in the System Instruction.", genai.RoleUser))
-		return
-	}
-
-	if last := req.Contents[len(req.Contents)-1]; last != nil && last.Role != genai.RoleUser {
-		req.Contents = append(req.Contents, genai.NewContentFromText("Continue processing previous requests as instructed. Exit or provide a summary if no more outputs are needed.", genai.RoleUser))
-	}
+	adapter.EnsureUserContent(req)
 }
 
 // resolveModelName returns the model name to use for the request.
 //
 // It prefers the model name in the request if provided, otherwise falls back to the default name.
 func resolveModelName(req *model.LLMRequest, defaultName string) string {
-	if req != nil {
-		if name := strings.TrimSpace(req.Model); name != "" {
-			return name
-		}
-	}
-	return defaultName
+	return adapter.ModelName(defaultName, req)
 }

@@ -27,7 +27,6 @@ import (
 	openai "github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
 	"google.golang.org/adk/model"
-	"google.golang.org/genai"
 
 	"github.com/zchee/tumix/gollm/internal/adapter"
 	"github.com/zchee/tumix/gollm/internal/httputil"
@@ -77,17 +76,7 @@ func (m *openAILLM) Name() string { return m.name }
 
 // GenerateContent implements [model.LLM].
 func (m *openAILLM) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
-	ensureUserContent(req)
-	if req.Config == nil {
-		req.Config = &genai.GenerateContentConfig{}
-	}
-	if req.Config.HTTPOptions == nil {
-		req.Config.HTTPOptions = &genai.HTTPOptions{}
-	}
-	if req.Config.HTTPOptions.Headers == nil {
-		req.Config.HTTPOptions.Headers = make(map[string][]string)
-	}
-	req.Config.HTTPOptions.Headers["User-Agent"] = []string{m.userAgent}
+	adapter.NormalizeRequest(req, m.userAgent)
 
 	params, err := m.chatCompletionParams(req)
 	if err != nil {

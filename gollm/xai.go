@@ -20,10 +20,8 @@ import (
 	"context"
 	"fmt"
 	"iter"
-	"net/http"
 
 	"google.golang.org/adk/model"
-	"google.golang.org/genai"
 
 	"github.com/zchee/tumix/gollm/internal/adapter"
 	"github.com/zchee/tumix/gollm/xai"
@@ -69,19 +67,9 @@ func (m *xaiLLM) Name() string { return m.name }
 
 // GenerateContent implements [model.LLM].
 func (m *xaiLLM) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
-	ensureUserContent(req)
-	if req.Config == nil {
-		req.Config = &genai.GenerateContentConfig{}
-	}
-	if req.Config.HTTPOptions == nil {
-		req.Config.HTTPOptions = &genai.HTTPOptions{}
-	}
-	if req.Config.HTTPOptions.Headers == nil {
-		req.Config.HTTPOptions.Headers = make(http.Header)
-	}
-	m.addHeaders(req.Config.HTTPOptions.Headers)
+	cfg := adapter.NormalizeRequest(req, m.userAgent)
 
-	msgs, err := xai.GenAIContentsToMessages(req.Config.SystemInstruction, req.Contents)
+	msgs, err := xai.GenAIContentsToMessages(cfg.SystemInstruction, req.Contents)
 	if err != nil {
 		return func(yield func(*model.LLMResponse, error) bool) {
 			yield(nil, err)
@@ -98,11 +86,6 @@ func (m *xaiLLM) GenerateContent(ctx context.Context, req *model.LLMRequest, str
 	}
 }
 
-// addHeaders sets the user-agent header.
-func (m *xaiLLM) addHeaders(headers http.Header) {
-	headers.Set("User-Agent", m.userAgent)
-}
-
 // generate calls the model synchronously returning result from the first candidate.
 func (m *xaiLLM) generate(ctx context.Context, req *model.LLMRequest, msgs []*xaipb.Message) (*model.LLMResponse, error) {
 	opts := []xai.ChatOption{
@@ -111,7 +94,7 @@ func (m *xaiLLM) generate(ctx context.Context, req *model.LLMRequest, msgs []*xa
 	if opt := adapter.GenAI2XAIChatOptions(req.Config); opt != nil {
 		opts = append(opts, opt)
 	}
-	sess := m.client.Chat.Create(resolveModelName(req, m.name), opts...)
+	sess := m.client.Chat.Create(adapter.ModelName(m.name, req), opts...)
 
 	resp, err := sess.Completion(ctx)
 	if err != nil {
@@ -137,7 +120,7 @@ func (m *xaiLLM) generateStream(ctx context.Context, req *model.LLMRequest, msgs
 		if opt := adapter.GenAI2XAIChatOptions(req.Config); opt != nil {
 			opts = append(opts, opt)
 		}
-		sess := m.client.Chat.Create(resolveModelName(req, m.name), opts...)
+		sess := m.client.Chat.Create(adapter.ModelName(m.name, req), opts...)
 
 		stream, err := sess.Stream(ctx)
 		if err != nil {
