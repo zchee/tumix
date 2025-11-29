@@ -37,7 +37,6 @@ func GenAI2XAIChatOptions(config *genai.GenerateContentConfig) xai.ChatOption {
 	if config == nil {
 		return nil
 	}
-	// ... (rest of function)
 
 	sb := new(strings.Builder)
 	enc := jsontext.NewEncoder(sb)
