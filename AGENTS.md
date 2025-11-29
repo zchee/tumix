@@ -1,5 +1,12 @@
 # Contributor Guide
 
+## Important
+
+- This codebase is in early development. So you can plan for large-scale refactoring.
+- MUST READ the following files in the context of the ADK (Agent Development Kit):
+  - .agents/llms/adk-go.xml
+  - .agents/llms/adk-docs.xml
+
 ## Project Structure
 
 ```
