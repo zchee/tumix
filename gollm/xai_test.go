@@ -212,6 +212,130 @@ func TestXAIModel_GenerateStream(t *testing.T) {
 	}
 }
 
+func TestXAIModel_StreamThoughtsAndToolCalls(t *testing.T) {
+	t.Parallel()
+
+	req := &model.LLMRequest{
+		Contents: genai.Text("Call a tool with reasoning"),
+		Config:   &genai.GenerateContentConfig{},
+	}
+
+	chunks := []*xaipb.GetChatCompletionChunk{
+		{
+			Outputs: []*xaipb.CompletionOutputChunk{
+				{
+					Index: 0,
+					Delta: &xaipb.Delta{
+						Role:             xaipb.MessageRole_ROLE_ASSISTANT,
+						ReasoningContent: "Thinking ",
+						Content:          "Par",
+					},
+				},
+			},
+		},
+		{
+			Outputs: []*xaipb.CompletionOutputChunk{
+				{
+					Index: 0,
+					Delta: &xaipb.Delta{
+						Role: xaipb.MessageRole_ROLE_ASSISTANT,
+						ToolCalls: []*xaipb.ToolCall{{
+							Id: "tc1",
+							Tool: &xaipb.ToolCall_Function{Function: &xaipb.FunctionCall{
+								Name:      "lookup_city",
+								Arguments: `{"city":"Paris"}`,
+							}},
+						}},
+					},
+				},
+			},
+		},
+		{
+			Model:             "grok-1",
+			SystemFingerprint: "fp-xyz",
+			Usage: &xaipb.SamplingUsage{
+				PromptTokens:     3,
+				CompletionTokens: 5,
+				TotalTokens:      8,
+			},
+			Outputs: []*xaipb.CompletionOutputChunk{
+				{
+					Index:        0,
+					FinishReason: xaipb.FinishReason_REASON_STOP,
+					Delta: &xaipb.Delta{
+						Role:    xaipb.MessageRole_ROLE_ASSISTANT,
+						Content: "is",
+					},
+				},
+			},
+		},
+	}
+
+	server := &stubChatServer{chunks: chunks}
+	m, cleanup := newTestXAIModel(t, server, "grok-4-1-fast-reasoning")
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+
+	var (
+		thoughts     []string
+		texts        []string
+		toolCalls    []*genai.FunctionCall
+		finishCodes  []genai.FinishReason
+		turnComplete bool
+	)
+
+	for resp, err := range m.GenerateContent(ctx, req, true) {
+		if err != nil {
+			t.Fatalf("GenerateContent(stream) unexpected error: %v", err)
+		}
+		if resp == nil || resp.Content == nil || len(resp.Content.Parts) == 0 {
+			t.Fatalf("GenerateContent(stream) returned empty response: %+v", resp)
+		}
+
+		for _, part := range resp.Content.Parts {
+			switch {
+			case part.Thought:
+				thoughts = append(thoughts, part.Text)
+			case part.FunctionCall != nil:
+				toolCalls = append(toolCalls, part.FunctionCall)
+			case part.Text != "":
+				texts = append(texts, part.Text)
+			}
+		}
+		if resp.FinishReason != genai.FinishReasonUnspecified {
+			finishCodes = append(finishCodes, resp.FinishReason)
+		}
+		if resp.TurnComplete {
+			turnComplete = true
+		}
+	}
+
+	if !turnComplete {
+		t.Fatalf("no response marked TurnComplete; finish codes = %v", finishCodes)
+	}
+
+	if len(thoughts) == 0 || thoughts[0] != "Thinking " {
+		t.Fatalf("thoughts = %v, want first thought \"Thinking \"", thoughts)
+	}
+	if len(texts) == 0 {
+		t.Fatalf("texts empty: %v", texts)
+	}
+	if lastText := texts[len(texts)-1]; lastText != "Paris" {
+		t.Fatalf("final text = %q, want %q", lastText, "Paris")
+	}
+	if len(toolCalls) == 0 || toolCalls[0].Name != "lookup_city" {
+		t.Fatalf("tool calls missing or wrong: %+v", toolCalls)
+	}
+	if city, ok := toolCalls[0].Args["city"]; !ok || city != "Paris" {
+		t.Fatalf("tool call args = %+v, want city=Paris", toolCalls[0].Args)
+	}
+	if finishCodes[len(finishCodes)-1] != genai.FinishReasonStop {
+		t.Fatalf("finish reasons = %v, want last FinishReasonStop", finishCodes)
+	}
+}
+
 func TestXAIModel_MaybeAppendUserContent(t *testing.T) {
 	t.Parallel()
 
