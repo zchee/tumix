@@ -1,11 +1,11 @@
-# Contributor Guide — model/xai
+# Contributor Guide — gollm/xai
 
 Go SDK for xAI services using gRPC. Port of [xai-org/xai-sdk-python](https://github.com/xai-org/xai-sdk-python).
 
 ## Project Structure
 
 ```
-model/xai/
+gollm/xai/
 ├── api/v1/              # Protobuf-generated gRPC types (vtprotobuf)
 ├── management_api/v1/   # Management API protos (billing)
 ├── shared/              # Shared proto types (billing, analytics)
@@ -62,14 +62,14 @@ func TestResponseProcessChunk(t *testing.T) {
 
 ## Commit Messages
 
-Format: `model/xai: description` (lowercase, imperative, no period)
+Format: `gollm/xai: description` (lowercase, imperative, no period)
 
 Examples from history:
 ```
-model/xai: cache chunk accessors
-model/xai: precompute chunk stats
-model/xai: optimize encoding/json/v2 marshaling
-model/xai/internal/grpccodec: improve CodecV2 performance
+gollm/xai: cache chunk accessors
+gollm/xai: precompute chunk stats
+gollm/xai: optimize encoding/json/v2 marshaling
+gollm/xai/internal/grpccodec: improve CodecV2 performance
 ```
 
 ## Performance Notes

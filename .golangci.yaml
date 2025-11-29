@@ -34,7 +34,7 @@ formatters:
     goimports:
       local-prefixes:
         - github.com/zchee/tumix
-        - github.com/zchee/tumix/model/xai
+        - github.com/zchee/tumix/gollm/xai
 
   exclusions:
     generated: lax
@@ -348,23 +348,23 @@ linters:
           - gosec
           - revive
           - wrapcheck
-        path: model/xai
+        path: gollm/xai
 
       - linters:
           - goheader
-        path: model/xai/internal/grpccodec/mem
+        path: gollm/xai/internal/grpccodec/mem
 
       - linters:
           - unparam
         text: "(\\*Reader).Close" # io.Closer
-        path: model/xai/internal/grpccodec/mem
+        path: gollm/xai/internal/grpccodec/mem
 
       - linters:
           - decorder
           - revive
           - wrapcheck
           - cyclop
-        path: model/xai/examples
+        path: gollm/xai/examples
 
       - linters:
           - errcheck
