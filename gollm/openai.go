@@ -119,7 +119,7 @@ func (m *openAILLM) GenerateContent(ctx context.Context, req *model.LLMRequest, 
 func (m *openAILLM) chatCompletionParams(req *model.LLMRequest) (*openai.ChatCompletionNewParams, error) {
 	msgs, err := adapter.GenaiToOpenAIMessages(req.Contents)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("convert content: %w", err)
 	}
 	if len(msgs) == 0 {
 		return nil, fmt.Errorf("no messages to send")
