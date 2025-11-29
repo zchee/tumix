@@ -17,22 +17,11 @@
 package gollm
 
 import (
-	"fmt"
 	"strings"
 
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
 )
-
-// toolID returns a unique identifier for a tool call.
-//
-// If id is empty, it generates one based on the content and part indices.
-func toolID(id string, contentIdx, partIdx int) string {
-	if strings.TrimSpace(id) != "" {
-		return id
-	}
-	return fmt.Sprintf("tool_%d_%d", contentIdx, partIdx)
-}
 
 // ensureUserContent aligns with ADK behavior of ending with a user turn.
 //
