@@ -263,7 +263,7 @@ func XAI2LLMResponse(resp *xai.Response) *model.LLMResponse {
 
 	var argErrors []string
 	if toolCalls := resp.ToolCalls(); len(toolCalls) > 0 { //nolint:nestif // TODO(zchee): fix nolint
-		dec := jsontext.NewDecoder(nil)
+		dec := jsontext.NewDecoder(strings.NewReader(""))
 		for _, call := range toolCalls {
 			fc := call.GetFunction()
 			if fc == nil {
