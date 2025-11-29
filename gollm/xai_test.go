@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/zchee/tumix/gollm/internal/adapter"
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
 	"google.golang.org/grpc"
@@ -171,6 +172,7 @@ func TestXAIModel_GenerateStream(t *testing.T) {
 	var partialTexts []string
 	var finalTexts []string
 	var finishReasons []genai.FinishReason
+	var lastTurnComplete bool
 
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
@@ -184,6 +186,8 @@ func TestXAIModel_GenerateStream(t *testing.T) {
 		}
 
 		text := resp.Content.Parts[0].Text
+		lastTurnComplete = resp.TurnComplete
+
 		if resp.Partial {
 			partialTexts = append(partialTexts, text)
 		} else {
@@ -209,34 +213,41 @@ func TestXAIModel_GenerateStream(t *testing.T) {
 	if len(finishReasons) == 0 || finishReasons[len(finishReasons)-1] != genai.FinishReasonStop {
 		t.Fatalf("finish reasons = %v, want last reason FinishReasonStop", finishReasons)
 	}
+	if !lastTurnComplete {
+		t.Fatalf("TurnComplete = false on final response")
+	}
 }
 
 func TestXAIModel_MaybeAppendUserContent(t *testing.T) {
 	t.Parallel()
 
-	m := &xaiLLM{}
+	tests := map[string]struct {
+		req      *model.LLMRequest
+		wantRole string
+	}{
+		"appends_when_empty": {
+			req:      &model.LLMRequest{},
+			wantRole: genai.RoleUser,
+		},
+		"appends_when_last_not_user": {
+			req: &model.LLMRequest{
+				Contents: []*genai.Content{genai.NewContentFromText("assistant output", genai.RoleModel)},
+			},
+			wantRole: genai.RoleUser,
+		},
+	}
 
-	t.Run("appends_when_empty", func(t *testing.T) {
-		t.Parallel()
+	for name, tt := range tests {
+		tt := tt
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 
-		req := &model.LLMRequest{}
-		m.maybeAppendUserContent(req)
-		if got := req.Contents[len(req.Contents)-1].Role; got != genai.RoleUser {
-			t.Fatalf("last role = %q, want user", got)
-		}
-	})
-
-	t.Run("appends_when_last_not_user", func(t *testing.T) {
-		t.Parallel()
-
-		req := &model.LLMRequest{
-			Contents: []*genai.Content{genai.NewContentFromText("assistant output", genai.RoleModel)},
-		}
-		m.maybeAppendUserContent(req)
-		if got := req.Contents[len(req.Contents)-1].Role; got != genai.RoleUser {
-			t.Fatalf("last role = %q, want user", got)
-		}
-	})
+			adapter.EnsureUserContent(tt.req)
+			if got := tt.req.Contents[len(tt.req.Contents)-1].Role; got != tt.wantRole {
+				t.Fatalf("last role = %q, want %q", got, tt.wantRole)
+			}
+		})
+	}
 }
 
 func TestGenAI2XAIChatOptions(t *testing.T) {

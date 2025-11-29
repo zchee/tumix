@@ -22,7 +22,6 @@ import (
 	json "encoding/json/v2"
 	"fmt"
 	"iter"
-	"net/http"
 	"reflect"
 	"runtime"
 	"slices"
@@ -31,6 +30,7 @@ import (
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
 
+	"github.com/zchee/tumix/gollm/internal/adapter"
 	"github.com/zchee/tumix/gollm/xai"
 	xaipb "github.com/zchee/tumix/gollm/xai/api/v1"
 	"github.com/zchee/tumix/internal/version"
@@ -69,19 +69,9 @@ func (m *xaiLLM) Name() string { return m.name }
 
 // GenerateContent implements [model.LLM].
 func (m *xaiLLM) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
-	m.maybeAppendUserContent(req)
-	if req.Config == nil {
-		req.Config = &genai.GenerateContentConfig{}
-	}
-	if req.Config.HTTPOptions == nil {
-		req.Config.HTTPOptions = &genai.HTTPOptions{}
-	}
-	if req.Config.HTTPOptions.Headers == nil {
-		req.Config.HTTPOptions.Headers = make(http.Header)
-	}
-	m.addHeaders(req.Config.HTTPOptions.Headers)
+	cfg := adapter.NormalizeRequest(req, m.userAgent)
 
-	msgs, err := xai.GenAIContentsToMessages(req.Config.SystemInstruction, req.Contents)
+	msgs, err := xai.GenAIContentsToMessages(cfg.SystemInstruction, req.Contents)
 	if err != nil {
 		return func(yield func(*model.LLMResponse, error) bool) {
 			yield(nil, err)
@@ -96,11 +86,6 @@ func (m *xaiLLM) GenerateContent(ctx context.Context, req *model.LLMRequest, str
 		resp, err := m.generate(ctx, req, msgs)
 		yield(resp, err)
 	}
-}
-
-// addHeaders sets the user-agent header.
-func (m *xaiLLM) addHeaders(headers http.Header) {
-	headers.Set("User-Agent", m.userAgent)
 }
 
 // generate calls the model synchronously returning result from the first candidate.
@@ -170,12 +155,7 @@ func (m *xaiLLM) maybeAppendUserContent(req *model.LLMRequest) {
 }
 
 func (m *xaiLLM) modelName(req *model.LLMRequest) string {
-	if req != nil {
-		if name := strings.TrimSpace(req.Model); name != "" {
-			return name
-		}
-	}
-	return m.name
+	return adapter.ModelName(m.name, req)
 }
 
 func genAI2XAIChatOptions(config *genai.GenerateContentConfig) xai.ChatOption {
@@ -528,7 +508,7 @@ func (s *xAIStreamAggregator) aggregateResponse(llmResponse *model.LLMResponse) 
 
 	// If part is text append it
 	if part0 != nil && part0.Text != "" {
-		delta := appendDelta(part0.Text, func() *string {
+		delta := adapter.AppendDelta(part0.Text, func() *string {
 			if part0.Thought {
 				return &s.thoughtText
 			}
@@ -580,6 +560,7 @@ func (s *xAIStreamAggregator) Close() *model.LLMResponse {
 			GroundingMetadata: s.response.GroundingMetadata,
 			FinishReason:      s.response.FinishReason,
 		}
+		adapter.MarkTurnComplete(response)
 		s.clear()
 		return response
 	}
@@ -592,19 +573,6 @@ func (s *xAIStreamAggregator) clear() {
 	s.text = ""
 	s.thoughtText = ""
 	s.role = ""
-}
-
-func appendDelta(incoming string, acc *string) string {
-	if acc == nil || incoming == "" {
-		return incoming
-	}
-
-	if after, ok := strings.CutPrefix(incoming, *acc); ok {
-		return after
-	}
-
-	// If the incoming text is not a superset, treat it as fresh chunk to avoid data loss.
-	return incoming
 }
 
 func mapXAIFinishReason(fr string) genai.FinishReason {

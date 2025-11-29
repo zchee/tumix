@@ -24,56 +24,61 @@ import (
 	"github.com/google/go-cmp/cmp"
 	openai "github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/respjson"
+	"github.com/zchee/tumix/gollm/internal/adapter"
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
 )
 
 func TestOpenAIEnsureUserContent(t *testing.T) {
-	t.Run("adds_default_when_empty", func(t *testing.T) {
-		req := &model.LLMRequest{}
-		m := &openAILLM{}
+	tests := map[string]struct {
+		req      *model.LLMRequest
+		wantLen  int
+		wantRole string
+		wantText string
+	}{
+		"adds_default_when_empty": {
+			req:      &model.LLMRequest{},
+			wantLen:  1,
+			wantRole: genai.RoleUser,
+			wantText: "Handle the requests as specified in the System Instruction.",
+		},
+		"appends_when_last_not_user": {
+			req: &model.LLMRequest{
+				Contents: []*genai.Content{genai.NewContentFromText("system guidance", "system")},
+			},
+			wantLen:  2,
+			wantRole: genai.RoleUser,
+			wantText: "Continue processing previous requests as instructed. Exit or provide a summary if no more outputs are needed.",
+		},
+		"no_change_when_last_user": {
+			req: &model.LLMRequest{
+				Contents: []*genai.Content{genai.NewContentFromText("hello", genai.RoleUser)},
+			},
+			wantLen:  1,
+			wantRole: genai.RoleUser,
+			wantText: "hello",
+		},
+	}
 
-		m.ensureUserContent(req)
+	for name, tt := range tests {
+		tt := tt
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 
-		if len(req.Contents) != 1 {
-			t.Fatalf("ensureUserContent added %d contents, want 1", len(req.Contents))
-		}
-		if req.Contents[0].Role != genai.RoleUser {
-			t.Fatalf("role = %q, want %q", req.Contents[0].Role, genai.RoleUser)
-		}
-		if got, want := req.Contents[0].Parts[0].Text, "Handle the requests as specified in the System Instruction."; got != want {
-			t.Fatalf("default text = %q, want %q", got, want)
-		}
-	})
+			adapter.EnsureUserContent(tt.req)
 
-	t.Run("appends_when_last_not_user", func(t *testing.T) {
-		req := &model.LLMRequest{
-			Contents: []*genai.Content{genai.NewContentFromText("system guidance", "system")},
-		}
-		m := &openAILLM{}
-
-		m.ensureUserContent(req)
-
-		if got, want := len(req.Contents), 2; got != want {
-			t.Fatalf("len(contents) = %d, want %d", got, want)
-		}
-		if req.Contents[1].Role != genai.RoleUser {
-			t.Fatalf("role = %q, want %q", req.Contents[1].Role, genai.RoleUser)
-		}
-	})
-
-	t.Run("no_change_when_last_user", func(t *testing.T) {
-		req := &model.LLMRequest{
-			Contents: []*genai.Content{genai.NewContentFromText("hello", genai.RoleUser)},
-		}
-		m := &openAILLM{}
-
-		m.ensureUserContent(req)
-
-		if got, want := len(req.Contents), 1; got != want {
-			t.Fatalf("len(contents) = %d, want %d", got, want)
-		}
-	})
+			if got := len(tt.req.Contents); got != tt.wantLen {
+				t.Fatalf("len(contents) = %d, want %d", got, tt.wantLen)
+			}
+			last := tt.req.Contents[len(tt.req.Contents)-1]
+			if last.Role != tt.wantRole {
+				t.Fatalf("last role = %q, want %q", last.Role, tt.wantRole)
+			}
+			if text := last.Parts[0].Text; text != tt.wantText {
+				t.Fatalf("last text = %q, want %q", text, tt.wantText)
+			}
+		})
+	}
 }
 
 func TestGenaiToOpenAIMessages(t *testing.T) {

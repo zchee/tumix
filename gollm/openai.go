@@ -17,7 +17,6 @@
 package gollm
 
 import (
-	"cmp"
 	"context"
 	json "encoding/json/v2"
 	"errors"
@@ -35,6 +34,7 @@ import (
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
 
+	"github.com/zchee/tumix/gollm/internal/adapter"
 	"github.com/zchee/tumix/internal/version"
 )
 
@@ -81,17 +81,7 @@ func (m *openAILLM) Name() string { return m.name }
 
 // GenerateContent implements [model.LLM].
 func (m *openAILLM) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
-	m.ensureUserContent(req)
-	if req.Config == nil {
-		req.Config = &genai.GenerateContentConfig{}
-	}
-	if req.Config.HTTPOptions == nil {
-		req.Config.HTTPOptions = &genai.HTTPOptions{}
-	}
-	if req.Config.HTTPOptions.Headers == nil {
-		req.Config.HTTPOptions.Headers = make(map[string][]string)
-	}
-	req.Config.HTTPOptions.Headers["User-Agent"] = []string{m.userAgent}
+	adapter.NormalizeRequest(req, m.userAgent)
 
 	params, err := m.chatCompletionParams(req)
 	if err != nil {
@@ -209,27 +199,7 @@ func (m *openAILLM) stream(ctx context.Context, params *openai.ChatCompletionNew
 }
 
 func (m *openAILLM) modelName(req *model.LLMRequest) string {
-	if req != nil {
-		if name := strings.TrimSpace(req.Model); name != "" {
-			return name
-		}
-	}
-	return m.name
-}
-
-func (m *openAILLM) ensureUserContent(req *model.LLMRequest) {
-	if len(req.Contents) == 0 {
-		req.Contents = append(req.Contents,
-			genai.NewContentFromText("Handle the requests as specified in the System Instruction.", genai.RoleUser),
-		)
-		return
-	}
-
-	if last := req.Contents[len(req.Contents)-1]; last != nil && last.Role != genai.RoleUser {
-		req.Contents = append(req.Contents,
-			genai.NewContentFromText("Continue processing previous requests as instructed. Exit or provide a summary if no more outputs are needed.", genai.RoleUser),
-		)
-	}
+	return adapter.ModelName(m.name, req)
 }
 
 func genaiToOpenAIMessages(contents []*genai.Content) ([]openai.ChatCompletionMessageParamUnion, error) {
@@ -462,7 +432,7 @@ func openAIResponseToLLM(resp *openai.ChatCompletion) (*model.LLMResponse, error
 			FunctionCall: &genai.FunctionCall{
 				ID:   tc.ID,
 				Name: fn.Name,
-				Args: parseArgs(fn.Arguments),
+				Args: adapter.ParseArgs(fn.Arguments),
 			},
 		})
 	}
@@ -477,22 +447,15 @@ func openAIResponseToLLM(resp *openai.ChatCompletion) (*model.LLMResponse, error
 	}, nil
 }
 
-type toolCallState struct {
-	id    string
-	name  string
-	index int64
-	args  strings.Builder
-}
-
 type openAIStreamAggregator struct {
 	text         strings.Builder
-	toolCalls    []*toolCallState
+	toolCalls    *adapter.ToolCallAccumulator
 	finishReason string
 	usage        *openai.CompletionUsage
 }
 
 func newOpenAIStreamAggregator() *openAIStreamAggregator {
-	return &openAIStreamAggregator{}
+	return &openAIStreamAggregator{toolCalls: adapter.NewToolCallAccumulator()}
 }
 
 func (a *openAIStreamAggregator) Process(chunk *openai.ChatCompletionChunk) []*model.LLMResponse {
@@ -523,15 +486,15 @@ func (a *openAIStreamAggregator) Process(chunk *openai.ChatCompletionChunk) []*m
 	}
 
 	for tc := range slices.Values(delta.ToolCalls) {
-		state := a.ensureToolCall(tc.Index, tc.ID)
+		state := a.toolCalls.Ensure(tc.Index, tc.ID)
 		if tc.Function.Name != "" {
-			state.name = tc.Function.Name
+			state.Name = tc.Function.Name
 		}
 		if tc.Function.Arguments != "" {
-			state.args.WriteString(tc.Function.Arguments)
+			state.ArgsBuilder().WriteString(tc.Function.Arguments)
 		}
 		if tc.ID != "" {
-			state.id = tc.ID
+			state.ID = tc.ID
 		}
 	}
 
@@ -539,31 +502,17 @@ func (a *openAIStreamAggregator) Process(chunk *openai.ChatCompletionChunk) []*m
 }
 
 func (a *openAIStreamAggregator) Final() *model.LLMResponse {
-	if a.text.Len() == 0 && len(a.toolCalls) == 0 && a.finishReason == "" && a.usage == nil {
+	toolParts := a.toolCalls.Parts()
+	if a.text.Len() == 0 && len(toolParts) == 0 && a.finishReason == "" && a.usage == nil {
 		return nil
 	}
 
-	parts := make([]*genai.Part, 0, 1+len(a.toolCalls))
+	parts := make([]*genai.Part, 0, 1+len(toolParts))
 	if a.text.Len() > 0 {
 		parts = append(parts, genai.NewPartFromText(a.text.String()))
 	}
 
-	if len(a.toolCalls) > 0 {
-		slices.SortFunc(a.toolCalls, func(a, b *toolCallState) int {
-			return cmp.Compare(a.index, b.index)
-		})
-
-		for _, tc := range a.toolCalls {
-			args := parseArgs(tc.args.String())
-			parts = append(parts, &genai.Part{
-				FunctionCall: &genai.FunctionCall{
-					ID:   tc.id,
-					Name: tc.name,
-					Args: args,
-				},
-			})
-		}
-	}
+	parts = append(parts, toolParts...)
 
 	return &model.LLMResponse{
 		Content: &genai.Content{
@@ -573,49 +522,6 @@ func (a *openAIStreamAggregator) Final() *model.LLMResponse {
 		UsageMetadata: openAIUsage(a.usage),
 		TurnComplete:  a.finishReason != "",
 		FinishReason:  mapOpenAIFinishReason(a.finishReason),
-	}
-}
-
-func (a *openAIStreamAggregator) ensureToolCall(idx int64, id string) *toolCallState {
-	for _, tc := range a.toolCalls {
-		if tc.index == idx || (id != "" && tc.id == id) {
-			return tc
-		}
-	}
-
-	tc := &toolCallState{
-		id:    id,
-		index: idx,
-	}
-	a.toolCalls = append(a.toolCalls, tc)
-
-	return tc
-}
-
-func parseArgs(raw string) map[string]any {
-	if strings.TrimSpace(raw) == "" {
-		return map[string]any{}
-	}
-
-	var out map[string]any
-	if err := json.Unmarshal([]byte(raw), &out); err != nil {
-		return map[string]any{
-			"raw": raw,
-		}
-	}
-
-	return out
-}
-
-func openAIUsage(u *openai.CompletionUsage) *genai.GenerateContentResponseUsageMetadata {
-	if u == nil {
-		return nil
-	}
-
-	return &genai.GenerateContentResponseUsageMetadata{
-		PromptTokenCount:     int32(u.PromptTokens),
-		CandidatesTokenCount: int32(u.CompletionTokens),
-		TotalTokenCount:      int32(u.TotalTokens),
 	}
 }
 
@@ -640,5 +546,17 @@ func mapOpenAIFinishReason(reason string) genai.FinishReason {
 		return genai.FinishReasonOther
 	default:
 		return genai.FinishReasonUnspecified
+	}
+}
+
+func openAIUsage(u *openai.CompletionUsage) *genai.GenerateContentResponseUsageMetadata {
+	if u == nil {
+		return nil
+	}
+
+	return &genai.GenerateContentResponseUsageMetadata{
+		PromptTokenCount:     int32(u.PromptTokens),
+		CandidatesTokenCount: int32(u.CompletionTokens),
+		TotalTokenCount:      int32(u.TotalTokens),
 	}
 }

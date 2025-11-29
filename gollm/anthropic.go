@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"iter"
-	"net/http"
 	"slices"
 	"strings"
 	"time"
@@ -34,6 +33,7 @@ import (
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
 
+	"github.com/zchee/tumix/gollm/internal/adapter"
 	"github.com/zchee/tumix/internal/version"
 )
 
@@ -83,20 +83,9 @@ func (m *anthropicLLM) Name() string { return m.name }
 
 // GenerateContent implements [model.LLM].
 func (m *anthropicLLM) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
-	m.ensureUserContent(req)
-	if req.Config == nil {
-		req.Config = &genai.GenerateContentConfig{}
-	}
-	if req.Config.HTTPOptions == nil {
-		req.Config.HTTPOptions = &genai.HTTPOptions{}
-	}
-	if req.Config.HTTPOptions.Headers == nil {
-		req.Config.HTTPOptions.Headers = make(http.Header)
-	}
-	// Keep the same user-agent used during client construction to satisfy ADK expectations.
-	req.Config.HTTPOptions.Headers.Set("User-Agent", m.userAgent)
+	cfg := adapter.NormalizeRequest(req, m.userAgent)
 
-	system, msgs, err := genaiToAnthropicMessages(req.Config.SystemInstruction, req.Contents)
+	system, msgs, err := genaiToAnthropicMessages(cfg.SystemInstruction, req.Contents)
 	if err != nil {
 		return func(yield func(*model.LLMResponse, error) bool) {
 			yield(nil, err)
@@ -168,40 +157,22 @@ func (m *anthropicLLM) buildParams(req *model.LLMRequest, system []anthropic.Tex
 
 func (m *anthropicLLM) stream(ctx context.Context, params *anthropic.MessageNewParams) iter.Seq2[*model.LLMResponse, error] {
 	stream := m.client.Messages.NewStreaming(ctx, *params)
-	acc := &anthropic.Message{}
+	agg := newAnthropicStreamAggregator()
 
 	return func(yield func(*model.LLMResponse, error) bool) {
 		defer stream.Close()
 
 		for stream.Next() {
-			event := stream.Current()
-			if err := acc.Accumulate(event); err != nil {
+			resp, err := agg.Process(stream.Current())
+			if err != nil {
 				yield(nil, err)
 				return
 			}
-
-			switch ev := event.AsAny().(type) {
-			case anthropic.ContentBlockDeltaEvent:
-				if delta := ev.Delta.AsAny(); delta != nil {
-					if t, ok := delta.(anthropic.TextDelta); ok && t.Text != "" {
-						if !yield(&model.LLMResponse{
-							Content: &genai.Content{
-								Role:  string(genai.RoleModel),
-								Parts: []*genai.Part{genai.NewPartFromText(accText(acc))},
-							},
-							Partial: true,
-						}, nil) {
-							return
-						}
-					}
+			for _, r := range resp {
+				if r == nil {
+					continue
 				}
-			case anthropic.MessageStopEvent:
-				resp, err := anthropicMessageToLLMResponse(acc)
-				if err != nil {
-					yield(nil, err)
-					return
-				}
-				if !yield(resp, nil) {
+				if !yield(r, nil) {
 					return
 				}
 			}
@@ -227,10 +198,7 @@ func accText(msg *anthropic.Message) string {
 }
 
 func (m *anthropicLLM) modelName(req *model.LLMRequest) string {
-	if req != nil && strings.TrimSpace(req.Model) != "" {
-		return strings.TrimSpace(req.Model)
-	}
-	return m.name
+	return adapter.ModelName(m.name, req)
 }
 
 // Convert a non-streaming Anthropics message to an ADK response.
@@ -437,14 +405,48 @@ func genaiToolsToAnthropic(tools []*genai.Tool, cfg *genai.ToolConfig) ([]anthro
 	return out, tc
 }
 
-// ensureUserContent aligns with ADK behavior of ending with a user turn.
-func (m *anthropicLLM) ensureUserContent(req *model.LLMRequest) {
-	if len(req.Contents) == 0 {
-		req.Contents = append(req.Contents, genai.NewContentFromText("Handle the requests as specified in the System Instruction.", genai.RoleUser))
-		return
+// anthropicStreamAggregator accumulates streaming events into partial and final LLMResponses.
+type anthropicStreamAggregator struct {
+	acc anthropic.Message
+}
+
+func newAnthropicStreamAggregator() *anthropicStreamAggregator {
+	return &anthropicStreamAggregator{}
+}
+
+func (a *anthropicStreamAggregator) reset() {
+	a.acc = anthropic.Message{}
+}
+
+func (a *anthropicStreamAggregator) Process(event anthropic.MessageStreamEventUnion) ([]*model.LLMResponse, error) {
+	if err := a.acc.Accumulate(event); err != nil {
+		return nil, err
 	}
 
-	if last := req.Contents[len(req.Contents)-1]; last != nil && last.Role != genai.RoleUser {
-		req.Contents = append(req.Contents, genai.NewContentFromText("Continue processing previous requests as instructed. Exit or provide a summary if no more outputs are needed.", genai.RoleUser))
+	var out []*model.LLMResponse
+
+	if deltaEv, ok := event.AsAny().(anthropic.ContentBlockDeltaEvent); ok {
+		if delta := deltaEv.Delta.AsAny(); delta != nil {
+			if t, ok := delta.(anthropic.TextDelta); ok && t.Text != "" {
+				out = append(out, &model.LLMResponse{
+					Content: &genai.Content{
+						Role:  string(genai.RoleModel),
+						Parts: []*genai.Part{genai.NewPartFromText(accText(&a.acc))},
+					},
+					Partial: true,
+				})
+			}
+		}
 	}
+
+	if _, ok := event.AsAny().(anthropic.MessageStopEvent); ok {
+		resp, err := anthropicMessageToLLMResponse(&a.acc)
+		if err != nil {
+			return nil, err
+		}
+		adapter.MarkTurnComplete(resp)
+		out = append(out, resp)
+	}
+
+	return out, nil
 }
