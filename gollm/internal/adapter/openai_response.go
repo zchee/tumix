@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package gollm
+package adapter
 
 import (
 	"cmp"
@@ -65,7 +65,7 @@ func toolCallsFromMessage(msg *openai.ChatCompletionMessage) []openai.ChatComple
 	}
 }
 
-func openAIResponseToLLM(resp *openai.ChatCompletion) (*model.LLMResponse, error) {
+func OpenAIResponseToLLM(resp *openai.ChatCompletion) (*model.LLMResponse, error) {
 	if resp == nil {
 		return nil, fmt.Errorf("nil openai response")
 	}
@@ -118,18 +118,18 @@ type toolCallState struct {
 	args  strings.Builder
 }
 
-type openAIStreamAggregator struct {
+type OpenAIStreamAggregator struct {
 	text         strings.Builder
 	toolCalls    []*toolCallState
 	finishReason string
 	usage        *openai.CompletionUsage
 }
 
-func newOpenAIStreamAggregator() *openAIStreamAggregator {
-	return &openAIStreamAggregator{}
+func NewOpenAIStreamAggregator() *OpenAIStreamAggregator {
+	return &OpenAIStreamAggregator{}
 }
 
-func (a *openAIStreamAggregator) Process(chunk *openai.ChatCompletionChunk) []*model.LLMResponse {
+func (a *OpenAIStreamAggregator) Process(chunk *openai.ChatCompletionChunk) []*model.LLMResponse {
 	if chunk == nil || len(chunk.Choices) == 0 {
 		return nil
 	}
@@ -172,7 +172,7 @@ func (a *openAIStreamAggregator) Process(chunk *openai.ChatCompletionChunk) []*m
 	return out
 }
 
-func (a *openAIStreamAggregator) Final() *model.LLMResponse {
+func (a *OpenAIStreamAggregator) Final() *model.LLMResponse {
 	if a.text.Len() == 0 && len(a.toolCalls) == 0 && a.finishReason == "" && a.usage == nil {
 		return nil
 	}
@@ -210,7 +210,7 @@ func (a *openAIStreamAggregator) Final() *model.LLMResponse {
 	}
 }
 
-func (a *openAIStreamAggregator) ensureToolCall(idx int64, id string) *toolCallState {
+func (a *OpenAIStreamAggregator) ensureToolCall(idx int64, id string) *toolCallState {
 	for _, tc := range a.toolCalls {
 		if tc.index == idx || (id != "" && tc.id == id) {
 			return tc

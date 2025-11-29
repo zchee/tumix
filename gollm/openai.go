@@ -29,6 +29,7 @@ import (
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
 
+	"github.com/zchee/tumix/gollm/internal/adapter"
 	"github.com/zchee/tumix/gollm/internal/httputil"
 	"github.com/zchee/tumix/internal/version"
 )
@@ -106,7 +107,7 @@ func (m *openAILLM) GenerateContent(ctx context.Context, req *model.LLMRequest, 
 			return
 		}
 
-		llmResp, err := openAIResponseToLLM(resp)
+		llmResp, err := adapter.OpenAIResponseToLLM(resp)
 		if err != nil {
 			yield(nil, err)
 			return
@@ -116,7 +117,7 @@ func (m *openAILLM) GenerateContent(ctx context.Context, req *model.LLMRequest, 
 }
 
 func (m *openAILLM) chatCompletionParams(req *model.LLMRequest) (*openai.ChatCompletionNewParams, error) {
-	msgs, err := genaiToOpenAIMessages(req.Contents)
+	msgs, err := adapter.GenaiToOpenAIMessages(req.Contents)
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +166,7 @@ func (m *openAILLM) chatCompletionParams(req *model.LLMRequest) (*openai.ChatCom
 	}
 
 	if len(cfg.Tools) > 0 {
-		tools, tc := genaiToolsToOpenAI(cfg.Tools, cfg.ToolConfig)
+		tools, tc := adapter.GenaiToolsToOpenAI(cfg.Tools, cfg.ToolConfig)
 		params.Tools = tools
 		if tc != nil {
 			params.ToolChoice = *tc
@@ -177,7 +178,7 @@ func (m *openAILLM) chatCompletionParams(req *model.LLMRequest) (*openai.ChatCom
 
 func (m *openAILLM) stream(ctx context.Context, params *openai.ChatCompletionNewParams) iter.Seq2[*model.LLMResponse, error] {
 	stream := m.client.Chat.Completions.NewStreaming(ctx, *params)
-	agg := newOpenAIStreamAggregator()
+	agg := adapter.NewOpenAIStreamAggregator()
 
 	return func(yield func(*model.LLMResponse, error) bool) {
 		defer stream.Close()
