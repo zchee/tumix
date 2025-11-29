@@ -116,6 +116,10 @@ func (m *openAILLM) GenerateContent(ctx context.Context, req *model.LLMRequest, 
 	}
 }
 
+// chatCompletionParams builds OpenAI chat completion parameters from the request.
+//
+// It converts genai contents to OpenAI messages and applies generation config,
+// returning an error when no messages remain after conversion.
 func (m *openAILLM) chatCompletionParams(req *model.LLMRequest) (*openai.ChatCompletionNewParams, error) {
 	msgs, err := adapter.GenaiToOpenAIMessages(req.Contents)
 	if err != nil {
@@ -176,6 +180,10 @@ func (m *openAILLM) chatCompletionParams(req *model.LLMRequest) (*openai.ChatCom
 	return &params, nil
 }
 
+// stream executes a streaming chat completion request and aggregates partial responses.
+//
+// It forwards each streamed chunk through the OpenAI aggregator and emits final output
+// after the stream ends, respecting consumer backpressure.
 func (m *openAILLM) stream(ctx context.Context, params *openai.ChatCompletionNewParams) iter.Seq2[*model.LLMResponse, error] {
 	stream := m.client.Chat.Completions.NewStreaming(ctx, *params)
 	agg := adapter.NewOpenAIStreamAggregator()

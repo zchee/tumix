@@ -34,7 +34,7 @@ import (
 	"github.com/zchee/tumix/internal/version"
 )
 
-// anthropicLLM implements the adk [model.LLM] interface using Anthropics SDK.
+// anthropicLLM implements the adk [model.LLM] interface using the Anthropic SDK.
 type anthropicLLM struct {
 	client    *anthropic.Client
 	name      string
@@ -43,9 +43,9 @@ type anthropicLLM struct {
 
 var _ model.LLM = (*anthropicLLM)(nil)
 
-// NewAnthropicLLM creates a new Anthropics-backed LLM.
+// NewAnthropicLLM creates a new Anthropic-backed LLM.
 //
-// If authKey is nil, the Anthropics SDK will fall back to ANTHROPIC_API_KEY environment variable.
+// If authKey is nil, the Anthropic SDK falls back to the ANTHROPIC_API_KEY environment variable.
 //
 //nolint:unparam
 func NewAnthropicLLM(_ context.Context, authKey AuthMethod, modelName string, opts ...option.RequestOption) (model.LLM, error) {
@@ -126,6 +126,10 @@ func (m *anthropicLLM) GenerateContent(ctx context.Context, req *model.LLMReques
 	}
 }
 
+// buildParams prepares Anthropic message parameters from a genai request.
+//
+// It validates presence of messages, maps config knobs, and sets defaults
+// required by the Anthropic API.
 func (m *anthropicLLM) buildParams(req *model.LLMRequest, system []anthropic.TextBlockParam, msgs []anthropic.MessageParam) (*anthropic.MessageNewParams, error) {
 	if len(msgs) == 0 {
 		return nil, errors.New("no messages")
@@ -163,6 +167,10 @@ func (m *anthropicLLM) buildParams(req *model.LLMRequest, system []anthropic.Tex
 	return params, nil
 }
 
+// stream consumes Anthropic streaming responses and converts them to LLM responses.
+//
+// It accumulates incremental deltas, yielding partial text as it arrives and a final
+// response once the stream signals completion.
 func (m *anthropicLLM) stream(ctx context.Context, params *anthropic.MessageNewParams) iter.Seq2[*model.LLMResponse, error] {
 	stream := m.client.Messages.NewStreaming(ctx, *params)
 	acc := &anthropic.Message{}
