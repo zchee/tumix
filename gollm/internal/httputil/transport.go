@@ -17,6 +17,7 @@
 package httputil
 
 import (
+	"fmt"
 	"net/http"
 
 	"go.opentelemetry.io/otel"
@@ -82,7 +83,7 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, fmt.Errorf("RoundTrip failed: %w", err)
 	}
 
 	span.SetAttributes(attribute.Int("http.response.status_code", resp.StatusCode))
