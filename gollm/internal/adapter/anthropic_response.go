@@ -17,7 +17,7 @@
 package adapter
 
 import (
-	"encoding/json/v2"
+	json "encoding/json/v2"
 	"errors"
 	"fmt"
 	"slices"

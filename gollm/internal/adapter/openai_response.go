@@ -18,7 +18,7 @@ package adapter
 
 import (
 	"cmp"
-	"encoding/json/v2"
+	json "encoding/json/v2"
 	"fmt"
 	"slices"
 	"strings"

@@ -95,7 +95,7 @@ func TestGenaiToOpenAIMessages(t *testing.T) {
 	if got, want := fn.Function.Name, "lookup"; got != want {
 		t.Fatalf("function name = %q, want %q", got, want)
 	}
-	if got, want := fn.Function.Arguments, `{"q":"foo"}` ; got != want {
+	if got, want := fn.Function.Arguments, `{"q":"foo"}`; got != want {
 		t.Fatalf("function args = %q, want %q", got, want)
 	}
 }
