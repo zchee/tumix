@@ -189,7 +189,7 @@ const file_xai_api_v1_deferred_proto_rawDesc = "" +
 	"\x04DONE\x10\x01\x12\v\n" +
 	"\aEXPIRED\x10\x02\x12\v\n" +
 	"\aPENDING\x10\x03B}\n" +
-	"\vcom.xai_apiB\rDeferredProtoP\x01Z'github.com/zchee/tumix/model/xai/api/v1\xa2\x02\x03XXX\xaa\x02\x06XaiApi\xca\x02\x06XaiApi\xe2\x02\x12XaiApi\\GPBMetadata\xea\x02\x06XaiApib\x06proto3"
+	"\vcom.xai_apiB\rDeferredProtoP\x01Z'github.com/zchee/tumix/gollm/xai/api/v1\xa2\x02\x03XXX\xaa\x02\x06XaiApi\xca\x02\x06XaiApi\xe2\x02\x12XaiApi\\GPBMetadata\xea\x02\x06XaiApib\x06proto3"
 
 var (
 	file_xai_api_v1_deferred_proto_rawDescOnce sync.Once

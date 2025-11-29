@@ -7,8 +7,8 @@
 package v1
 
 import (
-	analytics "github.com/zchee/tumix/model/xai/shared/analytics"
-	billing "github.com/zchee/tumix/model/xai/shared/billing"
+	analytics "github.com/zchee/tumix/gollm/xai/shared/analytics"
+	billing "github.com/zchee/tumix/gollm/xai/shared/billing"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	_ "google.golang.org/protobuf/types/known/emptypb"
@@ -2497,7 +2497,7 @@ const file_xai_management_api_v1_billing_proto_rawDesc = "" +
 	"\x1fTopUpOrGetExistingPendingChange\x123.prod_mc_billing.TopUpOrGetExistingPendingChangeReq\x1a4.prod_mc_billing.TopUpOrGetExistingPendingChangeResp\"\x00\x12d\n" +
 	"\x11GetSpendingLimits\x12%.prod_mc_billing.GetSpendingLimitsReq\x1a&.prod_mc_billing.GetSpendingLimitsResp\"\x00\x12m\n" +
 	"\x14SetSoftSpendingLimit\x12(.prod_mc_billing.SetSoftSpendingLimitReq\x1a).prod_mc_billing.SetSoftSpendingLimitResp\"\x00B\xab\x01\n" +
-	"\x13com.prod_mc_billingB\fBillingProtoP\x01Z2github.com/zchee/tumix/model/xai/management_api/v1\xa2\x02\x03PXX\xaa\x02\rProdMcBilling\xca\x02\rProdMcBilling\xe2\x02\x19ProdMcBilling\\GPBMetadata\xea\x02\rProdMcBillingb\x06proto3"
+	"\x13com.prod_mc_billingB\fBillingProtoP\x01Z2github.com/zchee/tumix/gollm/xai/management_api/v1\xa2\x02\x03PXX\xaa\x02\rProdMcBilling\xca\x02\rProdMcBilling\xe2\x02\x19ProdMcBilling\\GPBMetadata\xea\x02\rProdMcBillingb\x06proto3"
 
 var (
 	file_xai_management_api_v1_billing_proto_rawDescOnce sync.Once

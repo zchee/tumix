@@ -7,8 +7,8 @@
 package collectionspb
 
 import (
-	ragpb "github.com/zchee/tumix/model/xai/api/v1/ragpb"
-	sharedpb "github.com/zchee/tumix/model/xai/api/v1/sharedpb"
+	ragpb "github.com/zchee/tumix/gollm/xai/api/v1/ragpb"
+	sharedpb "github.com/zchee/tumix/gollm/xai/api/v1/sharedpb"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"

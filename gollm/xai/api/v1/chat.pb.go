@@ -4482,7 +4482,7 @@ const file_xai_api_v1_chat_proto_rawDesc = "" +
 	"\x15GetDeferredCompletion\x12\x1b.xai_api.GetDeferredRequest\x1a&.xai_api.GetDeferredCompletionResponse\"\x00\x12`\n" +
 	"\x13GetStoredCompletion\x12#.xai_api.GetStoredCompletionRequest\x1a\".xai_api.GetChatCompletionResponse\"\x00\x12k\n" +
 	"\x16DeleteStoredCompletion\x12&.xai_api.DeleteStoredCompletionRequest\x1a'.xai_api.DeleteStoredCompletionResponse\"\x00By\n" +
-	"\vcom.xai_apiB\tChatProtoP\x01Z'github.com/zchee/tumix/model/xai/api/v1\xa2\x02\x03XXX\xaa\x02\x06XaiApi\xca\x02\x06XaiApi\xe2\x02\x12XaiApi\\GPBMetadata\xea\x02\x06XaiApib\x06proto3"
+	"\vcom.xai_apiB\tChatProtoP\x01Z'github.com/zchee/tumix/gollm/xai/api/v1\xa2\x02\x03XXX\xaa\x02\x06XaiApi\xca\x02\x06XaiApi\xe2\x02\x12XaiApi\\GPBMetadata\xea\x02\x06XaiApib\x06proto3"
 
 var (
 	file_xai_api_v1_chat_proto_rawDescOnce sync.Once

@@ -228,7 +228,7 @@ const file_xai_api_v1_tokenize_proto_rawDesc = "" +
 	"\x05model\x18\x02 \x01(\tR\x05model2Y\n" +
 	"\bTokenize\x12M\n" +
 	"\fTokenizeText\x12\x1c.xai_api.TokenizeTextRequest\x1a\x1d.xai_api.TokenizeTextResponse\"\x00B}\n" +
-	"\vcom.xai_apiB\rTokenizeProtoP\x01Z'github.com/zchee/tumix/model/xai/api/v1\xa2\x02\x03XXX\xaa\x02\x06XaiApi\xca\x02\x06XaiApi\xe2\x02\x12XaiApi\\GPBMetadata\xea\x02\x06XaiApib\x06proto3"
+	"\vcom.xai_apiB\rTokenizeProtoP\x01Z'github.com/zchee/tumix/gollm/xai/api/v1\xa2\x02\x03XXX\xaa\x02\x06XaiApi\xca\x02\x06XaiApi\xe2\x02\x12XaiApi\\GPBMetadata\xea\x02\x06XaiApib\x06proto3"
 
 var (
 	file_xai_api_v1_tokenize_proto_rawDescOnce sync.Once

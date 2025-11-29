@@ -8,7 +8,7 @@ package v1
 
 import (
 	context "context"
-	analytics "github.com/zchee/tumix/model/xai/shared/analytics"
+	analytics "github.com/zchee/tumix/gollm/xai/shared/analytics"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"

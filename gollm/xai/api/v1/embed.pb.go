@@ -474,7 +474,7 @@ const file_xai_api_v1_embed_proto_rawDesc = "" +
 	"\bEmbedder\x128\n" +
 	"\x05Embed\x12\x15.xai_api.EmbedRequest\x1a\x16.xai_api.EmbedResponse\"\x00Bz\n" +
 	"\vcom.xai_apiB\n" +
-	"EmbedProtoP\x01Z'github.com/zchee/tumix/model/xai/api/v1\xa2\x02\x03XXX\xaa\x02\x06XaiApi\xca\x02\x06XaiApi\xe2\x02\x12XaiApi\\GPBMetadata\xea\x02\x06XaiApib\x06proto3"
+	"EmbedProtoP\x01Z'github.com/zchee/tumix/gollm/xai/api/v1\xa2\x02\x03XXX\xaa\x02\x06XaiApi\xca\x02\x06XaiApi\xe2\x02\x12XaiApi\\GPBMetadata\xea\x02\x06XaiApib\x06proto3"
 
 var (
 	file_xai_api_v1_embed_proto_rawDescOnce sync.Once

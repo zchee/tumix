@@ -725,7 +725,7 @@ const file_xai_api_v1_models_proto_rawDesc = "" +
 	"\x10GetLanguageModel\x12\x18.xai_api.GetModelRequest\x1a\x16.xai_api.LanguageModel\"\x00\x12H\n" +
 	"\x11GetEmbeddingModel\x12\x18.xai_api.GetModelRequest\x1a\x17.xai_api.EmbeddingModel\"\x00\x12T\n" +
 	"\x17GetImageGenerationModel\x12\x18.xai_api.GetModelRequest\x1a\x1d.xai_api.ImageGenerationModel\"\x00B{\n" +
-	"\vcom.xai_apiB\vModelsProtoP\x01Z'github.com/zchee/tumix/model/xai/api/v1\xa2\x02\x03XXX\xaa\x02\x06XaiApi\xca\x02\x06XaiApi\xe2\x02\x12XaiApi\\GPBMetadata\xea\x02\x06XaiApib\x06proto3"
+	"\vcom.xai_apiB\vModelsProtoP\x01Z'github.com/zchee/tumix/gollm/xai/api/v1\xa2\x02\x03XXX\xaa\x02\x06XaiApi\xca\x02\x06XaiApi\xe2\x02\x12XaiApi\\GPBMetadata\xea\x02\x06XaiApib\x06proto3"
 
 var (
 	file_xai_api_v1_models_proto_rawDescOnce sync.Once
