@@ -6,6 +6,7 @@
 - MUST READ the following files in the context of the ADK (Agent Development Kit):
   - .agents/llms/adk-go.xml
   - .agents/llms/adk-docs.xml
+  - .agents/llms/go-genai.xml
 
 ## Project Structure
 
