@@ -1,5 +1,5 @@
 {
-  "Initial": "AQAAAA7gv/DpAv/WaAIc",
+  "Initial": "AQAAAA7gwAGLOdYXYAIc",
   "Version": "0.2",
   "Converter": {
     "ScrubBody": null,
@@ -33,7 +33,7 @@
   },
   "Entries": [
     {
-      "ID": "c04262cf0572743b",
+      "ID": "7c4f0d557f1dd58d",
       "Request": {
         "Method": "GET",
         "URL": "http://127.0.0.1:28090/ping",
@@ -63,7 +63,44 @@
             "text/plain; charset=utf-8"
           ],
           "Date": [
-            "Mon, 01 Dec 2025 20:26:17 GMT"
+            "Mon, 01 Dec 2025 21:37:16 GMT"
+          ]
+        },
+        "Body": "cG9uZw=="
+      }
+    },
+    {
+      "ID": "d2b0d79d979bb43b",
+      "Request": {
+        "Method": "GET",
+        "URL": "http://127.0.0.1:28090/ping",
+        "Header": {
+          "Accept-Encoding": [
+            "gzip"
+          ],
+          "User-Agent": [
+            "test-ua-different"
+          ]
+        },
+        "MediaType": "",
+        "BodyParts": [
+          ""
+        ]
+      },
+      "Response": {
+        "StatusCode": 200,
+        "Proto": "HTTP/1.1",
+        "ProtoMajor": 1,
+        "ProtoMinor": 1,
+        "Header": {
+          "Content-Length": [
+            "4"
+          ],
+          "Content-Type": [
+            "text/plain; charset=utf-8"
+          ],
+          "Date": [
+            "Mon, 01 Dec 2025 21:37:16 GMT"
           ]
         },
         "Body": "cG9uZw=="
