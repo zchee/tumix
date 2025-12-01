@@ -40,9 +40,9 @@ import (
 )
 
 var ignoreHeaders = []string{
-	"X-Stainless-Arch",
-	"X-Stainless-Runtime-Version",
-	"X-Stainless-Os",
+	"Accept-Encoding",
+	"User-Agent",
+	"^X-Stainless-.*$",
 }
 
 // Record is true iff the tests are being run in "record" mode.
