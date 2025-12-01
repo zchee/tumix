@@ -25,13 +25,18 @@ import (
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/anthropics/anthropic-sdk-go/packages/param"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
 
 	"github.com/zchee/tumix/gollm/internal/adapter"
 	"github.com/zchee/tumix/gollm/internal/httputil"
 	"github.com/zchee/tumix/internal/version"
+	"github.com/zchee/tumix/telemetry"
 )
+
+var anthropicTracer = otel.Tracer("github.com/zchee/tumix/gollm/anthropic")
 
 // anthropicLLM implements the adk [model.LLM] interface using the Anthropic SDK.
 type anthropicLLM struct {
@@ -79,11 +84,13 @@ func (m *anthropicLLM) Name() string { return m.name }
 
 // GenerateContent implements [model.LLM].
 func (m *anthropicLLM) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
+	ctx, span := anthropicTracer.Start(ctx, "gollm.anthropic.GenerateContent")
 	cfg := adapter.NormalizeRequest(req, m.userAgent)
 
 	system, msgs, err := adapter.GenAIToAnthropicMessages(cfg.SystemInstruction, req.Contents)
 	if err != nil {
 		return func(yield func(*model.LLMResponse, error) bool) {
+			defer telemetry.End(span, err)
 			yield(nil, err)
 		}
 	}
@@ -91,22 +98,28 @@ func (m *anthropicLLM) GenerateContent(ctx context.Context, req *model.LLMReques
 	params, err := m.buildParams(req, system, msgs)
 	if err != nil {
 		return func(yield func(*model.LLMResponse, error) bool) {
+			defer telemetry.End(span, err)
 			yield(nil, err)
 		}
 	}
 
 	if stream {
-		return m.stream(ctx, params)
+		return m.stream(ctx, span, params)
 	}
 
 	return func(yield func(*model.LLMResponse, error) bool) {
+		var spanErr error
+		defer telemetry.End(span, spanErr)
+
 		resp, err := m.client.Messages.New(ctx, *params)
 		if err != nil {
+			spanErr = err
 			yield(nil, err)
 			return
 		}
 		llmResp, convErr := adapter.AnthropicMessageToLLMResponse(resp)
 		if convErr != nil {
+			spanErr = convErr
 			yield(nil, convErr)
 			return
 		}
@@ -159,16 +172,20 @@ func (m *anthropicLLM) buildParams(req *model.LLMRequest, system []anthropic.Tex
 //
 // It accumulates incremental deltas, yielding partial text as it arrives and a final
 // response once the stream signals completion.
-func (m *anthropicLLM) stream(ctx context.Context, params *anthropic.MessageNewParams) iter.Seq2[*model.LLMResponse, error] {
+func (m *anthropicLLM) stream(ctx context.Context, span trace.Span, params *anthropic.MessageNewParams) iter.Seq2[*model.LLMResponse, error] {
 	stream := m.client.Messages.NewStreaming(ctx, *params)
 	acc := &anthropic.Message{}
 
 	return func(yield func(*model.LLMResponse, error) bool) {
 		defer stream.Close()
 
+		var spanErr error
+		defer telemetry.End(span, spanErr)
+
 		for stream.Next() {
 			event := stream.Current()
 			if err := acc.Accumulate(event); err != nil {
+				spanErr = err
 				yield(nil, err)
 				return
 			}
@@ -201,6 +218,7 @@ func (m *anthropicLLM) stream(ctx context.Context, params *anthropic.MessageNewP
 		}
 
 		if err := stream.Err(); err != nil {
+			spanErr = err
 			yield(nil, err)
 		}
 	}

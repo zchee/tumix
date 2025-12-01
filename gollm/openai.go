@@ -28,10 +28,16 @@ import (
 	"github.com/openai/openai-go/v3/option"
 	"google.golang.org/adk/model"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/zchee/tumix/gollm/internal/adapter"
 	"github.com/zchee/tumix/gollm/internal/httputil"
 	"github.com/zchee/tumix/internal/version"
+	"github.com/zchee/tumix/telemetry"
 )
+
+var openaiTracer = otel.Tracer("github.com/zchee/tumix/gollm/openai")
 
 // openAILLM implements the adk [model.LLM] interface using OpenAI SDK.
 type openAILLM struct {
@@ -76,28 +82,35 @@ func (m *openAILLM) Name() string { return m.name }
 
 // GenerateContent implements [model.LLM].
 func (m *openAILLM) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
+	ctx, span := openaiTracer.Start(ctx, "gollm.openai.GenerateContent")
 	req.Config = adapter.NormalizeRequest(req, m.userAgent)
 
 	params, err := m.chatCompletionParams(req)
 	if err != nil {
 		return func(yield func(*model.LLMResponse, error) bool) {
+			defer telemetry.End(span, err)
 			yield(nil, err)
 		}
 	}
 
 	if stream {
-		return m.stream(ctx, params)
+		return m.stream(ctx, span, params)
 	}
 
 	return func(yield func(*model.LLMResponse, error) bool) {
+		var spanErr error
+		defer telemetry.End(span, spanErr)
+
 		resp, err := m.client.Chat.Completions.New(ctx, *params)
 		if err != nil {
+			spanErr = err
 			yield(nil, err)
 			return
 		}
 
 		llmResp, err := adapter.OpenAIResponseToLLM(resp)
 		if err != nil {
+			spanErr = err
 			yield(nil, err)
 			return
 		}
@@ -173,12 +186,15 @@ func (m *openAILLM) chatCompletionParams(req *model.LLMRequest) (*openai.ChatCom
 //
 // It forwards each streamed chunk through the OpenAI aggregator and emits final output
 // after the stream ends, respecting consumer backpressure.
-func (m *openAILLM) stream(ctx context.Context, params *openai.ChatCompletionNewParams) iter.Seq2[*model.LLMResponse, error] {
-	stream := m.client.Chat.Completions.NewStreaming(ctx, *params)
+func (m *openAILLM) stream(ctx context.Context, span trace.Span, params *openai.ChatCompletionNewParams) iter.Seq2[*model.LLMResponse, error] {
 	agg := adapter.NewOpenAIStreamAggregator()
 
 	return func(yield func(*model.LLMResponse, error) bool) {
+		stream := m.client.Chat.Completions.NewStreaming(ctx, *params)
 		defer stream.Close()
+
+		var spanErr error
+		defer telemetry.End(span, spanErr)
 
 		for stream.Next() {
 			chunk := stream.Current()
@@ -191,6 +207,7 @@ func (m *openAILLM) stream(ctx context.Context, params *openai.ChatCompletionNew
 		}
 
 		if err := stream.Err(); err != nil && !errors.Is(err, io.EOF) {
+			spanErr = err
 			yield(nil, err)
 			return
 		}
