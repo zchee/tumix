@@ -108,6 +108,7 @@ func NewGRPCConn(_ context.Context, t *testing.T, apiName, endPoint string, opts
 
 	rr, err := grpcreplay.NewRecorder(golden, &grpcreplay.RecorderOptions{
 		Initial: b,
+		Text:    true,
 	})
 	if err != nil {
 		t.Fatal(err)
