@@ -18,6 +18,7 @@ package version
 
 import (
 	"fmt"
+	goversion "go/version"
 	"runtime"
 	"strings"
 )
@@ -27,5 +28,6 @@ const Version = "0.1.0"
 
 // UserAgent returns the User-Agent header value for tumix API requests.
 func UserAgent(apiName string) string {
-	return fmt.Sprintf("tumix/%s/%s %s", Version, apiName, strings.TrimPrefix(runtime.Version(), "go"))
+	v := strings.Split(runtime.Version(), " X")
+	return fmt.Sprintf("tumix/%s/%s %s", Version, apiName, goversion.Lang(v[0]))
 }
