@@ -56,8 +56,6 @@ func TestAnthropicLLM_Generate(t *testing.T) {
 			httpClient, cleanup, _ := rr.NewHTTPClient(t, func(r *rr.Recorder) {
 				r.RemoveRequestHeaders(
 					"X-Api-Key",
-					"X-Stainless-Retry-Count",
-					"X-Stainless-Runtime-Version",
 				)
 				r.RemoveResponseHeaders(
 					"Anthropic-Organization-Id",
@@ -115,8 +113,6 @@ func TestAnthropicLLM_GenerateStream(t *testing.T) {
 			httpClient, cleanup, _ := rr.NewHTTPClient(t, func(r *rr.Recorder) {
 				r.RemoveRequestHeaders(
 					"X-Api-Key",
-					"X-Stainless-Retry-Count",
-					"X-Stainless-Runtime-Version",
 				)
 				r.RemoveResponseHeaders(
 					"Anthropic-Organization-Id",

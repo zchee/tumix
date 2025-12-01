@@ -54,10 +54,8 @@ func TestOpenAILLM_Generate(t *testing.T) {
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			httpClient, cleanup, _ := rr.NewHTTPClient(t, func(r *rr.Recorder) {
-				r.RemoveRequestHeaders(
-					"X-Stainless-Runtime-Version",
-				)
 				r.RemoveResponseHeaders(
+					"Openai-Organization",
 					"Openai-Project",
 					"Set-Cookie",
 				)
@@ -110,10 +108,8 @@ func TestOpenAILLM_GenerateStream(t *testing.T) {
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			httpClient, cleanup, _ := rr.NewHTTPClient(t, func(r *rr.Recorder) {
-				r.RemoveRequestHeaders(
-					"X-Stainless-Runtime-Version",
-				)
 				r.RemoveResponseHeaders(
+					"Openai-Organization",
 					"Openai-Project",
 					"Set-Cookie",
 				)

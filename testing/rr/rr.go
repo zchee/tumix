@@ -43,7 +43,10 @@ import (
 var ignoreHeaders = []string{
 	"Accept-Encoding",
 	"User-Agent",
-	"^X-Stainless-.*$",
+	"X-Stainless-Arch",
+	"X-Stainless-Os",
+	"X-Stainless-Retry-Count",
+	"X-Stainless-Runtime-Version",
 }
 
 // Record is true iff the tests are being run in "record" mode.
