@@ -40,7 +40,8 @@ func TestXAIModel_RecordReplay(t *testing.T) {
 
 	var serverCleanup func()
 	if *rr.Record {
-		ln, err := net.Listen("tcp", xaiReplayAddr)
+		var lc net.ListenConfig
+		ln, err := lc.Listen(t.Context(), "tcp", xaiReplayAddr)
 		if err != nil {
 			t.Skipf("unable to listen for xai stub: %v", err)
 		}
@@ -136,7 +137,8 @@ func TestXAIModel_RecordReplayStream(t *testing.T) {
 
 	var serverCleanup func()
 	if *rr.Record {
-		ln, err := net.Listen("tcp", xaiReplayAddr)
+		var lc net.ListenConfig
+		ln, err := lc.Listen(t.Context(), "tcp", xaiReplayAddr)
 		if err != nil {
 			t.Skipf("unable to listen for xai stream stub: %v", err)
 		}
@@ -255,7 +257,8 @@ func TestXAIModel_RecordReplayToolCalls(t *testing.T) {
 
 	var serverCleanup func()
 	if *rr.Record {
-		ln, err := net.Listen("tcp", xaiReplayAddr)
+		var lc net.ListenConfig
+		ln, err := lc.Listen(t.Context(), "tcp", xaiReplayAddr)
 		if err != nil {
 			t.Skipf("unable to listen for xai tool stub: %v", err)
 		}

@@ -17,9 +17,6 @@
 package gollm
 
 import (
-	"context"
-	"net"
-	"net/http"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -37,19 +34,7 @@ func TestOpenAILLMRecordReplay(t *testing.T) {
 	const openaiReplayBaseURL = "http://" + openaiReplayAddr + "/v1"
 
 	if *rr.Record {
-		ln, err := net.Listen("tcp", openaiReplayAddr)
-		if err != nil {
-			t.Skipf("unable to listen for openai stub: %v", err)
-		}
-
-		mux := http.NewServeMux()
-		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path != "/v1/chat/completions" && r.URL.Path != "/chat/completions" {
-				http.NotFound(w, r)
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{
+		cleanup := startStubHTTP(t, openaiReplayAddr, []string{"/v1/chat/completions", "/chat/completions"}, `{
   "id": "chatcmpl-rreplay",
   "object": "chat.completion",
   "created": 1730000000,
@@ -69,17 +54,8 @@ func TestOpenAILLMRecordReplay(t *testing.T) {
     "completion_tokens": 2,
     "total_tokens": 10
   }
-}`))
-		})
-
-		srv := &http.Server{Handler: mux}
-		go func() {
-			_ = srv.Serve(ln)
-		}()
-		t.Cleanup(func() {
-			_ = srv.Shutdown(context.Background())
-			_ = ln.Close()
-		})
+}`)
+		t.Cleanup(cleanup)
 	}
 
 	httpClient, cleanup, _ := rr.NewHTTPClient(t, func(r *rr.Recorder) {})

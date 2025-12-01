@@ -17,9 +17,6 @@
 package gollm
 
 import (
-	"context"
-	"net"
-	"net/http"
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go/option"
@@ -37,19 +34,7 @@ func TestAnthropicLLMRecordReplay(t *testing.T) {
 	const anthropicReplayBaseURL = "http://" + anthropicReplayAddr
 
 	if *rr.Record {
-		ln, err := net.Listen("tcp", anthropicReplayAddr)
-		if err != nil {
-			t.Skipf("unable to listen for anthropic stub: %v", err)
-		}
-
-		mux := http.NewServeMux()
-		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path != "/v1/messages" && r.URL.Path != "/messages" {
-				http.NotFound(w, r)
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{
+		cleanup := startStubHTTP(t, anthropicReplayAddr, []string{"/v1/messages", "/messages"}, `{
   "id": "msg_rr_test",
   "type": "message",
   "role": "assistant",
@@ -65,17 +50,8 @@ func TestAnthropicLLMRecordReplay(t *testing.T) {
       "text": "Paris"
     }
   ]
-}`))
-		})
-
-		srv := &http.Server{Handler: mux}
-		go func() {
-			_ = srv.Serve(ln)
-		}()
-		t.Cleanup(func() {
-			_ = srv.Shutdown(context.Background())
-			_ = ln.Close()
-		})
+}`)
+		t.Cleanup(cleanup)
 	}
 
 	httpClient, cleanup, _ := rr.NewHTTPClient(t, func(r *rr.Recorder) {})
