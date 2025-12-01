@@ -119,7 +119,7 @@ func NewClient(apiKey string, optFns ...ClientOption) (*Client, error) {
 		},
 	}
 
-	if opts.managementKey != "" {
+	if opts.managementKey != "" { //nolint:nestif // TODO(zchee): fix nolint
 		client.managementConn = opts.managementConn
 		if client.managementConn == nil {
 			client.managementConn, err = grpc.NewClient(opts.managementHost, buildDialOptions(opts, opts.managementKey)...)
