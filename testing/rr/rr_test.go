@@ -18,6 +18,7 @@ package rr
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"os"
@@ -36,7 +37,7 @@ func (pingServer) Ping(_ context.Context, _ *emptypb.Empty) (*emptypb.Empty, err
 }
 
 type pingService interface {
-	Ping(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
+	Ping(ctx context.Context, req *emptypb.Empty) (*emptypb.Empty, error)
 }
 
 func registerPingService(s *grpc.Server) {
@@ -73,9 +74,9 @@ func registerPingService(s *grpc.Server) {
 func TestNewHTTPClientRecordCreatesReplay(t *testing.T) {
 	t.Parallel()
 
-	orig := *Record
-	*Record = true
-	t.Cleanup(func() { *Record = orig })
+	replayPath := filepath.Join("testdata", t.Name()+".replay")
+	restore, recording := withRecordMode(t, replayPath)
+	t.Cleanup(restore)
 
 	client, cleanup, _ := NewHTTPClient(t, func(r *httpreplay.Recorder) {})
 
@@ -102,16 +103,18 @@ func TestNewHTTPClientRecordCreatesReplay(t *testing.T) {
 
 	cleanup()
 
-	replay := filepath.Join("testdata", t.Name()+".replay")
-	if _, statErr := os.Stat(replay); statErr != nil {
-		t.Fatalf("expected replay file %s: %v", replay, statErr)
+	if !recording {
+		return
+	}
+	if _, statErr := os.Stat(replayPath); statErr != nil {
+		t.Fatalf("expected replay file %s: %v", replayPath, statErr)
 	}
 }
 
 func TestNewInsecureGRPCConnRecordCreatesReplay(t *testing.T) {
-	orig := *Record
-	*Record = true
-	t.Cleanup(func() { *Record = orig })
+	replayPath := filepath.Join("testdata", t.Name()+".replay")
+	restore, recording := withRecordMode(t, replayPath)
+	t.Cleanup(restore)
 
 	ln := grpcListener(t)
 	s := grpc.NewServer()
@@ -130,9 +133,11 @@ func TestNewInsecureGRPCConnRecordCreatesReplay(t *testing.T) {
 
 	cleanup()
 
-	replay := filepath.Join("testdata", t.Name()+".replay")
-	if _, statErr := os.Stat(replay); statErr != nil {
-		t.Fatalf("expected replay file %s: %v", replay, statErr)
+	if !recording {
+		return
+	}
+	if _, statErr := os.Stat(replayPath); statErr != nil {
+		t.Fatalf("expected replay file %s: %v", replayPath, statErr)
 	}
 }
 
@@ -156,4 +161,16 @@ func grpcListener(t *testing.T) net.Listener {
 		t.Fatalf("grpc listener: %v", err)
 	}
 	return ln
+}
+
+func withRecordMode(t *testing.T, replay string) (func(), bool) {
+	t.Helper()
+
+	orig := *Record
+	recording := orig
+	if _, err := os.Stat(replay); err != nil && errors.Is(err, os.ErrNotExist) {
+		recording = true
+	}
+	*Record = recording
+	return func() { *Record = orig }, recording
 }
