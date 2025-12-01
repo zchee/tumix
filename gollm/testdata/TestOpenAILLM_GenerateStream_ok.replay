@@ -1,5 +1,5 @@
 {
-  "Initial": "AQAAAA7gwBabGMU7eAIc",
+  "Initial": "AQAAAA7gwBoSLJObGAIc",
   "Version": "0.2",
   "Converter": {
     "ScrubBody": null,
@@ -22,12 +22,15 @@
       "^X-Gfe-.*$",
       "^Accept-Encoding$",
       "^User-Agent$",
-      "^\\^X-Stainless-\\..*\\$$",
+      "^X-Stainless-Arch$",
+      "^X-Stainless-Os$",
+      "^X-Stainless-Retry-Count$",
       "^X-Stainless-Runtime-Version$"
     ],
     "RemoveResponseHeaders": [
       "^X-Google-.*$",
       "^X-Gfe-.*$",
+      "^Openai-Organization$",
       "^Openai-Project$",
       "^Set-Cookie$"
     ],
@@ -36,7 +39,7 @@
   },
   "Entries": [
     {
-      "ID": "a42be6d02548a05b",
+      "ID": "2ded9ef47bd2c6ed",
       "Request": {
         "Method": "POST",
         "URL": "https://api.openai.com/v1/chat/completions",
@@ -47,20 +50,11 @@
           "Content-Length": [
             "118"
           ],
-          "X-Stainless-Arch": [
-            "arm64"
-          ],
           "X-Stainless-Lang": [
             "go"
           ],
-          "X-Stainless-Os": [
-            "MacOS"
-          ],
           "X-Stainless-Package-Version": [
             "3.9.0"
-          ],
-          "X-Stainless-Retry-Count": [
-            "0"
           ],
           "X-Stainless-Runtime": [
             "go"
@@ -87,19 +81,16 @@
             "DYNAMIC"
           ],
           "Cf-Ray": [
-            "9a763d2c4e81e367-NRT"
+            "9a7652d60db6d5b7-NRT"
           ],
           "Content-Type": [
             "text/event-stream; charset=utf-8"
           ],
           "Date": [
-            "Mon, 01 Dec 2025 23:07:09 GMT"
-          ],
-          "Openai-Organization": [
-            "zchee"
+            "Mon, 01 Dec 2025 23:21:56 GMT"
           ],
           "Openai-Processing-Ms": [
-            "846"
+            "727"
           ],
           "Openai-Version": [
             "2020-10-01"
@@ -114,7 +105,7 @@
             "nosniff"
           ],
           "X-Envoy-Upstream-Service-Time": [
-            "1110"
+            "1159"
           ],
           "X-Openai-Proxy-Wasm": [
             "v0.1"
@@ -138,10 +129,10 @@
             "0s"
           ],
           "X-Request-Id": [
-            "req_570f1d335146473488a4005f7901a06c"
+            "req_41da00ea50374619947202776776d966"
           ]
         },
-        "Body": "ZGF0YTogeyJpZCI6ImNoYXRjbXBsLUNpN0gyUU05cWVZQ3N3MDFtSXd2cFJpdW42M25BIiwib2JqZWN0IjoiY2hhdC5jb21wbGV0aW9uLmNodW5rIiwiY3JlYXRlZCI6MTc2NDYzMDQyOCwibW9kZWwiOiJncHQtNS1taW5pLTIwMjUtMDgtMDciLCJzZXJ2aWNlX3RpZXIiOiJwcmlvcml0eSIsInN5c3RlbV9maW5nZXJwcmludCI6bnVsbCwiY2hvaWNlcyI6W3siaW5kZXgiOjAsImRlbHRhIjp7InJvbGUiOiJhc3Npc3RhbnQiLCJjb250ZW50IjoiIiwicmVmdXNhbCI6bnVsbH0sImZpbmlzaF9yZWFzb24iOm51bGx9XSwib2JmdXNjYXRpb24iOiI2In0KCmRhdGE6IHsiaWQiOiJjaGF0Y21wbC1DaTdIMlFNOXFlWUNzdzAxbUl3dnBSaXVuNjNuQSIsIm9iamVjdCI6ImNoYXQuY29tcGxldGlvbi5jaHVuayIsImNyZWF0ZWQiOjE3NjQ2MzA0MjgsIm1vZGVsIjoiZ3B0LTUtbWluaS0yMDI1LTA4LTA3Iiwic2VydmljZV90aWVyIjoicHJpb3JpdHkiLCJzeXN0ZW1fZmluZ2VycHJpbnQiOm51bGwsImNob2ljZXMiOlt7ImluZGV4IjowLCJkZWx0YSI6eyJjb250ZW50IjoiUGFyaXMifSwiZmluaXNoX3JlYXNvbiI6bnVsbH1dLCJvYmZ1c2NhdGlvbiI6IkhGeEh4a2J5d2hmYmFjIn0KCmRhdGE6IHsiaWQiOiJjaGF0Y21wbC1DaTdIMlFNOXFlWUNzdzAxbUl3dnBSaXVuNjNuQSIsIm9iamVjdCI6ImNoYXQuY29tcGxldGlvbi5jaHVuayIsImNyZWF0ZWQiOjE3NjQ2MzA0MjgsIm1vZGVsIjoiZ3B0LTUtbWluaS0yMDI1LTA4LTA3Iiwic2VydmljZV90aWVyIjoicHJpb3JpdHkiLCJzeXN0ZW1fZmluZ2VycHJpbnQiOm51bGwsImNob2ljZXMiOlt7ImluZGV4IjowLCJkZWx0YSI6e30sImZpbmlzaF9yZWFzb24iOiJzdG9wIn1dLCJvYmZ1c2NhdGlvbiI6Ikt4cURoMFZRYmlReHIifQoKZGF0YTogW0RPTkVdCgo="
+        "Body": "ZGF0YTogeyJpZCI6ImNoYXRjbXBsLUNpN1ZNUTdydTVETUFzNVR4V2xIcUR3ak52Zk51Iiwib2JqZWN0IjoiY2hhdC5jb21wbGV0aW9uLmNodW5rIiwiY3JlYXRlZCI6MTc2NDYzMTMxNiwibW9kZWwiOiJncHQtNS1taW5pLTIwMjUtMDgtMDciLCJzZXJ2aWNlX3RpZXIiOiJwcmlvcml0eSIsInN5c3RlbV9maW5nZXJwcmludCI6bnVsbCwiY2hvaWNlcyI6W3siaW5kZXgiOjAsImRlbHRhIjp7InJvbGUiOiJhc3Npc3RhbnQiLCJjb250ZW50IjoiIiwicmVmdXNhbCI6bnVsbH0sImZpbmlzaF9yZWFzb24iOm51bGx9XSwib2JmdXNjYXRpb24iOiJpIn0KCmRhdGE6IHsiaWQiOiJjaGF0Y21wbC1DaTdWTVE3cnU1RE1BczVUeFdsSHFEd2pOdmZOdSIsIm9iamVjdCI6ImNoYXQuY29tcGxldGlvbi5jaHVuayIsImNyZWF0ZWQiOjE3NjQ2MzEzMTYsIm1vZGVsIjoiZ3B0LTUtbWluaS0yMDI1LTA4LTA3Iiwic2VydmljZV90aWVyIjoicHJpb3JpdHkiLCJzeXN0ZW1fZmluZ2VycHJpbnQiOm51bGwsImNob2ljZXMiOlt7ImluZGV4IjowLCJkZWx0YSI6eyJjb250ZW50IjoiUGFyaXMifSwiZmluaXNoX3JlYXNvbiI6bnVsbH1dLCJvYmZ1c2NhdGlvbiI6Im1abFY5UWJyTllaVlYzIn0KCmRhdGE6IHsiaWQiOiJjaGF0Y21wbC1DaTdWTVE3cnU1RE1BczVUeFdsSHFEd2pOdmZOdSIsIm9iamVjdCI6ImNoYXQuY29tcGxldGlvbi5jaHVuayIsImNyZWF0ZWQiOjE3NjQ2MzEzMTYsIm1vZGVsIjoiZ3B0LTUtbWluaS0yMDI1LTA4LTA3Iiwic2VydmljZV90aWVyIjoicHJpb3JpdHkiLCJzeXN0ZW1fZmluZ2VycHJpbnQiOm51bGwsImNob2ljZXMiOlt7ImluZGV4IjowLCJkZWx0YSI6e30sImZpbmlzaF9yZWFzb24iOiJzdG9wIn1dLCJvYmZ1c2NhdGlvbiI6ImZ0aGxXdkNJU2xKYkwifQoKZGF0YTogW0RPTkVdCgo="
       }
     }
   ]

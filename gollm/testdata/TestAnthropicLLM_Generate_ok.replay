@@ -1,5 +1,5 @@
 {
-  "Initial": "AQAAAA7gwBYWADRG0AIc",
+  "Initial": "AQAAAA7gwBkyG+4tUAIc",
   "Version": "0.2",
   "Converter": {
     "ScrubBody": null,
@@ -22,10 +22,11 @@
       "^X-Gfe-.*$",
       "^Accept-Encoding$",
       "^User-Agent$",
-      "^\\^X-Stainless-\\..*\\$$",
-      "^X-Api-Key$",
+      "^X-Stainless-Arch$",
+      "^X-Stainless-Os$",
       "^X-Stainless-Retry-Count$",
-      "^X-Stainless-Runtime-Version$"
+      "^X-Stainless-Runtime-Version$",
+      "^X-Api-Key$"
     ],
     "RemoveResponseHeaders": [
       "^X-Google-.*$",
@@ -37,7 +38,7 @@
   },
   "Entries": [
     {
-      "ID": "98c04194096204d2",
+      "ID": "020eadcdacc2a4ea",
       "Request": {
         "Method": "POST",
         "URL": "https://api.anthropic.com/v1/messages",
@@ -51,14 +52,8 @@
           "Content-Length": [
             "143"
           ],
-          "X-Stainless-Arch": [
-            "arm64"
-          ],
           "X-Stainless-Lang": [
             "go"
-          ],
-          "X-Stainless-Os": [
-            "MacOS"
           ],
           "X-Stainless-Package-Version": [
             "1.19.0"
@@ -88,7 +83,7 @@
             "4000000"
           ],
           "Anthropic-Ratelimit-Input-Tokens-Reset": [
-            "2025-12-01T23:04:54Z"
+            "2025-12-01T23:18:10Z"
           ],
           "Anthropic-Ratelimit-Output-Tokens-Limit": [
             "800000"
@@ -97,7 +92,7 @@
             "800000"
           ],
           "Anthropic-Ratelimit-Output-Tokens-Reset": [
-            "2025-12-01T23:04:56Z"
+            "2025-12-01T23:18:11Z"
           ],
           "Anthropic-Ratelimit-Requests-Limit": [
             "4000"
@@ -106,7 +101,7 @@
             "3999"
           ],
           "Anthropic-Ratelimit-Requests-Reset": [
-            "2025-12-01T23:04:54Z"
+            "2025-12-01T23:18:10Z"
           ],
           "Anthropic-Ratelimit-Tokens-Limit": [
             "4800000"
@@ -115,13 +110,13 @@
             "4800000"
           ],
           "Anthropic-Ratelimit-Tokens-Reset": [
-            "2025-12-01T23:04:54Z"
+            "2025-12-01T23:18:10Z"
           ],
           "Cf-Cache-Status": [
             "DYNAMIC"
           ],
           "Cf-Ray": [
-            "9a7639ea7bdfd775-NRT"
+            "9a764d5d59caaeb8-NRT"
           ],
           "Content-Encoding": [
             "gzip"
@@ -130,13 +125,13 @@
             "application/json"
           ],
           "Date": [
-            "Mon, 01 Dec 2025 23:04:56 GMT"
+            "Mon, 01 Dec 2025 23:18:12 GMT"
           ],
           "Request-Id": [
-            "req_011CVgoazydZutNvrdmaRNYa"
+            "req_011CVgpbiWaVoFVGSEKqStsL"
           ],
           "Retry-After": [
-            "6"
+            "52"
           ],
           "Server": [
             "cloudflare"
@@ -145,13 +140,13 @@
             "max-age=31536000; includeSubDomains; preload"
           ],
           "X-Envoy-Upstream-Service-Time": [
-            "1839"
+            "1092"
           ],
           "X-Robots-Tag": [
             "none"
           ]
         },
-        "Body": "H4sIAAAAAAAAAwAAAP//dJDdSgMxEIVfZTnXWdktXZA8QL0SpFQFRcKQjN3QbLLmR1vLvrtssUgVrwbm+2Y4nCOGYNhBQjsqhuue7K7Uy7qrF82ia5umhYA1kBjSVjXt5ql/INpf36zuP/fhdn34MOvhEQL5MPJscUq0ZQjE4OYFpWRTJp8hoIPP7DPk8/HsZ97P5DQkNj1XmkabyVXhtVpF8porm6o7ijZdYXoRSDmMKjKl4CHB3qhcosc3SPxW2GuG9MU5gXJKI4+wfixZ5bBjnyDbpYAm3bPSkSnb4NWl0Jx5ZDL/sfPt/J/HngeO5FQ3/PV/aNv/ppNAKPkiXSOQOL5bzSpbjpCYKzQUDabpCwAA//8DAEjj2Hq0AQAA"
+        "Body": "H4sIAAAAAAAAAwAAAP//dJBNSwMxEIb/yvKes7JbWsEcRS0UDx56EwljMu6GZpM1H7VS9r/LFotU8TQwzzPDy3vEEAw7SGhHxXDdk92Velmv6kWzWLVN00LAGkgMqVNN+7g53K1vXvlju+nsfdnu99fpdg2B/DnybHFK1DEEYnDzglKyKZPPENDBZ/YZ8vl49jMfZnIaEtueK02jzeSq8FY9RPKaK5uqJ4o2XWF6EUg5jCoypeAhwd6oXKLHN0j8XthrhvTFOYFySiOPsH4sWeWwY58g26WAJt2z0pEp2+DVpdCceWQy/7Hz7fyfx54HjuTUavjr/9C2/00ngVDyRbpGIHHcW80qW46QmCs0FA2m6QsAAP//AwDCcru8tAEAAA=="
       }
     }
   ]

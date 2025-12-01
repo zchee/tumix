@@ -1,5 +1,5 @@
 {
-  "Initial": "AQAAAA7gwBaZOoHEmAIc",
+  "Initial": "AQAAAA7gwBoRDO9bCAIc",
   "Version": "0.2",
   "Converter": {
     "ScrubBody": null,
@@ -22,12 +22,15 @@
       "^X-Gfe-.*$",
       "^Accept-Encoding$",
       "^User-Agent$",
-      "^\\^X-Stainless-\\..*\\$$",
+      "^X-Stainless-Arch$",
+      "^X-Stainless-Os$",
+      "^X-Stainless-Retry-Count$",
       "^X-Stainless-Runtime-Version$"
     ],
     "RemoveResponseHeaders": [
       "^X-Google-.*$",
       "^X-Gfe-.*$",
+      "^Openai-Organization$",
       "^Openai-Project$",
       "^Set-Cookie$"
     ],
@@ -36,7 +39,7 @@
   },
   "Entries": [
     {
-      "ID": "f5d3e61b5bd4d3fa",
+      "ID": "e0568e2f4f142232",
       "Request": {
         "Method": "POST",
         "URL": "https://api.openai.com/v1/chat/completions",
@@ -47,20 +50,11 @@
           "Content-Length": [
             "94"
           ],
-          "X-Stainless-Arch": [
-            "arm64"
-          ],
           "X-Stainless-Lang": [
             "go"
           ],
-          "X-Stainless-Os": [
-            "MacOS"
-          ],
           "X-Stainless-Package-Version": [
             "3.9.0"
-          ],
-          "X-Stainless-Retry-Count": [
-            "0"
           ],
           "X-Stainless-Runtime": [
             "go"
@@ -87,7 +81,7 @@
             "DYNAMIC"
           ],
           "Cf-Ray": [
-            "9a763d24bc712da1-NRT"
+            "9a7652cdc88f8a78-NRT"
           ],
           "Content-Encoding": [
             "gzip"
@@ -96,13 +90,10 @@
             "application/json"
           ],
           "Date": [
-            "Mon, 01 Dec 2025 23:07:07 GMT"
-          ],
-          "Openai-Organization": [
-            "zchee"
+            "Mon, 01 Dec 2025 23:21:54 GMT"
           ],
           "Openai-Processing-Ms": [
-            "716"
+            "653"
           ],
           "Openai-Version": [
             "2020-10-01"
@@ -117,7 +108,7 @@
             "nosniff"
           ],
           "X-Envoy-Upstream-Service-Time": [
-            "879"
+            "806"
           ],
           "X-Openai-Proxy-Wasm": [
             "v0.1"
@@ -141,10 +132,10 @@
             "0s"
           ],
           "X-Request-Id": [
-            "req_4ef928a4d7eb4c17a4303de05754aa32"
+            "req_8a3c647088cf436d996e68629ec5d66e"
           ]
         },
-        "Body": "H4sIAAAAAAAAA4xSy27cMAy8+ysIndeBs0m86d76RIC2aA+9FYGhyLTNVhYFiS66CPbfC8mbtYOmQC86cDijGZKPBYCiVu1BmUGLGb0t39LuruK+62T38e7Lw3t+d6jdp9efp+H2jahNYvDDDzTyxLowPHqLQuxm2ATUgkn1cldf11fV9bbOwMgt2kTrvZQ35UiOym21vSmr27LancgDk8Go9vC9AAB4zG+y6Vr8rfZQbZ4qI8aoe1T7cxOACmxTRekYKYp2s+UTaNgJuuz824BgtCfRFriDD0E7g0ARvupA8WLNCthNUSfjbrJ2BWjnWHQKnv3en5Dj2WFHjuLQBNSRXfo1CnuV0WMBcJ8TT89CKB949NII/8Qse3k1y6llzCuwPoHCou1S377avKDWtCiabFxNTBltBmwX5jJePbXEK6BYZfvbzEvac25y/f/IL4Ax6AXbxgdsyTwPvLQFTEf4r7bzjLNhFTH8IoONEIa0Bx+IA8lhvrl4iIJj05HrMfhA+ULSrotj8QcAAP//AwCr1PixIwMAAA=="
+        "Body": "H4sIAAAAAAAAA4xSTWvbQBC961cMe7aCbCd262MCDYQcQig9pAQxWY2kSbUf7I5L3eD/Xnb9IYWm0IsO8+Y9vfd23goAxY3agNI9ijZ+KG94/e3O3P7G9rFdVf5yfd+Z3fz6yTyGpxs1Swz38kpaTqwL7YwfSNjZA6wDoVBSna9Xl6vlfDlfZsC4hoZE67yUV6Vhy+WiWlyV1aeyWh/JvWNNUW3gewEA8Ja/yaZt6JfaQDU7TQzFiB2pzXkJQAU3pInCGDkKWlGzEdTOCtns/GtPoNGz4ACuhS8BrSbgCA8YOF5MWYHabcRk3G6HYQKgtU4wBc9+n4/I/uywZcuxrwNhdDb9NYrzKqP7AuA5J96+C6F8cMZLLe4HZdlDd9n8qeYJuDqC4gSHcb74PPtArW5IkIc4aUxp1D01I3OsF7cNuwlQTLL9beYj7UNutt3/yI+A1uSFmtoHali/DzyuBUpH+K+1c8fZsIoUfrKmWphCegcf2AWW3eHm4i4Kmbpl21HwgfOFpLcu9sUfAAAA//8DACAkgSYjAwAA"
       }
     }
   ]
