@@ -74,6 +74,7 @@ func registerPingService(s *grpc.Server) {
 func TestNewHTTPClientRecordCreatesReplay(t *testing.T) {
 	t.Parallel()
 
+	const httpAddr = "127.0.0.1:28090"
 	replayPath := filepath.Join("testdata", t.Name()+".replay")
 	restore, recording := withRecordMode(t, replayPath)
 	t.Cleanup(restore)
@@ -85,13 +86,15 @@ func TestNewHTTPClientRecordCreatesReplay(t *testing.T) {
 		_, _ = w.Write([]byte("pong"))
 	})
 	srv := http.Server{Handler: mux}
-	ln := httptestListener(t)
-	t.Cleanup(func() { _ = srv.Shutdown(t.Context()) })
-	go func() {
-		_ = srv.Serve(ln)
-	}()
+	if recording {
+		ln := mustListen(t, httpAddr)
+		t.Cleanup(func() { _ = srv.Shutdown(t.Context()) })
+		go func() {
+			_ = srv.Serve(ln)
+		}()
+	}
 
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+ln.Addr().String()+"/ping", http.NoBody)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+httpAddr+"/ping", http.NoBody)
 	if err != nil {
 		t.Fatalf("build request: %v", err)
 	}
@@ -112,19 +115,22 @@ func TestNewHTTPClientRecordCreatesReplay(t *testing.T) {
 }
 
 func TestNewInsecureGRPCConnRecordCreatesReplay(t *testing.T) {
+	const grpcAddr = "127.0.0.1:28091"
 	replayPath := filepath.Join("testdata", t.Name()+".replay")
 	restore, recording := withRecordMode(t, replayPath)
 	t.Cleanup(restore)
 
-	ln := grpcListener(t)
-	s := grpc.NewServer()
-	registerPingService(s)
-	go func() {
-		_ = s.Serve(ln)
-	}()
-	t.Cleanup(s.Stop)
+	if recording {
+		ln := mustListen(t, grpcAddr)
+		s := grpc.NewServer()
+		registerPingService(s)
+		go func() {
+			_ = s.Serve(ln)
+		}()
+		t.Cleanup(s.Stop)
+	}
 
-	conn, cleanup := NewInsecureGRPCConn(t, "rr-test", ln.Addr().String())
+	conn, cleanup := NewInsecureGRPCConn(t, "rr-test", grpcAddr)
 
 	ctx := t.Context()
 	if err := conn.Invoke(ctx, "/test.Ping/Ping", &emptypb.Empty{}, &emptypb.Empty{}); err != nil {
@@ -141,28 +147,6 @@ func TestNewInsecureGRPCConnRecordCreatesReplay(t *testing.T) {
 	}
 }
 
-func httptestListener(t *testing.T) net.Listener {
-	t.Helper()
-
-	var lc net.ListenConfig
-	ln, err := lc.Listen(t.Context(), "tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("httptest listener: %v", err)
-	}
-	return ln
-}
-
-func grpcListener(t *testing.T) net.Listener {
-	t.Helper()
-
-	var lc net.ListenConfig
-	ln, err := lc.Listen(t.Context(), "tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("grpc listener: %v", err)
-	}
-	return ln
-}
-
 func withRecordMode(t *testing.T, replay string) (func(), bool) {
 	t.Helper()
 
@@ -173,4 +157,15 @@ func withRecordMode(t *testing.T, replay string) (func(), bool) {
 	}
 	*Record = recording
 	return func() { *Record = orig }, recording
+}
+
+func mustListen(t *testing.T, addr string) net.Listener {
+	t.Helper()
+
+	var lc net.ListenConfig
+	ln, err := lc.Listen(t.Context(), "tcp", addr)
+	if err != nil {
+		t.Fatalf("listen %s: %v", addr, err)
+	}
+	return ln
 }
