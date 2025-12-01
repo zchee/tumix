@@ -17,8 +17,11 @@
 package adapter
 
 import (
+	"context"
 	json "encoding/json/v2"
+	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 	"unsafe"
 
@@ -349,13 +352,52 @@ func TestXAIStreamAggregatorThought(t *testing.T) {
 }
 
 func TestAppendDelta(t *testing.T) {
-	acc := "Hello"
-	if delta := appendDelta("Hello world", &acc); delta != " world" {
+	var acc strings.Builder
+	acc.WriteString("Hello")
+	if delta := appendDeltaToBuilder("Hello world", &acc); delta != " world" {
 		t.Fatalf("delta = %q, want %q", delta, " world")
 	}
-	acc = "foo"
-	if delta := appendDelta("bar", &acc); delta != "bar" {
+	acc.Reset()
+	acc.WriteString("foo")
+	if delta := appendDeltaToBuilder("bar", &acc); delta != "bar" {
 		t.Fatalf("delta = %q, want bar", delta)
+	}
+}
+
+func BenchmarkXAIStreamAggregator(b *testing.B) {
+	ctx := context.Background()
+	lengths := []int{1_024, 4_096, 10_240}
+
+	for _, n := range lengths {
+		b.Run(fmt.Sprintf("len=%d", n), func(b *testing.B) {
+			b.ReportAllocs()
+			payload := strings.Repeat("a", n)
+			resp := newTestXAIResponse(b, &xaipb.GetChatCompletionResponse{
+				Outputs: []*xaipb.CompletionOutput{{
+					Message: &xaipb.CompletionMessage{
+						Role:    xaipb.MessageRole_ROLE_ASSISTANT,
+						Content: payload,
+					},
+				}},
+			})
+
+			var size int
+			for b.Loop() {
+				aggr := NewXAIStreamAggregator()
+				for llm, err := range aggr.Process(ctx, resp) {
+					if err != nil {
+						b.Fatalf("process: %v", err)
+					}
+					if llm != nil && llm.Content != nil && len(llm.Content.Parts) > 0 {
+						size += len(llm.Content.Parts[0].Text)
+					}
+				}
+				if final := aggr.Close(); final != nil && final.Content != nil && len(final.Content.Parts) > 0 {
+					size += len(final.Content.Parts[0].Text)
+				}
+			}
+			_ = size
+		})
 	}
 }
 
@@ -379,8 +421,8 @@ func TestMapXAIFinishReason(t *testing.T) {
 	}
 }
 
-func newTestXAIResponse(t *testing.T, proto *xaipb.GetChatCompletionResponse) *xai.Response {
-	t.Helper()
+func newTestXAIResponse(tb testing.TB, proto *xaipb.GetChatCompletionResponse) *xai.Response {
+	tb.Helper()
 	resp := &xai.Response{}
 	v := reflect.ValueOf(resp).Elem().FieldByName("proto")
 	reflect.NewAt(v.Type(), unsafe.Pointer(v.UnsafeAddr())).Elem().Set(reflect.ValueOf(proto))

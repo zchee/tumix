@@ -87,6 +87,17 @@ func toFunctionParameters(src any) (shared.FunctionParameters, error) {
 		return nil, nil //nolint:nilnil
 	}
 
+	switch v := src.(type) {
+	case map[string]any:
+		return v, nil
+	case []byte:
+		var params map[string]any
+		if err := json.Unmarshal(v, &params); err != nil {
+			return nil, fmt.Errorf("unmarshal json: %w", err)
+		}
+		return params, nil
+	}
+
 	raw, err := json.Marshal(src)
 	if err != nil {
 		return nil, fmt.Errorf("marshal json: %w", err)

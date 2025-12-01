@@ -18,10 +18,12 @@ package adapter
 
 import (
 	"cmp"
+	"encoding/json/jsontext"
 	json "encoding/json/v2"
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 
 	openai "github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/shared/constant"
@@ -233,18 +235,27 @@ func (a *OpenAIStreamAggregator) ensureToolCall(idx int64, id string) *toolCallS
 }
 
 func parseArgs(raw string) map[string]any {
-	if strings.TrimSpace(raw) == "" {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
 		return map[string]any{}
 	}
 
+	dec := argsDecoderPool.Get().(*jsontext.Decoder)
+	defer argsDecoderPool.Put(dec)
+	dec.Reset(strings.NewReader(trimmed))
+
 	var out map[string]any
-	if err := json.Unmarshal([]byte(raw), &out); err != nil {
-		return map[string]any{
-			"raw": raw,
-		}
+	if err := json.UnmarshalDecode(dec, &out); err != nil {
+		return map[string]any{"raw": raw}
 	}
 
 	return out
+}
+
+var argsDecoderPool = sync.Pool{
+	New: func() any {
+		return jsontext.NewDecoder(strings.NewReader(""))
+	},
 }
 
 func openAIUsage(u *openai.CompletionUsage) *genai.GenerateContentResponseUsageMetadata {

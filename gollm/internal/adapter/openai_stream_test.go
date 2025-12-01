@@ -14,33 +14,29 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package gollm
+package adapter
 
 import (
-	"context"
-	"net"
 	"testing"
 
-	"google.golang.org/grpc"
-
-	"github.com/zchee/tumix/gollm/xai"
+	openai "github.com/openai/openai-go/v3"
 )
 
-func TestNewXAILLMConstructor(t *testing.T) {
-	t.Parallel()
-
-	llm, err := NewXAILLM(t.Context(), AuthMethodAPIKey("dummy"), "grok-test",
-		xai.WithAPIHost("127.0.0.1:0"), // no outbound traffic in ctor
-		xai.WithInsecure(),
-		xai.WithTimeout(0),
-		xai.WithDialOptions(grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
-			return nil, nil //nolint:nilnil
-		})),
-	)
-	if err != nil {
-		t.Fatalf("NewXAILLM error: %v", err)
+func BenchmarkOpenAIStreamAggregator(b *testing.B) {
+	chunk := openai.ChatCompletionChunk{
+		Choices: []openai.ChatCompletionChunkChoice{{
+			Delta: openai.ChatCompletionChunkChoiceDelta{Content: "hello world"},
+		}},
 	}
-	if got := llm.Name(); got != "grok-test" {
-		t.Fatalf("Name() = %q, want %q", got, "grok-test")
+
+	b.ReportAllocs()
+	for b.Loop() {
+		agg := NewOpenAIStreamAggregator()
+		if out := agg.Process(&chunk); len(out) != 1 {
+			b.Fatalf("got %d partials, want 1", len(out))
+		}
+		if final := agg.Final(); final == nil {
+			b.Fatalf("Final() returned nil")
+		}
 	}
 }

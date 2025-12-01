@@ -31,8 +31,8 @@ import (
 
 // XAIStreamAggregator accumulates streaming xAI responses into coherent LLM responses.
 type XAIStreamAggregator struct {
-	text        string
-	thoughtText string
+	text        strings.Builder
+	thoughtText strings.Builder
 	response    *model.LLMResponse
 	role        string
 }
@@ -77,17 +77,12 @@ func (s *XAIStreamAggregator) aggregateResponse(llmResponse *model.LLMResponse) 
 
 	// If part is text append it
 	if part0 != nil && part0.Text != "" {
-		delta := appendDelta(part0.Text, func() *string {
+		appendDeltaToBuilder(part0.Text, func() *strings.Builder {
 			if part0.Thought {
 				return &s.thoughtText
 			}
 			return &s.text
 		}())
-		if part0.Thought {
-			s.thoughtText += delta
-		} else {
-			s.text += delta
-		}
 		llmResponse.Partial = true
 		return nil
 	}
@@ -100,7 +95,7 @@ func (s *XAIStreamAggregator) aggregateResponse(llmResponse *model.LLMResponse) 
 	}
 
 	// If there is aggregated text and there is no content or parts return aggregated response
-	if (s.thoughtText != "" || s.text != "") &&
+	if (s.thoughtText.Len() != 0 || s.text.Len() != 0) &&
 		(llmResponse.Content == nil ||
 			len(llmResponse.Content.Parts) == 0 ||
 			// don't yield the merged text event when receiving audio data
@@ -113,13 +108,13 @@ func (s *XAIStreamAggregator) aggregateResponse(llmResponse *model.LLMResponse) 
 
 // Close returns the final aggregated LLM response and resets the aggregator state.
 func (s *XAIStreamAggregator) Close() *model.LLMResponse {
-	if (s.text != "" || s.thoughtText != "") && s.response != nil {
+	if (s.text.Len() != 0 || s.thoughtText.Len() != 0) && s.response != nil {
 		var parts []*genai.Part
-		if s.thoughtText != "" {
-			parts = append(parts, &genai.Part{Text: s.thoughtText, Thought: true})
+		if s.thoughtText.Len() != 0 {
+			parts = append(parts, &genai.Part{Text: s.thoughtText.String(), Thought: true})
 		}
-		if s.text != "" {
-			parts = append(parts, &genai.Part{Text: s.text, Thought: false})
+		if s.text.Len() != 0 {
+			parts = append(parts, &genai.Part{Text: s.text.String(), Thought: false})
 		}
 
 		response := &model.LLMResponse{
@@ -139,20 +134,27 @@ func (s *XAIStreamAggregator) Close() *model.LLMResponse {
 
 func (s *XAIStreamAggregator) clear() {
 	s.response = nil
-	s.text = ""
-	s.thoughtText = ""
+	s.text.Reset()
+	s.thoughtText.Reset()
 	s.role = ""
 }
 
-func appendDelta(incoming string, acc *string) string {
+func appendDeltaToBuilder(incoming string, acc *strings.Builder) string {
 	if acc == nil || incoming == "" {
 		return incoming
 	}
 
-	if after, ok := strings.CutPrefix(incoming, *acc); ok {
-		return after
+	// Avoid quadratic concatenation by appending only the new suffix when the incoming
+	// text already contains the previous accumulated text as a prefix.
+	existing := acc.String()
+	delta := incoming
+	if len(incoming) >= len(existing) && strings.HasPrefix(incoming, existing) {
+		delta = incoming[len(existing):]
+	}
+	if delta == "" {
+		return ""
 	}
 
-	// If the incoming text is not a superset, treat it as fresh chunk to avoid data loss.
-	return incoming
+	acc.WriteString(delta)
+	return delta
 }

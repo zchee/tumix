@@ -14,33 +14,19 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package gollm
+package adapter
 
 import (
-	"context"
-	"net"
 	"testing"
-
-	"google.golang.org/grpc"
-
-	"github.com/zchee/tumix/gollm/xai"
 )
 
-func TestNewXAILLMConstructor(t *testing.T) {
-	t.Parallel()
+func BenchmarkParseArgs(b *testing.B) {
+	json := `{"a":1,"b":{"c":"d","e":[1,2,3]},"long":"` + longJSONFragment + `"}`
+	b.ReportAllocs()
 
-	llm, err := NewXAILLM(t.Context(), AuthMethodAPIKey("dummy"), "grok-test",
-		xai.WithAPIHost("127.0.0.1:0"), // no outbound traffic in ctor
-		xai.WithInsecure(),
-		xai.WithTimeout(0),
-		xai.WithDialOptions(grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
-			return nil, nil //nolint:nilnil
-		})),
-	)
-	if err != nil {
-		t.Fatalf("NewXAILLM error: %v", err)
-	}
-	if got := llm.Name(); got != "grok-test" {
-		t.Fatalf("Name() = %q, want %q", got, "grok-test")
+	for b.Loop() {
+		parseArgs(json)
 	}
 }
+
+const longJSONFragment = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
