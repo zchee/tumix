@@ -33,7 +33,104 @@ import (
 	"github.com/zchee/tumix/gollm/internal/adapter"
 	"github.com/zchee/tumix/gollm/xai"
 	xaipb "github.com/zchee/tumix/gollm/xai/api/v1"
+	"github.com/zchee/tumix/testing/rr"
 )
+
+func TestXAIModel_RecordReplay(t *testing.T) {
+	t.Parallel()
+
+	const xaiReplayAddr = "127.0.0.1:28083"
+
+	var serverCleanup func()
+	if *rr.Record {
+		ln, err := net.Listen("tcp", xaiReplayAddr)
+		if err != nil {
+			t.Skipf("unable to listen for xai stub: %v", err)
+		}
+
+		grpcServer := grpc.NewServer()
+		xaipb.RegisterChatServer(grpcServer, &stubChatServer{
+			completionResp: &xaipb.GetChatCompletionResponse{
+				Model:             "grok-1",
+				SystemFingerprint: "fp-rr",
+				Outputs: []*xaipb.CompletionOutput{
+					{
+						Index:        0,
+						FinishReason: xaipb.FinishReason_REASON_STOP,
+						Message: &xaipb.CompletionMessage{
+							Role:    xaipb.MessageRole_ROLE_ASSISTANT,
+							Content: "Paris",
+						},
+					},
+				},
+				Usage: &xaipb.SamplingUsage{
+					CompletionTokens: 2,
+					PromptTokens:     8,
+					TotalTokens:      10,
+				},
+			},
+		})
+
+		go func() {
+			_ = grpcServer.Serve(ln)
+		}()
+		serverCleanup = func() {
+			grpcServer.Stop()
+			_ = ln.Close()
+		}
+	}
+
+	conn, cleanup := rr.NewInsecureGRPCConn(t, "xai", xaiReplayAddr)
+	t.Cleanup(cleanup)
+	if serverCleanup != nil {
+		t.Cleanup(serverCleanup)
+	}
+
+	llm, err := NewXAILLM(t.Context(), AuthMethodAPIKey("test-key"), "grok-1",
+		xai.WithAPIConn(conn),
+		xai.WithAPIHost(xaiReplayAddr),
+		xai.WithInsecure(),
+	)
+	if err != nil {
+		t.Fatalf("NewXAILLM() error = %v", err)
+	}
+	if concrete, ok := llm.(*xaiLLM); ok {
+		t.Cleanup(func() {
+			_ = concrete.client.Close()
+		})
+	}
+
+	req := &model.LLMRequest{
+		Contents: genai.Text("What is the capital of France?"),
+		Config:   &genai.GenerateContentConfig{},
+	}
+
+	var got *model.LLMResponse
+	for resp, err := range llm.GenerateContent(t.Context(), req, false) {
+		if err != nil {
+			t.Fatalf("GenerateContent() unexpected error: %v", err)
+		}
+		got = resp
+	}
+
+	want := &model.LLMResponse{
+		Content: genai.NewContentFromText("Paris", genai.RoleModel),
+		UsageMetadata: &genai.GenerateContentResponseUsageMetadata{
+			PromptTokenCount:     8,
+			CandidatesTokenCount: 2,
+			TotalTokenCount:      10,
+		},
+		CustomMetadata: map[string]any{
+			"xai_finish_reason":      "REASON_STOP",
+			"xai_system_fingerprint": "fp-rr",
+		},
+		FinishReason: genai.FinishReasonStop,
+	}
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("GenerateContent() diff (-want +got):\n%s", diff)
+	}
+}
 
 func TestXAIModel_Generate(t *testing.T) {
 	t.Parallel()

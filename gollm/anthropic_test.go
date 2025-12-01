@@ -17,15 +17,20 @@
 package gollm
 
 import (
+	"context"
+	"net"
+	"net/http"
 	"strings"
 	"testing"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
 
 	"github.com/zchee/tumix/gollm/internal/adapter"
+	"github.com/zchee/tumix/testing/rr"
 )
 
 func TestAnthropicLLMBuildParams(t *testing.T) {
@@ -153,5 +158,92 @@ func TestAnthropicLLMBuildParams(t *testing.T) {
 			}
 			tc.check(t, params)
 		})
+	}
+}
+
+func TestAnthropicLLMRecordReplay(t *testing.T) {
+	t.Parallel()
+
+	const anthropicReplayAddr = "127.0.0.1:28081"
+	const anthropicReplayBaseURL = "http://" + anthropicReplayAddr
+
+	if *rr.Record {
+		ln, err := net.Listen("tcp", anthropicReplayAddr)
+		if err != nil {
+			t.Skipf("unable to listen for anthropic stub: %v", err)
+		}
+
+		mux := http.NewServeMux()
+		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/v1/messages" && r.URL.Path != "/messages" {
+				http.NotFound(w, r)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{
+  "id": "msg_rr_test",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-3-haiku",
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 9,
+    "output_tokens": 2
+  },
+  "content": [
+    {
+      "type": "text",
+      "text": "Paris"
+    }
+  ]
+}`))
+		})
+
+		srv := &http.Server{Handler: mux}
+		go func() {
+			_ = srv.Serve(ln)
+		}()
+		t.Cleanup(func() {
+			_ = srv.Shutdown(context.Background())
+			_ = ln.Close()
+		})
+	}
+
+	httpClient, cleanup, _ := rr.NewHTTPClient(t, func(r *rr.Recorder) {})
+	t.Cleanup(cleanup)
+
+	llm, err := NewAnthropicLLM(t.Context(), AuthMethodAPIKey("test-key"), "claude-3-haiku",
+		option.WithBaseURL(anthropicReplayBaseURL),
+		option.WithHTTPClient(httpClient),
+	)
+	if err != nil {
+		t.Fatalf("NewAnthropicLLM() error = %v", err)
+	}
+
+	req := &model.LLMRequest{
+		Contents: genai.Text("What is the capital of France?"),
+		Config:   &genai.GenerateContentConfig{},
+	}
+
+	var got *model.LLMResponse
+	for resp, err := range llm.GenerateContent(t.Context(), req, false) {
+		if err != nil {
+			t.Fatalf("GenerateContent() unexpected error: %v", err)
+		}
+		got = resp
+	}
+
+	want := &model.LLMResponse{
+		Content: genai.NewContentFromText("Paris", genai.RoleModel),
+		UsageMetadata: &genai.GenerateContentResponseUsageMetadata{
+			PromptTokenCount:     9,
+			CandidatesTokenCount: 2,
+			TotalTokenCount:      11,
+		},
+		FinishReason: genai.FinishReasonStop,
+	}
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("GenerateContent() diff (-want +got):\n%s", diff)
 	}
 }

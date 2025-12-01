@@ -44,6 +44,8 @@ type clientOptions struct {
 	managementHost string
 	metadata       map[string]string
 	dialOptions    []grpc.DialOption
+	apiConn        *grpc.ClientConn
+	managementConn *grpc.ClientConn
 	useInsecure    bool
 	timeout        time.Duration
 }
@@ -124,6 +126,20 @@ func WithSDKVersion(version string) ClientOption {
 func WithDialOptions(opts ...grpc.DialOption) ClientOption {
 	return func(o *clientOptions) {
 		o.dialOptions = append(o.dialOptions, opts...)
+	}
+}
+
+// WithAPIConn injects a pre-built gRPC connection for the data plane.
+func WithAPIConn(conn *grpc.ClientConn) ClientOption {
+	return func(o *clientOptions) {
+		o.apiConn = conn
+	}
+}
+
+// WithManagementConn injects a pre-built gRPC connection for the management plane.
+func WithManagementConn(conn *grpc.ClientConn) ClientOption {
+	return func(o *clientOptions) {
+		o.managementConn = conn
 	}
 }
 
