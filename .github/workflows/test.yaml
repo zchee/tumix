@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name != 'push' }}
 
 env:
-  GOEXPERIMENT: arenas,loopvar,newinliner,jsonv2,greenteagc
+  GOEXPERIMENT: cgocheck2,loopvar,newinliner,jsonv2,greenteagc
 
 jobs:
   test:
