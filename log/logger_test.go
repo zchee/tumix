@@ -73,3 +73,32 @@ func TestLogAddSource(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkLogCallerCapture(b *testing.B) {
+	cases := map[string]struct {
+		capture bool
+	}{
+		"capture:on": {
+			capture: true,
+		},
+		"capture:off": {
+			capture: false,
+		},
+	}
+
+	for name, tc := range cases {
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			SetCaptureCaller(tc.capture)
+			b.Cleanup(func() { SetCaptureCaller(true) })
+
+			logger := slog.New(slog.DiscardHandler)
+			ctx := context.Background()
+			ctx = WithLogger(ctx, logger)
+
+			for b.Loop() {
+				Info(ctx, "hello", "k", 1)
+			}
+		})
+	}
+}

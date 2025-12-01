@@ -26,6 +26,7 @@ import (
 	"log/slog"
 	"runtime"
 	"slices"
+	"sync/atomic"
 	"time"
 )
 
@@ -35,6 +36,19 @@ type loggerKey struct{}
 // WithLogger returns a new [context.Context] that carries the provided [*slog.Logger].
 func WithLogger(ctx context.Context, logger *slog.Logger) context.Context {
 	return context.WithValue(ctx, loggerKey{}, logger)
+}
+
+var captureCaller atomic.Bool
+
+func init() {
+	captureCaller.Store(true)
+}
+
+// SetCaptureCaller toggles whether log records include call-site information.
+//
+// Disabling caller capture avoids the runtime.Callers overhead in hot logging paths.
+func SetCaptureCaller(enabled bool) {
+	captureCaller.Store(enabled)
 }
 
 // FromContext returns the [*slog.Logger] associated with the provided [context.Context] or [slog.Default] if no context-scoped logger is available.
@@ -68,10 +82,15 @@ func Error(ctx context.Context, msg string, err error, args ...any) {
 // If we use [slog.Logger.Log] directly in our log package methods, these methods are logged as the call site.
 func doLog(ctx context.Context, level slog.Level, msg string, args ...any) {
 	if logger := FromContext(ctx); logger.Enabled(ctx, level) {
-		var pcs [1]uintptr
-		// skip [runtime.Callers], [doLog], and caller
-		runtime.Callers(3, pcs[:])
-		record := slog.NewRecord(time.Now(), level, msg, pcs[0])
+		var pc uintptr
+		if captureCaller.Load() {
+			var pcs [1]uintptr
+			// skip [runtime.Callers], [doLog], and caller
+			runtime.Callers(3, pcs[:])
+			pc = pcs[0]
+		}
+
+		record := slog.NewRecord(time.Now(), level, msg, pc)
 		record.Add(args...)
 		logger.Handler().Handle(ctx, record) //nolint:errcheck,gosec
 	}
