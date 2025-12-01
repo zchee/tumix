@@ -1,5 +1,5 @@
 {
-  "Initial": "AQAAAA7gv+phM/Y7GAIc",
+  "Initial": "AQAAAA7gv/DpAv/WaAIc",
   "Version": "0.2",
   "Converter": {
     "ScrubBody": null,
@@ -19,7 +19,10 @@
       "^X-Cloud-Trace-Context$",
       "^X-Goog-Api-Client$",
       "^X-Google-.*$",
-      "^X-Gfe-.*$"
+      "^X-Gfe-.*$",
+      "^X-Stainless-Arch$",
+      "^X-Stainless-Runtime-Version$",
+      "^X-Stainless-Os$"
     ],
     "RemoveResponseHeaders": [
       "^X-Google-.*$",
@@ -30,7 +33,7 @@
   },
   "Entries": [
     {
-      "ID": "910302467b2f4184",
+      "ID": "c04262cf0572743b",
       "Request": {
         "Method": "GET",
         "URL": "http://127.0.0.1:28090/ping",
@@ -60,7 +63,7 @@
             "text/plain; charset=utf-8"
           ],
           "Date": [
-            "Mon, 01 Dec 2025 19:58:26 GMT"
+            "Mon, 01 Dec 2025 20:26:17 GMT"
           ]
         },
         "Body": "cG9uZw=="

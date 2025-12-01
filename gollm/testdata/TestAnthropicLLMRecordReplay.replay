@@ -1,5 +1,5 @@
 {
-  "Initial": "AQAAAA7gv+GlCUu68AIc",
+  "Initial": "AQAAAA7gv/DpA30cuAIc",
   "Version": "0.2",
   "Converter": {
     "ScrubBody": null,
@@ -19,7 +19,10 @@
       "^X-Cloud-Trace-Context$",
       "^X-Goog-Api-Client$",
       "^X-Google-.*$",
-      "^X-Gfe-.*$"
+      "^X-Gfe-.*$",
+      "^X-Stainless-Arch$",
+      "^X-Stainless-Runtime-Version$",
+      "^X-Stainless-Os$"
     ],
     "RemoveResponseHeaders": [
       "^X-Google-.*$",
@@ -30,7 +33,7 @@
   },
   "Entries": [
     {
-      "ID": "63ec72a99f686641",
+      "ID": "cb60cf9820987a17",
       "Request": {
         "Method": "POST",
         "URL": "http://127.0.0.1:28081/v1/messages",
@@ -48,19 +51,13 @@
             "141"
           ],
           "User-Agent": [
-            "tumix/0.1.0/anthropic 1.25.4 X:cgocheck2,loopvar,newinliner,jsonv2,greenteagc"
+            "tumix/0.1.0/anthropic go1.25"
           ],
           "X-Api-Key": [
             "test-key"
           ],
-          "X-Stainless-Arch": [
-            "arm64"
-          ],
           "X-Stainless-Lang": [
             "go"
-          ],
-          "X-Stainless-Os": [
-            "MacOS"
           ],
           "X-Stainless-Package-Version": [
             "1.19.0"
@@ -70,9 +67,6 @@
           ],
           "X-Stainless-Runtime": [
             "go"
-          ],
-          "X-Stainless-Runtime-Version": [
-            "go1.25.4 X:cgocheck2,loopvar,newinliner,jsonv2,greenteagc"
           ],
           "X-Stainless-Timeout": [
             "600"
@@ -96,7 +90,7 @@
             "application/json"
           ],
           "Date": [
-            "Mon, 01 Dec 2025 19:21:09 GMT"
+            "Mon, 01 Dec 2025 20:26:17 GMT"
           ]
         },
         "Body": "ewogICJpZCI6ICJtc2dfcnJfdGVzdCIsCiAgInR5cGUiOiAibWVzc2FnZSIsCiAgInJvbGUiOiAiYXNzaXN0YW50IiwKICAibW9kZWwiOiAiY2xhdWRlLTMtaGFpa3UiLAogICJzdG9wX3JlYXNvbiI6ICJlbmRfdHVybiIsCiAgInVzYWdlIjogewogICAgImlucHV0X3Rva2VucyI6IDksCiAgICAib3V0cHV0X3Rva2VucyI6IDIKICB9LAogICJjb250ZW50IjogWwogICAgewogICAgICAidHlwZSI6ICJ0ZXh0IiwKICAgICAgInRleHQiOiAiUGFyaXMiCiAgICB9CiAgXQp9"

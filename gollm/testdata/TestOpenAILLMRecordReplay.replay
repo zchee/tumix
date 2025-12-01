@@ -1,5 +1,5 @@
 {
-  "Initial": "AQAAAA7gv+GlCUfS8AIc",
+  "Initial": "AQAAAA7gv/DpA1Vc8AIc",
   "Version": "0.2",
   "Converter": {
     "ScrubBody": null,
@@ -19,7 +19,10 @@
       "^X-Cloud-Trace-Context$",
       "^X-Goog-Api-Client$",
       "^X-Google-.*$",
-      "^X-Gfe-.*$"
+      "^X-Gfe-.*$",
+      "^X-Stainless-Arch$",
+      "^X-Stainless-Runtime-Version$",
+      "^X-Stainless-Os$"
     ],
     "RemoveResponseHeaders": [
       "^X-Google-.*$",
@@ -30,7 +33,7 @@
   },
   "Entries": [
     {
-      "ID": "737771f03575dfc8",
+      "ID": "d85e4bc01a60f0e7",
       "Request": {
         "Method": "POST",
         "URL": "http://127.0.0.1:28082/v1/chat/completions",
@@ -45,16 +48,10 @@
             "90"
           ],
           "User-Agent": [
-            "tumix/0.1.0/openai 1.25.4 X:cgocheck2,loopvar,newinliner,jsonv2,greenteagc"
-          ],
-          "X-Stainless-Arch": [
-            "arm64"
+            "tumix/0.1.0/openai go1.25"
           ],
           "X-Stainless-Lang": [
             "go"
-          ],
-          "X-Stainless-Os": [
-            "MacOS"
           ],
           "X-Stainless-Package-Version": [
             "3.8.1"
@@ -64,9 +61,6 @@
           ],
           "X-Stainless-Runtime": [
             "go"
-          ],
-          "X-Stainless-Runtime-Version": [
-            "go1.25.4 X:cgocheck2,loopvar,newinliner,jsonv2,greenteagc"
           ]
         },
         "MediaType": "application/json",
@@ -87,7 +81,7 @@
             "application/json"
           ],
           "Date": [
-            "Mon, 01 Dec 2025 19:21:09 GMT"
+            "Mon, 01 Dec 2025 20:26:17 GMT"
           ]
         },
         "Body": "ewogICJpZCI6ICJjaGF0Y21wbC1ycmVwbGF5IiwKICAib2JqZWN0IjogImNoYXQuY29tcGxldGlvbiIsCiAgImNyZWF0ZWQiOiAxNzMwMDAwMDAwLAogICJtb2RlbCI6ICJncHQtNG8iLAogICJjaG9pY2VzIjogWwogICAgewogICAgICAiaW5kZXgiOiAwLAogICAgICAiZmluaXNoX3JlYXNvbiI6ICJzdG9wIiwKICAgICAgIm1lc3NhZ2UiOiB7CiAgICAgICAgInJvbGUiOiAiYXNzaXN0YW50IiwKICAgICAgICAiY29udGVudCI6ICJQYXJpcyIKICAgICAgfQogICAgfQogIF0sCiAgInVzYWdlIjogewogICAgInByb21wdF90b2tlbnMiOiA4LAogICAgImNvbXBsZXRpb25fdG9rZW5zIjogMiwKICAgICJ0b3RhbF90b2tlbnMiOiAxMAogIH0KfQ=="
