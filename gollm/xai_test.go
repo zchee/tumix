@@ -513,6 +513,7 @@ func (s *stubChatServer) cloneRequest(req *xaipb.GetCompletionsRequest) *xaipb.G
 	return proto.Clone(req).(*xaipb.GetCompletionsRequest)
 }
 
+//nolint:unparam
 func (s *stubChatServer) GetCompletion(ctx context.Context, req *xaipb.GetCompletionsRequest) (*xaipb.GetChatCompletionResponse, error) {
 	s.lastRequest = s.cloneRequest(req)
 	return proto.Clone(s.completionResp).(*xaipb.GetChatCompletionResponse), nil

@@ -19,11 +19,7 @@ package gollm
 import (
 	"fmt"
 	"iter"
-	"net"
-	"net/http"
-	"slices"
 	"strings"
-	"testing"
 
 	"google.golang.org/adk/model"
 )
@@ -38,7 +34,7 @@ type TextResponse struct {
 }
 
 // readResponse transforms a sequence into a TextResponse, concatenating the text value of the response parts
-// depending on the readPartial value it will only concatenate the text of partial events or the text of non partial events
+// depending on the readPartial value it will only concatenate the text of partial events or the text of non partial events.
 func readResponse(s iter.Seq2[*model.LLMResponse, error]) (TextResponse, error) {
 	var partialBuilder, finalBuilder strings.Builder
 	var result TextResponse
@@ -65,48 +61,4 @@ func readResponse(s iter.Seq2[*model.LLMResponse, error]) (TextResponse, error) 
 	result.PartialText = partialBuilder.String()
 	result.FinalText = finalBuilder.String()
 	return result, nil
-}
-
-// startStubHTTP spins up a minimal HTTP server that responds with payload when the request path matches any allowed path.
-// The caller is responsible for selecting unique addresses per test.
-func startStubHTTP(t *testing.T, addr string, allowed []string, payload string) func() {
-	t.Helper()
-
-	var lc net.ListenConfig
-	ln, err := lc.Listen(t.Context(), "tcp", addr)
-	if err != nil {
-		t.Fatalf("listen %s: %v", addr, err)
-	}
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		ok := slices.Contains(allowed, r.URL.Path)
-		if !ok {
-			http.NotFound(w, r)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		if _, err := w.Write([]byte(payload)); err != nil {
-			t.Fatal(err)
-		}
-	})
-
-	srv := &http.Server{Handler: mux}
-	go func() {
-		if err := srv.Serve(ln); err != nil {
-			t.Error(err)
-		}
-	}()
-
-	return func() {
-		if err := srv.Shutdown(t.Context()); err != nil {
-			t.Fatal(err)
-		}
-		if err := ln.Close(); err != nil {
-			t.Fatal(err)
-		}
-		if t.Failed() {
-			t.FailNow()
-		}
-	}
 }
