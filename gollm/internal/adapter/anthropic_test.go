@@ -71,7 +71,7 @@ func TestAnthropicMessageToLLMResponse_TextAndToolCall(t *testing.T) {
 	}
 }
 
-func TestGenaiToAnthropicMessages_SystemAndUser(t *testing.T) {
+func TestGenAIToAnthropicMessages_SystemAndUser(t *testing.T) {
 	sys := genai.NewContentFromText("system guidance", "system")
 	contents := []*genai.Content{
 		genai.NewContentFromText("hello", genai.RoleUser),
@@ -79,7 +79,7 @@ func TestGenaiToAnthropicMessages_SystemAndUser(t *testing.T) {
 
 	systemBlocks, msgs, err := GenAIToAnthropicMessages(sys, contents)
 	if err != nil {
-		t.Fatalf("GenaiToAnthropicMessages err = %v", err)
+		t.Fatalf("GenAIToAnthropicMessages err = %v", err)
 	}
 
 	if len(systemBlocks) != 1 || systemBlocks[0].Text != "system guidance" {

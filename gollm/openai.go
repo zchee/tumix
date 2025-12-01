@@ -171,7 +171,7 @@ func (m *openAILLM) chatCompletionParams(req *model.LLMRequest) (*openai.ChatCom
 	}
 
 	if len(cfg.Tools) > 0 {
-		tools, tc := adapter.GenaiToolsToOpenAI(cfg.Tools, cfg.ToolConfig)
+		tools, tc := adapter.GenAIToolsToOpenAI(cfg.Tools, cfg.ToolConfig)
 		params.Tools = tools
 		if tc != nil {
 			params.ToolChoice = *tc

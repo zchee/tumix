@@ -27,8 +27,8 @@ import (
 	"google.golang.org/genai"
 )
 
-// GenaiToolsToOpenAI maps GenAI tool declarations into OpenAI chat completion tool parameters and choice options.
-func GenaiToolsToOpenAI(tools []*genai.Tool, cfg *genai.ToolConfig) (params []openai.ChatCompletionToolUnionParam, choiceOpt *openai.ChatCompletionToolChoiceOptionUnionParam) {
+// GenAIToolsToOpenAI maps GenAI tool declarations into OpenAI chat completion tool parameters and choice options.
+func GenAIToolsToOpenAI(tools []*genai.Tool, cfg *genai.ToolConfig) (params []openai.ChatCompletionToolUnionParam, choiceOpt *openai.ChatCompletionToolChoiceOptionUnionParam) {
 	if len(tools) == 0 {
 		return nil, nil
 	}

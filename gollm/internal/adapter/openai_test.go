@@ -28,7 +28,7 @@ import (
 	"google.golang.org/genai"
 )
 
-func TestGenaiToOpenAIMessages(t *testing.T) {
+func TestGenAIToOpenAIMessages(t *testing.T) {
 	contents := []*genai.Content{
 		genai.NewContentFromText("hello", genai.RoleUser),
 		{
@@ -53,7 +53,7 @@ func TestGenaiToOpenAIMessages(t *testing.T) {
 
 	msgs, err := GenAIToOpenAIMessages(contents)
 	if err != nil {
-		t.Fatalf("GenaiToOpenAIMessages err = %v", err)
+		t.Fatalf("GenAIToOpenAIMessages err = %v", err)
 	}
 
 	if got, want := len(msgs), 3; got != want {
