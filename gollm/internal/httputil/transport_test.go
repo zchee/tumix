@@ -43,11 +43,17 @@ func TestTransportRoundTripSuccess(t *testing.T) {
 	stub := &stubRoundTripper{resp: rr.Result()}
 	tr := NewTransport(stub)
 
-	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://example.com/foo?bar=baz", nil)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://example.com/foo?bar=baz", http.NoBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	resp, err := tr.RoundTrip(req)
 	if err != nil {
 		t.Fatalf("RoundTrip error: %v", err)
 	}
+	defer resp.Body.Close()
+
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNoContent)
 	}
@@ -62,11 +68,19 @@ func TestTransportRoundTripError(t *testing.T) {
 	stub := &stubRoundTripper{err: errors.New("boom")}
 	tr := NewTransport(stub)
 
-	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, "https://example.org", nil)
-	_, err := tr.RoundTrip(req)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "https://example.org", http.NoBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := tr.RoundTrip(req)
 	if err == nil || err.Error() == "boom" {
 		t.Fatalf("error = %v, want wrapped RoundTrip failed", err)
 	}
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+
 	if stub.calls != 1 {
 		t.Fatalf("base round trips = %d, want 1", stub.calls)
 	}

@@ -18,13 +18,80 @@ package httputil
 
 import (
 	"net/http"
+	"os"
+	"strconv"
+	"sync"
 	"time"
 )
 
-// NewClient creates a new HTTP client with a specified timeout and OTel tracing.
+var (
+	pooledBaseOnce sync.Once
+	pooledBase     http.RoundTripper
+
+	tracedTransport   *Transport
+	untracedTransport *Transport
+	transportsOnce    sync.Once
+)
+
+func baseTransport() http.RoundTripper {
+	pooledBaseOnce.Do(func() {
+		if dt, ok := http.DefaultTransport.(*http.Transport); ok {
+			clone := dt.Clone()
+			clone.MaxIdleConns = 256
+			clone.MaxIdleConnsPerHost = 64
+			clone.IdleConnTimeout = 90 * time.Second
+			pooledBase = clone
+		} else {
+			pooledBase = http.DefaultTransport
+		}
+	})
+	return pooledBase
+}
+
+func defaultTransports() {
+	transportsOnce.Do(func() {
+		base := baseTransport()
+		tracedTransport = NewTransportWithTrace(base, true)
+		untracedTransport = NewTransportWithTrace(base, false)
+	})
+}
+
+// NewClient creates a new HTTP client with a specified timeout and tracing controlled by environment defaults.
 func NewClient(timeout time.Duration) *http.Client {
+	return NewClientWithTracing(timeout, DefaultTraceEnabled())
+}
+
+// NewClientWithTracing creates a new HTTP client with optional OpenTelemetry tracing.
+func NewClientWithTracing(timeout time.Duration, traceEnabled bool) *http.Client {
+	defaultTransports()
+
+	transport := tracedTransport
+	if !traceEnabled {
+		transport = untracedTransport
+	}
+
 	return &http.Client{
 		Timeout:   timeout,
-		Transport: NewTransport(nil),
+		Transport: transport,
 	}
+}
+
+var (
+	traceOnce sync.Once
+	traceEnv  bool
+)
+
+// DefaultTraceEnabled reads TUMIX_HTTP_TRACE environment variable ("1", "true") to decide tracing default.
+// Falls back to false when unset or invalid.
+func DefaultTraceEnabled() bool {
+	traceOnce.Do(func() {
+		raw := os.Getenv("TUMIX_HTTP_TRACE")
+		if raw == "" {
+			traceEnv = false
+			return
+		}
+		val, err := strconv.ParseBool(raw)
+		traceEnv = err == nil && val
+	})
+	return traceEnv
 }

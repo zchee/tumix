@@ -50,7 +50,7 @@ var _ model.LLM = (*openAILLM)(nil)
 func NewOpenAILLM(_ context.Context, authKey AuthMethod, modelName string, opts ...option.RequestOption) (model.LLM, error) {
 	userAgent := version.UserAgent("openai")
 
-	httpClient := httputil.NewClient(3 * time.Minute)
+	httpClient := httputil.NewClientWithTracing(3*time.Minute, httputil.DefaultTraceEnabled())
 	ropts := []option.RequestOption{
 		option.WithHTTPClient(httpClient),
 		option.WithHeader("User-Agent", userAgent),
@@ -76,7 +76,7 @@ func (m *openAILLM) Name() string { return m.name }
 
 // GenerateContent implements [model.LLM].
 func (m *openAILLM) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
-	adapter.NormalizeRequest(req, m.userAgent)
+	req.Config = adapter.NormalizeRequest(req, m.userAgent)
 
 	params, err := m.chatCompletionParams(req)
 	if err != nil {

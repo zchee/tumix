@@ -20,12 +20,17 @@ import (
 	"fmt"
 	"net/http"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
+	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
+	"go.opentelemetry.io/otel/semconv/v1.37.0/httpconv"
 	"go.opentelemetry.io/otel/trace"
 )
+
+var _ httpconv.RequestMethodAttr
 
 const instrumentationName = "github.com/zchee/tumix/gollm/internal/httputil"
 
@@ -33,21 +38,47 @@ const instrumentationName = "github.com/zchee/tumix/gollm/internal/httputil"
 type Transport struct {
 	Base   http.RoundTripper
 	Tracer trace.Tracer
+	trace  bool
 }
 
 // NewTransport creates a new Transport. If base is nil, http.DefaultTransport is used.
 func NewTransport(base http.RoundTripper) *Transport {
+	return NewTransportWithTrace(base, true)
+}
+
+// NewTransportWithTrace creates a new Transport with optional OpenTelemetry tracing.
+//
+// If base is nil, http.DefaultTransport is used.
+func NewTransportWithTrace(base http.RoundTripper, traceEnabled bool) *Transport {
 	if base == nil {
-		base = http.DefaultTransport
+		base = http.DefaultTransport.(*http.Transport).Clone()
 	}
+	var tracer trace.Tracer
+	if traceEnabled {
+		tracer = otel.Tracer(instrumentationName)
+	}
+
+	opts := []otelhttp.Option{
+		otelhttp.WithMessageEvents(otelhttp.ReadEvents, otelhttp.WriteEvents),
+		otelhttp.WithTracerProvider(otel.GetTracerProvider()),
+		otelhttp.WithMeterProvider(otel.GetMeterProvider()),
+		otelhttp.WithServerName("tumix"),
+	}
+	base = otelhttp.NewTransport(base, opts...)
+
 	return &Transport{
 		Base:   base,
-		Tracer: otel.Tracer(instrumentationName),
+		Tracer: tracer,
+		trace:  traceEnabled,
 	}
 }
 
 // RoundTrip implements [http.RoundTripper].
 func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if !t.trace {
+		return t.Base.RoundTrip(req) //nolint:wrapcheck
+	}
+
 	ctx := req.Context()
 	method := req.Method
 	if method == "" {
@@ -56,9 +87,10 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	attrs := []attribute.KeyValue{
 		attribute.String("http.request.method", method),
-		attribute.String("url.full", req.URL.String()),
-		attribute.String("url.scheme", req.URL.Scheme),
-		attribute.String("url.path", req.URL.Path),
+		semconv.URLFull(req.URL.String()),
+		semconv.URLFull(req.URL.String()),
+		semconv.URLScheme(req.URL.Scheme),
+		semconv.URLPath(req.URL.Path),
 		attribute.String("server.address", req.URL.Hostname()),
 	}
 

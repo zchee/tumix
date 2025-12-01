@@ -17,6 +17,7 @@
 package httputil
 
 import (
+	"sync"
 	"testing"
 	"time"
 )
@@ -30,5 +31,28 @@ func TestNewClient(t *testing.T) {
 	}
 	if _, ok := c.Transport.(*Transport); !ok {
 		t.Fatalf("Transport type = %T, want *Transport", c.Transport)
+	}
+}
+
+func TestDefaultTraceEnabled(t *testing.T) {
+	tests := map[string]struct {
+		env  string
+		want bool
+	}{
+		"unset defaults false": {env: "", want: false},
+		"true":                 {env: "true", want: true},
+		"1":                    {env: "1", want: true},
+		"false":                {env: "false", want: false},
+		"junk":                 {env: "nope", want: false},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("TUMIX_HTTP_TRACE", tc.env)
+			traceOnce = sync.Once{} // reset cached value
+			if got := DefaultTraceEnabled(); got != tc.want {
+				t.Fatalf("DefaultTraceEnabled() = %v, want %v (env=%q)", got, tc.want, tc.env)
+			}
+		})
 	}
 }

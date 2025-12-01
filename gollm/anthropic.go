@@ -50,7 +50,7 @@ var _ model.LLM = (*anthropicLLM)(nil)
 func NewAnthropicLLM(_ context.Context, authKey AuthMethod, modelName string, opts ...option.RequestOption) (model.LLM, error) {
 	userAgent := version.UserAgent("anthropic")
 
-	httpClient := httputil.NewClient(3 * time.Minute)
+	httpClient := httputil.NewClientWithTracing(3*time.Minute, httputil.DefaultTraceEnabled())
 	ropts := []option.RequestOption{
 		option.WithHTTPClient(httpClient),
 		option.WithHeader("User-Agent", userAgent),
