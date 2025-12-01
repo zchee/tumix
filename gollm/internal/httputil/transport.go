@@ -22,23 +22,12 @@ import (
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/propagation"
-	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
-	"go.opentelemetry.io/otel/semconv/v1.37.0/httpconv"
-	"go.opentelemetry.io/otel/trace"
 )
 
-var _ httpconv.RequestMethodAttr
-
-const instrumentationName = "github.com/zchee/tumix/gollm/internal/httputil"
-
-// Transport implements [http.RoundTripper] with OpenTelemetry tracing.
+// Transport implements [http.RoundTripper] with optional OpenTelemetry tracing.
 type Transport struct {
-	Base   http.RoundTripper
-	Tracer trace.Tracer
-	trace  bool
+	Base http.RoundTripper
+	rt   http.RoundTripper
 }
 
 // NewTransport creates a new Transport. If base is nil, http.DefaultTransport is used.
@@ -53,76 +42,29 @@ func NewTransportWithTrace(base http.RoundTripper, traceEnabled bool) *Transport
 	if base == nil {
 		base = http.DefaultTransport.(*http.Transport).Clone()
 	}
-	var tracer trace.Tracer
-	if traceEnabled {
-		tracer = otel.Tracer(instrumentationName)
-	}
 
-	opts := []otelhttp.Option{
-		otelhttp.WithMessageEvents(otelhttp.ReadEvents, otelhttp.WriteEvents),
-		otelhttp.WithTracerProvider(otel.GetTracerProvider()),
-		otelhttp.WithMeterProvider(otel.GetMeterProvider()),
-		otelhttp.WithServerName("tumix"),
+	rt := base
+	if traceEnabled {
+		opts := []otelhttp.Option{
+			otelhttp.WithMessageEvents(otelhttp.ReadEvents, otelhttp.WriteEvents),
+			otelhttp.WithTracerProvider(otel.GetTracerProvider()),
+			otelhttp.WithMeterProvider(otel.GetMeterProvider()),
+			otelhttp.WithServerName("tumix"),
+		}
+		rt = otelhttp.NewTransport(base, opts...)
 	}
-	base = otelhttp.NewTransport(base, opts...)
 
 	return &Transport{
-		Base:   base,
-		Tracer: tracer,
-		trace:  traceEnabled,
+		Base: base,
+		rt:   rt,
 	}
 }
 
 // RoundTrip implements [http.RoundTripper].
 func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if !t.trace {
-		return t.Base.RoundTrip(req) //nolint:wrapcheck
-	}
-
-	ctx := req.Context()
-	method := req.Method
-	if method == "" {
-		method = http.MethodGet
-	}
-
-	attrs := []attribute.KeyValue{
-		attribute.String("http.request.method", method),
-		semconv.URLFull(req.URL.String()),
-		semconv.URLFull(req.URL.String()),
-		semconv.URLScheme(req.URL.Scheme),
-		semconv.URLPath(req.URL.Path),
-		attribute.String("server.address", req.URL.Hostname()),
-	}
-
-	if req.URL.RawQuery != "" {
-		attrs = append(attrs, attribute.String("url.query", req.URL.RawQuery))
-	}
-	if req.URL.Port() != "" {
-		attrs = append(attrs, attribute.String("server.port", req.URL.Port()))
-	}
-
-	var span trace.Span
-	ctx, span = t.Tracer.Start(ctx, "HTTP "+method,
-		trace.WithSpanKind(trace.SpanKindClient),
-		trace.WithAttributes(attrs...),
-	)
-	defer span.End()
-
-	// Inject trace context into the request headers
-	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
-
-	resp, err := t.Base.RoundTrip(req.WithContext(ctx))
+	resp, err := t.rt.RoundTrip(req)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
 		return nil, fmt.Errorf("RoundTrip failed: %w", err)
-	}
-
-	span.SetAttributes(attribute.Int("http.response.status_code", resp.StatusCode))
-	if resp.StatusCode >= 400 {
-		span.SetStatus(codes.Error, "HTTP error")
-	} else {
-		span.SetStatus(codes.Ok, "")
 	}
 
 	return resp, nil
