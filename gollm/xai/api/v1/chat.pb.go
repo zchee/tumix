@@ -1452,10 +1452,22 @@ func (x *Delta) GetCitations() []*InlineCitation {
 
 type InlineCitation struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// The globally unique id of the citation per response.
+	// The display number for this citation (e.g., "1", "2", "3").
+	// This ID is reused when the same source is cited multiple times in a
+	// response, ensuring consistent numbering (e.g., the same URL always shows as
+	// [1]).
 	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	// The index where the inline citation should be inserted in the complete text response.
+	// The character position in the response text where the citation markdown
+	// link begins. This is the index of the first '[' character in the citation
+	// format [[id]](url). Uses inclusive indexing (the character at this index is
+	// part of the citation).
 	StartIndex int32 `protobuf:"varint,2,opt,name=start_index,json=startIndex,proto3" json:"start_index,omitempty"`
+	// The character position in the response text immediately after the citation
+	// markdown link ends. This is the index after the final ']' character in the
+	// citation format [[id]](url). Uses exclusive indexing (the character at this
+	// index is NOT part of the citation). Together with start_index,
+	// text[start_index:end_index] extracts the full citation link.
+	EndIndex int32 `protobuf:"varint,6,opt,name=end_index,json=endIndex,proto3" json:"end_index,omitempty"`
 	// The citation type.
 	//
 	// Types that are valid to be assigned to Citation:
@@ -1508,6 +1520,13 @@ func (x *InlineCitation) GetId() string {
 func (x *InlineCitation) GetStartIndex() int32 {
 	if x != nil {
 		return x.StartIndex
+	}
+	return 0
+}
+
+func (x *InlineCitation) GetEndIndex() int32 {
+	if x != nil {
+		return x.EndIndex
 	}
 	return 0
 }
@@ -4207,11 +4226,12 @@ const file_xai_api_v1_chat_proto_rawDesc = "" +
 	"\n" +
 	"tool_calls\x18\x03 \x03(\v2\x11.xai_api.ToolCallR\ttoolCalls\x12+\n" +
 	"\x11encrypted_content\x18\x05 \x01(\tR\x10encryptedContent\x125\n" +
-	"\tcitations\x18\x06 \x03(\v2\x17.xai_api.InlineCitationR\tcitations\"\x90\x02\n" +
+	"\tcitations\x18\x06 \x03(\v2\x17.xai_api.InlineCitationR\tcitations\"\xad\x02\n" +
 	"\x0eInlineCitation\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1f\n" +
 	"\vstart_index\x18\x02 \x01(\x05R\n" +
-	"startIndex\x129\n" +
+	"startIndex\x12\x1b\n" +
+	"\tend_index\x18\x06 \x01(\x05R\bendIndex\x129\n" +
 	"\fweb_citation\x18\x03 \x01(\v2\x14.xai_api.WebCitationH\x00R\vwebCitation\x123\n" +
 	"\n" +
 	"x_citation\x18\x04 \x01(\v2\x12.xai_api.XCitationH\x00R\txCitation\x12Q\n" +
