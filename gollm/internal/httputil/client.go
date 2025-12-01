@@ -22,14 +22,16 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/zchee/tumix/telemetry/httptelemetry"
 )
 
 var (
 	pooledBaseOnce sync.Once
 	pooledBase     http.RoundTripper
 
-	tracedTransport   *Transport
-	untracedTransport *Transport
+	tracedTransport   *httptelemetry.Transport
+	untracedTransport *httptelemetry.Transport
 	transportsOnce    sync.Once
 )
 
@@ -51,8 +53,8 @@ func baseTransport() http.RoundTripper {
 func defaultTransports() {
 	transportsOnce.Do(func() {
 		base := baseTransport()
-		tracedTransport = NewTransportWithTrace(base, true)
-		untracedTransport = NewTransportWithTrace(base, false)
+		tracedTransport = httptelemetry.NewTransportWithTrace(base, true)
+		untracedTransport = httptelemetry.NewTransportWithTrace(base, false)
 	})
 }
 
