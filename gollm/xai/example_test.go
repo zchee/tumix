@@ -18,6 +18,7 @@ package xai
 
 import (
 	"fmt"
+	"log"
 
 	xaipb "github.com/zchee/tumix/gollm/xai/api/v1"
 )
@@ -52,7 +53,9 @@ func ExampleToolCallArguments() {
 		A int `json:"a"`
 		B int `json:"b"`
 	}
-	_ = ToolCallArguments(tc, &args)
+	if err := ToolCallArguments(tc, &args); err != nil {
+		log.Fatal(err)
+	}
 	fmt.Printf("%d %d\n", args.A, args.B)
 	// Output:
 	// 1 2

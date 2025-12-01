@@ -42,7 +42,9 @@ func startStubHTTP(t *testing.T, addr string, allowed []string, payload string) 
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(payload))
+		if _, err := w.Write([]byte(payload)); err != nil {
+			t.Fatal(err)
+		}
 	})
 
 	srv := &http.Server{Handler: mux}

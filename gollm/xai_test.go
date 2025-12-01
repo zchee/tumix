@@ -70,7 +70,9 @@ func TestXAIModel_RecordReplay(t *testing.T) {
 		})
 
 		go func() {
-			_ = grpcServer.Serve(ln)
+			if err := grpcServer.Serve(ln); err != nil {
+				t.Error(err)
+			}
 		}()
 		serverCleanup = func() {
 			grpcServer.Stop()
@@ -128,6 +130,10 @@ func TestXAIModel_RecordReplay(t *testing.T) {
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Fatalf("GenerateContent() diff (-want +got):\n%s", diff)
 	}
+
+	if t.Failed() {
+		t.FailNow()
+	}
 }
 
 func TestXAIModel_RecordReplayStream(t *testing.T) {
@@ -180,7 +186,9 @@ func TestXAIModel_RecordReplayStream(t *testing.T) {
 		})
 
 		go func() {
-			_ = grpcServer.Serve(ln)
+			if err := grpcServer.Serve(ln); err != nil {
+				t.Error(err)
+			}
 		}()
 		serverCleanup = func() {
 			grpcServer.Stop()
@@ -247,6 +255,10 @@ func TestXAIModel_RecordReplayStream(t *testing.T) {
 	}
 	if len(finishReasons) == 0 || finishReasons[len(finishReasons)-1] != genai.FinishReasonStop {
 		t.Fatalf("finish reasons = %v, want last FinishReasonStop", finishReasons)
+	}
+
+	if t.Failed() {
+		t.FailNow()
 	}
 }
 
@@ -318,7 +330,9 @@ func TestXAIModel_RecordReplayToolCalls(t *testing.T) {
 		})
 
 		go func() {
-			_ = grpcServer.Serve(ln)
+			if err := grpcServer.Serve(ln); err != nil {
+				t.Error(err)
+			}
 		}()
 		serverCleanup = func() {
 			grpcServer.Stop()
@@ -405,6 +419,10 @@ func TestXAIModel_RecordReplayToolCalls(t *testing.T) {
 	}
 	if finishCodes[len(finishCodes)-1] != genai.FinishReasonStop {
 		t.Fatalf("finish reasons = %v, want last FinishReasonStop", finishCodes)
+	}
+
+	if t.Failed() {
+		t.FailNow()
 	}
 }
 

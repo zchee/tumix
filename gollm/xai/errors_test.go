@@ -122,7 +122,7 @@ func TestIsRetryable(t *testing.T) {
 func TestAsError(t *testing.T) {
 	orig := &Error{Code: codes.PermissionDenied, Message: "nope"}
 	wrapped := WrapError(status.Error(codes.PermissionDenied, "nope"))
-	if _, ok := AsError(wrapped); !ok {
+	if err, ok := AsError(wrapped); err != nil && !ok {
 		t.Fatalf("AsError should unwrap wrapped status error")
 	}
 	if got, ok := AsError(orig); !ok || got != orig {

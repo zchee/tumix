@@ -32,7 +32,7 @@ import (
 
 type pingServer struct{}
 
-func (pingServer) Ping(_ context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
+func (pingServer) Ping(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
 	return &emptypb.Empty{}, nil
 }
 
@@ -83,14 +83,22 @@ func TestNewHTTPClientRecordCreatesReplay(t *testing.T) {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ping", func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte("pong"))
+		if _, err := w.Write([]byte("pong")); err != nil {
+			t.Fatal(err)
+		}
 	})
 	srv := http.Server{Handler: mux}
 	if recording {
 		ln := mustListen(t, httpAddr)
-		t.Cleanup(func() { _ = srv.Shutdown(t.Context()) })
+		t.Cleanup(func() {
+			if err := srv.Shutdown(t.Context()); err != nil {
+				t.Fatal(err)
+			}
+		})
 		go func() {
-			_ = srv.Serve(ln)
+			if err := srv.Serve(ln); err != nil {
+				t.Error(err)
+			}
 		}()
 	}
 
@@ -112,6 +120,10 @@ func TestNewHTTPClientRecordCreatesReplay(t *testing.T) {
 	if _, statErr := os.Stat(replayPath); statErr != nil {
 		t.Fatalf("expected replay file %s: %v", replayPath, statErr)
 	}
+
+	if t.Failed() {
+		t.FailNow()
+	}
 }
 
 func TestNewInsecureGRPCConnRecordCreatesReplay(t *testing.T) {
@@ -125,7 +137,9 @@ func TestNewInsecureGRPCConnRecordCreatesReplay(t *testing.T) {
 		s := grpc.NewServer()
 		registerPingService(s)
 		go func() {
-			_ = s.Serve(ln)
+			if err := s.Serve(ln); err != nil {
+				t.Error(err)
+			}
 		}()
 		t.Cleanup(s.Stop)
 	}
@@ -144,6 +158,10 @@ func TestNewInsecureGRPCConnRecordCreatesReplay(t *testing.T) {
 	}
 	if _, statErr := os.Stat(replayPath); statErr != nil {
 		t.Fatalf("expected replay file %s: %v", replayPath, statErr)
+	}
+
+	if t.Failed() {
+		t.FailNow()
 	}
 }
 
