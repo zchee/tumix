@@ -90,7 +90,7 @@ func (m *anthropicLLM) GenerateContent(ctx context.Context, req *model.LLMReques
 	system, msgs, err := adapter.GenAIToAnthropicMessages(cfg.SystemInstruction, req.Contents)
 	if err != nil {
 		return func(yield func(*model.LLMResponse, error) bool) {
-			defer telemetry.End(span, err)
+			defer func() { telemetry.End(span, err) }()
 			yield(nil, err)
 		}
 	}
@@ -98,7 +98,7 @@ func (m *anthropicLLM) GenerateContent(ctx context.Context, req *model.LLMReques
 	params, err := m.buildParams(req, system, msgs)
 	if err != nil {
 		return func(yield func(*model.LLMResponse, error) bool) {
-			defer telemetry.End(span, err)
+			defer func() { telemetry.End(span, err) }()
 			yield(nil, err)
 		}
 	}
@@ -109,7 +109,7 @@ func (m *anthropicLLM) GenerateContent(ctx context.Context, req *model.LLMReques
 
 	return func(yield func(*model.LLMResponse, error) bool) {
 		var spanErr error
-		defer telemetry.End(span, spanErr)
+		defer func() { telemetry.End(span, spanErr) }()
 
 		resp, err := m.client.Messages.New(ctx, *params)
 		if err != nil {
@@ -180,7 +180,7 @@ func (m *anthropicLLM) stream(ctx context.Context, span trace.Span, params *anth
 		defer stream.Close()
 
 		var spanErr error
-		defer telemetry.End(span, spanErr)
+		defer func() { telemetry.End(span, spanErr) }()
 
 		for stream.Next() {
 			event := stream.Current()

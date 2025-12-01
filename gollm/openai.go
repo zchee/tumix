@@ -88,7 +88,7 @@ func (m *openAILLM) GenerateContent(ctx context.Context, req *model.LLMRequest, 
 	params, err := m.chatCompletionParams(req)
 	if err != nil {
 		return func(yield func(*model.LLMResponse, error) bool) {
-			defer telemetry.End(span, err)
+			defer func() { telemetry.End(span, err) }()
 			yield(nil, err)
 		}
 	}
@@ -99,7 +99,7 @@ func (m *openAILLM) GenerateContent(ctx context.Context, req *model.LLMRequest, 
 
 	return func(yield func(*model.LLMResponse, error) bool) {
 		var spanErr error
-		defer telemetry.End(span, spanErr)
+		defer func() { telemetry.End(span, spanErr) }()
 
 		resp, err := m.client.Chat.Completions.New(ctx, *params)
 		if err != nil {
@@ -194,7 +194,7 @@ func (m *openAILLM) stream(ctx context.Context, span trace.Span, params *openai.
 		defer stream.Close()
 
 		var spanErr error
-		defer telemetry.End(span, spanErr)
+		defer func() { telemetry.End(span, spanErr) }()
 
 		for stream.Next() {
 			chunk := stream.Current()
