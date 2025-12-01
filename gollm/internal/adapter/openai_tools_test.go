@@ -172,7 +172,6 @@ func TestGenAIToolsToOpenAI(t *testing.T) {
 	}
 
 	for name, tc := range tests {
-		tc := tc
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			params, choice := GenAIToolsToOpenAI(tc.tools, tc.cfg)

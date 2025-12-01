@@ -66,6 +66,8 @@ func init() {
 //
 // An initState is returned for tests that need a state to have deterministic results,
 // for example, a seed to generate random sequences.
+//
+//nolint:unparam // initState is optional for callers; retained for determinism hooks.
 func NewHTTPClient(t *testing.T, rf func(r *Recorder)) (c *http.Client, cleanup func(), initState int64) {
 	t.Helper()
 

@@ -1,0 +1,14 @@
+RPCReTxt1
+""
+103
+kind: REQUEST
+method: "/test.Ping/Ping"
+message: {
+  [type.googleapis.com/google.protobuf.Empty]: {}
+}
+91
+kind: RESPONSE
+message: {
+  [type.googleapis.com/google.protobuf.Empty]: {}
+}
+ref_index: 1
