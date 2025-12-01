@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -71,7 +72,7 @@ func init() {
 func NewHTTPClient(t *testing.T, rf func(r *Recorder)) (c *http.Client, cleanup func(), initState int64) {
 	t.Helper()
 
-	golden := filepath.Join("testdata", t.Name()+".replay")
+	golden := filepath.Join("testdata", strings.ReplaceAll(t.Name(), "/", "_")+".replay")
 	if err := os.MkdirAll(filepath.Dir(golden), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +145,7 @@ func NewGRPCConn(t *testing.T, apiName, endPoint string, opts ...grpc.DialOption
 func NewGRPCConnWithCreds(t *testing.T, apiName, endPoint string, creds grpc_credentials.TransportCredentials, opts ...grpc.DialOption) (conn *grpc.ClientConn, cleanup func()) {
 	t.Helper()
 
-	golden := filepath.Join("testdata", t.Name()+".replay")
+	golden := filepath.Join("testdata", strings.ReplaceAll(t.Name(), "/", "_")+".replay")
 	if err := os.MkdirAll(filepath.Dir(golden), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -233,4 +234,14 @@ func NewGCPGRPCConn(ctx context.Context, t *testing.T, apiName, endPoint string,
 	)
 
 	return NewGRPCConn(t, apiName, endPoint, opts...)
+}
+
+// Recording reports whether the rr is recoding mode.
+func Recording() bool {
+	return *Record
+}
+
+// Replaying reports whether the rr is replaying mode.
+func Replaying() bool {
+	return !*Record
 }
