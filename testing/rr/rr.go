@@ -32,6 +32,7 @@ import (
 	"github.com/google/go-replayers/httpreplay"
 	"google.golang.org/grpc"
 	grpc_credentials "google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	grpc_oauth "google.golang.org/grpc/credentials/oauth"
 
 	"github.com/zchee/tumix/internal/version"
@@ -40,6 +41,13 @@ import (
 
 // Record is true iff the tests are being run in "record" mode.
 var Record = flag.Bool("record", false, "whether to run tests against SaaS resources and record the interactions")
+
+// Recorder is an alias of [httpreplay.Recorder].
+type Recorder = httpreplay.Recorder
+
+func init() {
+	httpreplay.DebugHeaders()
+}
 
 // NewHTTPClient creates a new [*http.Client] for testing.
 //
@@ -52,10 +60,9 @@ var Record = flag.Bool("record", false, "whether to run tests against SaaS resou
 //
 // An initState is returned for tests that need a state to have deterministic results,
 // for example, a seed to generate random sequences.
-func NewHTTPClient(t *testing.T, rf func(r *httpreplay.Recorder)) (c *http.Client, cleanup func(), initState int64) {
+func NewHTTPClient(t *testing.T, rf func(r *Recorder)) (c *http.Client, cleanup func(), initState int64) {
 	t.Helper()
 
-	httpreplay.DebugHeaders()
 	golden := filepath.Join("testdata", t.Name()+".replay")
 	if err := os.MkdirAll(filepath.Dir(golden), 0o755); err != nil {
 		t.Fatal(err)
@@ -115,6 +122,14 @@ func NewHTTPClient(t *testing.T, rf func(r *httpreplay.Recorder)) (c *http.Clien
 func NewGRPCConn(t *testing.T, apiName, endPoint string, opts ...grpc.DialOption) (conn *grpc.ClientConn, cleanup func()) {
 	t.Helper()
 
+	return NewGRPCConnWithCreds(t, apiName, endPoint, grpc_credentials.NewClientTLSFromCert(nil, ""), opts...)
+}
+
+// NewGRPCConnWithCreds mirrors [NewGRPCConn] but allows callers to override transport credentials,
+// enabling plaintext replay against local fixtures.
+func NewGRPCConnWithCreds(t *testing.T, apiName, endPoint string, creds grpc_credentials.TransportCredentials, opts ...grpc.DialOption) (conn *grpc.ClientConn, cleanup func()) {
+	t.Helper()
+
 	golden := filepath.Join("testdata", t.Name()+".replay")
 	if err := os.MkdirAll(filepath.Dir(golden), 0o755); err != nil {
 		t.Fatal(err)
@@ -130,9 +145,13 @@ func NewGRPCConn(t *testing.T, apiName, endPoint string, opts ...grpc.DialOption
 			t.Fatal(err)
 		}
 
+		if creds == nil {
+			creds = grpc_credentials.NewClientTLSFromCert(nil, "")
+		}
+
 		dopts := append(recoder.DialOptions(),
 			grpc.WithUserAgent(version.UserAgent(apiName)),
-			grpc.WithTransportCredentials(grpc_credentials.NewClientTLSFromCert(nil, "")),
+			grpc.WithTransportCredentials(creds),
 		)
 		// overwrite dopts to opts args
 		opts = append(dopts, opts...)
@@ -168,6 +187,13 @@ func NewGRPCConn(t *testing.T, apiName, endPoint string, opts ...grpc.DialOption
 	}
 
 	return conn, cleanup
+}
+
+// NewInsecureGRPCConn creates a plaintext gRPC replay connection using the shared recorder logic.
+func NewInsecureGRPCConn(t *testing.T, apiName, endPoint string, opts ...grpc.DialOption) (conn *grpc.ClientConn, cleanup func()) {
+	t.Helper()
+
+	return NewGRPCConnWithCreds(t, apiName, endPoint, insecure.NewCredentials(), opts...)
 }
 
 // NewGCPGRPCConn creates a new [*grpc.ClientConn] for testing against Google Cloud.
