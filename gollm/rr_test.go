@@ -17,11 +17,55 @@
 package gollm
 
 import (
+	"fmt"
+	"iter"
 	"net"
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
+
+	"google.golang.org/adk/model"
 )
+
+// TextResponse holds the concatenated text from a response stream,
+// separated into partial and final parts.
+type TextResponse struct {
+	// PartialText is the full text concatenated from all partial (streaming) responses.
+	PartialText string
+	// FinalText is the full text concatenated from all final (non-partial) responses.
+	FinalText string
+}
+
+// readResponse transforms a sequence into a TextResponse, concatenating the text value of the response parts
+// depending on the readPartial value it will only concatenate the text of partial events or the text of non partial events
+func readResponse(s iter.Seq2[*model.LLMResponse, error]) (TextResponse, error) {
+	var partialBuilder, finalBuilder strings.Builder
+	var result TextResponse
+
+	for resp, err := range s {
+		if err != nil {
+			// Return what we have so far, along with the error.
+			result.PartialText = partialBuilder.String()
+			result.FinalText = finalBuilder.String()
+			return result, err
+		}
+		if resp.Content == nil || len(resp.Content.Parts) == 0 {
+			return result, fmt.Errorf("encountered an empty response: %v", resp)
+		}
+
+		text := resp.Content.Parts[0].Text
+		if resp.Partial {
+			partialBuilder.WriteString(text)
+		} else {
+			finalBuilder.WriteString(text)
+		}
+	}
+
+	result.PartialText = partialBuilder.String()
+	result.FinalText = finalBuilder.String()
+	return result, nil
+}
 
 // startStubHTTP spins up a minimal HTTP server that responds with payload when the request path matches any allowed path.
 // The caller is responsible for selecting unique addresses per test.
