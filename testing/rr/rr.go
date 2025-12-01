@@ -39,6 +39,12 @@ import (
 	"github.com/zchee/tumix/log"
 )
 
+var ignoreHeaders = []string{
+	"X-Stainless-Arch",
+	"X-Stainless-Runtime-Version",
+	"X-Stainless-Os",
+}
+
 // Record is true iff the tests are being run in "record" mode.
 var Record = flag.Bool("record", false, "whether to run tests against SaaS resources and record the interactions")
 
@@ -82,6 +88,9 @@ func NewHTTPClient(t *testing.T, rf func(r *Recorder)) (c *http.Client, cleanup 
 		if err != nil {
 			t.Fatal(err)
 		}
+		for _, h := range ignoreHeaders {
+			recoder.RemoveRequestHeaders(h)
+		}
 		rf(recoder)
 		cleanup = func() {
 			if err := recoder.Close(); err != nil {
@@ -96,6 +105,9 @@ func NewHTTPClient(t *testing.T, rf func(r *Recorder)) (c *http.Client, cleanup 
 	replay, err := httpreplay.NewReplayer(golden)
 	if err != nil {
 		t.Fatal(err)
+	}
+	for _, h := range ignoreHeaders {
+		replay.IgnoreHeader(h)
 	}
 
 	recState := new(time.Time)
