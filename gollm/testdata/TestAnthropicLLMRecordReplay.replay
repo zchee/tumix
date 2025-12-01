@@ -1,0 +1,100 @@
+{
+  "Initial": "AQAAAA7gv/DpA30cuAIc",
+  "Version": "0.2",
+  "Converter": {
+    "ScrubBody": null,
+    "ClearHeaders": [
+      "^X-Goog-.*Encryption-Key$"
+    ],
+    "RemoveRequestHeaders": [
+      "^Authorization$",
+      "^Proxy-Authorization$",
+      "^Connection$",
+      "^Content-Type$",
+      "^Date$",
+      "^Host$",
+      "^Transfer-Encoding$",
+      "^Via$",
+      "^X-Forwarded-.*$",
+      "^X-Cloud-Trace-Context$",
+      "^X-Goog-Api-Client$",
+      "^X-Google-.*$",
+      "^X-Gfe-.*$",
+      "^X-Stainless-Arch$",
+      "^X-Stainless-Runtime-Version$",
+      "^X-Stainless-Os$"
+    ],
+    "RemoveResponseHeaders": [
+      "^X-Google-.*$",
+      "^X-Gfe-.*$"
+    ],
+    "ClearParams": null,
+    "RemoveParams": null
+  },
+  "Entries": [
+    {
+      "ID": "cb60cf9820987a17",
+      "Request": {
+        "Method": "POST",
+        "URL": "http://127.0.0.1:28081/v1/messages",
+        "Header": {
+          "Accept": [
+            "application/json"
+          ],
+          "Accept-Encoding": [
+            "gzip"
+          ],
+          "Anthropic-Version": [
+            "2023-06-01"
+          ],
+          "Content-Length": [
+            "141"
+          ],
+          "User-Agent": [
+            "tumix/0.1.0/anthropic go1.25"
+          ],
+          "X-Api-Key": [
+            "test-key"
+          ],
+          "X-Stainless-Lang": [
+            "go"
+          ],
+          "X-Stainless-Package-Version": [
+            "1.19.0"
+          ],
+          "X-Stainless-Retry-Count": [
+            "0"
+          ],
+          "X-Stainless-Runtime": [
+            "go"
+          ],
+          "X-Stainless-Timeout": [
+            "600"
+          ]
+        },
+        "MediaType": "application/json",
+        "BodyParts": [
+          "eyJtYXhfdG9rZW5zIjoxMDI0LCJtZXNzYWdlcyI6W3siY29udGVudCI6W3sidGV4dCI6IldoYXQgaXMgdGhlIGNhcGl0YWwgb2YgRnJhbmNlPyIsInR5cGUiOiJ0ZXh0In1dLCJyb2xlIjoidXNlciJ9XSwibW9kZWwiOiJjbGF1ZGUtMy1oYWlrdSJ9"
+        ]
+      },
+      "Response": {
+        "StatusCode": 200,
+        "Proto": "HTTP/1.1",
+        "ProtoMajor": 1,
+        "ProtoMinor": 1,
+        "Header": {
+          "Content-Length": [
+            "267"
+          ],
+          "Content-Type": [
+            "application/json"
+          ],
+          "Date": [
+            "Mon, 01 Dec 2025 20:26:17 GMT"
+          ]
+        },
+        "Body": "ewogICJpZCI6ICJtc2dfcnJfdGVzdCIsCiAgInR5cGUiOiAibWVzc2FnZSIsCiAgInJvbGUiOiAiYXNzaXN0YW50IiwKICAibW9kZWwiOiAiY2xhdWRlLTMtaGFpa3UiLAogICJzdG9wX3JlYXNvbiI6ICJlbmRfdHVybiIsCiAgInVzYWdlIjogewogICAgImlucHV0X3Rva2VucyI6IDksCiAgICAib3V0cHV0X3Rva2VucyI6IDIKICB9LAogICJjb250ZW50IjogWwogICAgewogICAgICAidHlwZSI6ICJ0ZXh0IiwKICAgICAgInRleHQiOiAiUGFyaXMiCiAgICB9CiAgXQp9"
+      }
+    }
+  ]
+}

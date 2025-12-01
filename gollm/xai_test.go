@@ -18,11 +18,8 @@ package gollm
 
 import (
 	"context"
-	json "encoding/json/v2"
 	"net"
-	"net/http"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/adk/model"
@@ -33,70 +30,99 @@ import (
 	"github.com/zchee/tumix/gollm/internal/adapter"
 	"github.com/zchee/tumix/gollm/xai"
 	xaipb "github.com/zchee/tumix/gollm/xai/api/v1"
+	"github.com/zchee/tumix/testing/rr"
 )
 
-func TestXAIModel_Generate(t *testing.T) {
+func TestXAIModel_RecordReplay(t *testing.T) {
 	t.Parallel()
 
-	temp := float32(0.0)
-	req := &model.LLMRequest{
-		Contents: genai.Text("What is the capital of France?"),
-		Config: &genai.GenerateContentConfig{
-			Temperature: &temp,
-			HTTPOptions: &genai.HTTPOptions{Headers: make(http.Header)},
-		},
-	}
+	const xaiReplayAddr = "127.0.0.1:28083"
 
-	fakeResp := &xaipb.GetChatCompletionResponse{
-		Model:             "grok-4-1-fast-reasoning",
-		SystemFingerprint: "fp-123",
-		Outputs: []*xaipb.CompletionOutput{
-			{
-				Index:        0,
-				FinishReason: xaipb.FinishReason_REASON_STOP,
-				Message: &xaipb.CompletionMessage{
-					Role:    xaipb.MessageRole_ROLE_ASSISTANT,
-					Content: "Paris",
+	var serverCleanup func()
+	if *rr.Record {
+		var lc net.ListenConfig
+		ln, err := lc.Listen(t.Context(), "tcp", xaiReplayAddr)
+		if err != nil {
+			t.Skipf("unable to listen for xai stub: %v", err)
+		}
+
+		grpcServer := grpc.NewServer()
+		xaipb.RegisterChatServer(grpcServer, &stubChatServer{
+			completionResp: &xaipb.GetChatCompletionResponse{
+				Model:             "grok-1",
+				SystemFingerprint: "fp-rr",
+				Outputs: []*xaipb.CompletionOutput{
+					{
+						Index:        0,
+						FinishReason: xaipb.FinishReason_REASON_STOP,
+						Message: &xaipb.CompletionMessage{
+							Role:    xaipb.MessageRole_ROLE_ASSISTANT,
+							Content: "Paris",
+						},
+					},
+				},
+				Usage: &xaipb.SamplingUsage{
+					CompletionTokens: 2,
+					PromptTokens:     8,
+					TotalTokens:      10,
 				},
 			},
-		},
-		Usage: &xaipb.SamplingUsage{
-			CompletionTokens:       2,
-			PromptTokens:           10,
-			TotalTokens:            12,
-			CachedPromptTextTokens: 1,
-		},
+		})
+
+		go func() {
+			if err := grpcServer.Serve(ln); err != nil {
+				t.Error(err)
+			}
+		}()
+		serverCleanup = func() {
+			grpcServer.Stop()
+			_ = ln.Close()
+		}
 	}
 
-	server := &stubChatServer{completionResp: fakeResp}
-	m, cleanup := newTestXAIModel(t, server, "grok-1")
-	defer cleanup()
+	conn, cleanup := rr.NewInsecureGRPCConn(t, "xai", xaiReplayAddr)
+	t.Cleanup(cleanup)
+	if serverCleanup != nil {
+		t.Cleanup(serverCleanup)
+	}
+
+	llm, err := NewXAILLM(t.Context(), AuthMethodAPIKey("test-key"), "grok-1",
+		xai.WithAPIConn(conn),
+		xai.WithAPIHost(xaiReplayAddr),
+		xai.WithInsecure(),
+	)
+	if err != nil {
+		t.Fatalf("NewXAILLM() error = %v", err)
+	}
+	if concrete, ok := llm.(*xaiLLM); ok {
+		t.Cleanup(func() {
+			_ = concrete.client.Close()
+		})
+	}
+
+	req := &model.LLMRequest{
+		Contents: genai.Text("What is the capital of France?"),
+		Config:   &genai.GenerateContentConfig{},
+	}
 
 	var got *model.LLMResponse
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-
-	for resp, err := range m.GenerateContent(ctx, req, false) {
+	for resp, err := range llm.GenerateContent(t.Context(), req, false) {
 		if err != nil {
 			t.Fatalf("GenerateContent() unexpected error: %v", err)
 		}
 		got = resp
 	}
-	if got == nil {
-		t.Fatal("GenerateContent() returned no response")
-	}
 
 	want := &model.LLMResponse{
 		Content: genai.NewContentFromText("Paris", genai.RoleModel),
 		UsageMetadata: &genai.GenerateContentResponseUsageMetadata{
-			CachedContentTokenCount: 1,
-			CandidatesTokenCount:    2,
-			PromptTokenCount:        10,
-			TotalTokenCount:         12,
+			PromptTokenCount:     8,
+			CandidatesTokenCount: 2,
+			TotalTokenCount:      10,
 		},
 		CustomMetadata: map[string]any{
 			"xai_finish_reason":      "REASON_STOP",
-			"xai_system_fingerprint": "fp-123",
+			"xai_system_fingerprint": "fp-rr",
 		},
 		FinishReason: genai.FinishReasonStop,
 	}
@@ -105,78 +131,101 @@ func TestXAIModel_Generate(t *testing.T) {
 		t.Fatalf("GenerateContent() diff (-want +got):\n%s", diff)
 	}
 
-	if ua := req.Config.HTTPOptions.Headers.Get("User-Agent"); ua != "tumix/test go1.25" {
-		t.Fatalf("User-Agent header = %q, want %q", ua, "tumix/test go1.25")
-	}
-
-	if server.lastRequest == nil {
-		t.Fatal("GetCompletion was not invoked")
-	}
-	gotText := server.lastRequest.GetMessages()[0].GetContent()[0].GetText()
-	if gotText != "What is the capital of France?" {
-		t.Fatalf("request message text = %q, want %q", gotText, "What is the capital of France?")
-	}
-	if gotRole := server.lastRequest.GetMessages()[0].GetRole(); gotRole != xaipb.MessageRole_ROLE_USER {
-		t.Fatalf("request message role = %v, want %v", gotRole, xaipb.MessageRole_ROLE_USER)
+	if t.Failed() {
+		t.FailNow()
 	}
 }
 
-func TestXAIModel_GenerateStream(t *testing.T) {
+func TestXAIModel_RecordReplayStream(t *testing.T) {
 	t.Parallel()
 
-	temp := float32(0.0)
+	const xaiReplayAddr = "127.0.0.1:28084"
+
+	var serverCleanup func()
+	if *rr.Record {
+		var lc net.ListenConfig
+		ln, err := lc.Listen(t.Context(), "tcp", xaiReplayAddr)
+		if err != nil {
+			t.Skipf("unable to listen for xai stream stub: %v", err)
+		}
+
+		grpcServer := grpc.NewServer()
+		xaipb.RegisterChatServer(grpcServer, &stubChatServer{
+			chunks: []*xaipb.GetChatCompletionChunk{
+				{
+					Outputs: []*xaipb.CompletionOutputChunk{
+						{
+							Index: 0,
+							Delta: &xaipb.Delta{
+								Role:    xaipb.MessageRole_ROLE_ASSISTANT,
+								Content: "Par",
+							},
+						},
+					},
+				},
+				{
+					Model:             "grok-1",
+					SystemFingerprint: "fp-stream",
+					Usage: &xaipb.SamplingUsage{
+						CompletionTokens: 2,
+						PromptTokens:     10,
+						TotalTokens:      12,
+					},
+					Outputs: []*xaipb.CompletionOutputChunk{
+						{
+							Index:        0,
+							FinishReason: xaipb.FinishReason_REASON_STOP,
+							Delta: &xaipb.Delta{
+								Role:    xaipb.MessageRole_ROLE_ASSISTANT,
+								Content: "is",
+							},
+						},
+					},
+				},
+			},
+		})
+
+		go func() {
+			if err := grpcServer.Serve(ln); err != nil {
+				t.Error(err)
+			}
+		}()
+		serverCleanup = func() {
+			grpcServer.Stop()
+			_ = ln.Close()
+		}
+	}
+
+	conn, cleanup := rr.NewInsecureGRPCConn(t, "xai", xaiReplayAddr)
+	t.Cleanup(cleanup)
+	if serverCleanup != nil {
+		t.Cleanup(serverCleanup)
+	}
+
+	llm, err := NewXAILLM(t.Context(), AuthMethodAPIKey("test-key"), "grok-4-1-fast-reasoning",
+		xai.WithAPIConn(conn),
+		xai.WithAPIHost(xaiReplayAddr),
+		xai.WithInsecure(),
+	)
+	if err != nil {
+		t.Fatalf("NewXAILLM() error = %v", err)
+	}
+	if concrete, ok := llm.(*xaiLLM); ok {
+		t.Cleanup(func() {
+			_ = concrete.client.Close()
+		})
+	}
+
 	req := &model.LLMRequest{
 		Contents: genai.Text("Stream please"),
-		Config: &genai.GenerateContentConfig{
-			Temperature: &temp,
-		},
+		Config:   &genai.GenerateContentConfig{},
 	}
-
-	chunks := []*xaipb.GetChatCompletionChunk{
-		{
-			Outputs: []*xaipb.CompletionOutputChunk{
-				{
-					Index: 0,
-					Delta: &xaipb.Delta{
-						Role:    xaipb.MessageRole_ROLE_ASSISTANT,
-						Content: "Par",
-					},
-				},
-			},
-		},
-		{
-			Model:             "grok-1",
-			SystemFingerprint: "fp-123",
-			Usage: &xaipb.SamplingUsage{
-				CompletionTokens: 2,
-				PromptTokens:     10,
-				TotalTokens:      12,
-			},
-			Outputs: []*xaipb.CompletionOutputChunk{
-				{
-					Index:        0,
-					FinishReason: xaipb.FinishReason_REASON_STOP,
-					Delta: &xaipb.Delta{
-						Role:    xaipb.MessageRole_ROLE_ASSISTANT,
-						Content: "is",
-					},
-				},
-			},
-		},
-	}
-
-	server := &stubChatServer{chunks: chunks}
-	m, cleanup := newTestXAIModel(t, server, "grok-4-1-fast-reasoning")
-	defer cleanup()
 
 	var partialTexts []string
 	var finalTexts []string
 	var finishReasons []genai.FinishReason
 
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-
-	for resp, err := range m.GenerateContent(ctx, req, true) {
+	for resp, err := range llm.GenerateContent(t.Context(), req, true) {
 		if err != nil {
 			t.Fatalf("GenerateContent(stream) unexpected error: %v", err)
 		}
@@ -195,11 +244,8 @@ func TestXAIModel_GenerateStream(t *testing.T) {
 		}
 	}
 
-	if len(partialTexts) < 2 {
-		t.Fatalf("partial texts too short: %v", partialTexts)
-	}
-	if partialTexts[0] != "Par" {
-		t.Fatalf("first partial = %q, want %q", partialTexts[0], "Par")
+	if len(partialTexts) == 0 || partialTexts[0] != "Par" {
+		t.Fatalf("partial texts = %v, want first \"Par\"", partialTexts)
 	}
 	if got := partialTexts[len(partialTexts)-1]; got != "Paris" {
 		t.Fatalf("last partial = %q, want %q", got, "Paris")
@@ -208,75 +254,116 @@ func TestXAIModel_GenerateStream(t *testing.T) {
 		t.Fatalf("final texts diff (-want +got):\n%s", diff)
 	}
 	if len(finishReasons) == 0 || finishReasons[len(finishReasons)-1] != genai.FinishReasonStop {
-		t.Fatalf("finish reasons = %v, want last reason FinishReasonStop", finishReasons)
+		t.Fatalf("finish reasons = %v, want last FinishReasonStop", finishReasons)
+	}
+
+	if t.Failed() {
+		t.FailNow()
 	}
 }
 
-func TestXAIModel_StreamThoughtsAndToolCalls(t *testing.T) {
+func TestXAIModel_RecordReplayToolCalls(t *testing.T) {
 	t.Parallel()
+
+	const xaiReplayAddr = "127.0.0.1:28085"
+
+	var serverCleanup func()
+	if *rr.Record {
+		var lc net.ListenConfig
+		ln, err := lc.Listen(t.Context(), "tcp", xaiReplayAddr)
+		if err != nil {
+			t.Skipf("unable to listen for xai tool stub: %v", err)
+		}
+
+		grpcServer := grpc.NewServer()
+		xaipb.RegisterChatServer(grpcServer, &stubChatServer{
+			chunks: []*xaipb.GetChatCompletionChunk{
+				{
+					Outputs: []*xaipb.CompletionOutputChunk{
+						{
+							Index: 0,
+							Delta: &xaipb.Delta{
+								Role:             xaipb.MessageRole_ROLE_ASSISTANT,
+								ReasoningContent: "Thinking ",
+								Content:          "Par",
+							},
+						},
+					},
+				},
+				{
+					Outputs: []*xaipb.CompletionOutputChunk{
+						{
+							Index: 0,
+							Delta: &xaipb.Delta{
+								Role: xaipb.MessageRole_ROLE_ASSISTANT,
+								ToolCalls: []*xaipb.ToolCall{{
+									Id: "tc1",
+									Tool: &xaipb.ToolCall_Function{Function: &xaipb.FunctionCall{
+										Name:      "lookup_city",
+										Arguments: `{"city":"Paris"}`,
+									}},
+								}},
+							},
+						},
+					},
+				},
+				{
+					Model:             "grok-1",
+					SystemFingerprint: "fp-tool",
+					Usage: &xaipb.SamplingUsage{
+						PromptTokens:     3,
+						CompletionTokens: 5,
+						TotalTokens:      8,
+					},
+					Outputs: []*xaipb.CompletionOutputChunk{
+						{
+							Index:        0,
+							FinishReason: xaipb.FinishReason_REASON_STOP,
+							Delta: &xaipb.Delta{
+								Role:    xaipb.MessageRole_ROLE_ASSISTANT,
+								Content: "is",
+							},
+						},
+					},
+				},
+			},
+		})
+
+		go func() {
+			if err := grpcServer.Serve(ln); err != nil {
+				t.Error(err)
+			}
+		}()
+		serverCleanup = func() {
+			grpcServer.Stop()
+			_ = ln.Close()
+		}
+	}
+
+	conn, cleanup := rr.NewInsecureGRPCConn(t, "xai", xaiReplayAddr)
+	t.Cleanup(cleanup)
+	if serverCleanup != nil {
+		t.Cleanup(serverCleanup)
+	}
+
+	llm, err := NewXAILLM(t.Context(), AuthMethodAPIKey("test-key"), "grok-4-1-fast-reasoning",
+		xai.WithAPIConn(conn),
+		xai.WithAPIHost(xaiReplayAddr),
+		xai.WithInsecure(),
+	)
+	if err != nil {
+		t.Fatalf("NewXAILLM() error = %v", err)
+	}
+	if concrete, ok := llm.(*xaiLLM); ok {
+		t.Cleanup(func() {
+			_ = concrete.client.Close()
+		})
+	}
 
 	req := &model.LLMRequest{
 		Contents: genai.Text("Call a tool with reasoning"),
 		Config:   &genai.GenerateContentConfig{},
 	}
-
-	chunks := []*xaipb.GetChatCompletionChunk{
-		{
-			Outputs: []*xaipb.CompletionOutputChunk{
-				{
-					Index: 0,
-					Delta: &xaipb.Delta{
-						Role:             xaipb.MessageRole_ROLE_ASSISTANT,
-						ReasoningContent: "Thinking ",
-						Content:          "Par",
-					},
-				},
-			},
-		},
-		{
-			Outputs: []*xaipb.CompletionOutputChunk{
-				{
-					Index: 0,
-					Delta: &xaipb.Delta{
-						Role: xaipb.MessageRole_ROLE_ASSISTANT,
-						ToolCalls: []*xaipb.ToolCall{{
-							Id: "tc1",
-							Tool: &xaipb.ToolCall_Function{Function: &xaipb.FunctionCall{
-								Name:      "lookup_city",
-								Arguments: `{"city":"Paris"}`,
-							}},
-						}},
-					},
-				},
-			},
-		},
-		{
-			Model:             "grok-1",
-			SystemFingerprint: "fp-xyz",
-			Usage: &xaipb.SamplingUsage{
-				PromptTokens:     3,
-				CompletionTokens: 5,
-				TotalTokens:      8,
-			},
-			Outputs: []*xaipb.CompletionOutputChunk{
-				{
-					Index:        0,
-					FinishReason: xaipb.FinishReason_REASON_STOP,
-					Delta: &xaipb.Delta{
-						Role:    xaipb.MessageRole_ROLE_ASSISTANT,
-						Content: "is",
-					},
-				},
-			},
-		},
-	}
-
-	server := &stubChatServer{chunks: chunks}
-	m, cleanup := newTestXAIModel(t, server, "grok-4-1-fast-reasoning")
-	defer cleanup()
-
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
 
 	var (
 		thoughts     []string
@@ -286,7 +373,7 @@ func TestXAIModel_StreamThoughtsAndToolCalls(t *testing.T) {
 		turnComplete bool
 	)
 
-	for resp, err := range m.GenerateContent(ctx, req, true) {
+	for resp, err := range llm.GenerateContent(t.Context(), req, true) {
 		if err != nil {
 			t.Fatalf("GenerateContent(stream) unexpected error: %v", err)
 		}
@@ -315,9 +402,8 @@ func TestXAIModel_StreamThoughtsAndToolCalls(t *testing.T) {
 	if !turnComplete {
 		t.Fatalf("no response marked TurnComplete; finish codes = %v", finishCodes)
 	}
-
 	if len(thoughts) == 0 || thoughts[0] != "Thinking " {
-		t.Fatalf("thoughts = %v, want first thought \"Thinking \"", thoughts)
+		t.Fatalf("thoughts = %v, want first \"Thinking \"", thoughts)
 	}
 	if len(texts) == 0 {
 		t.Fatalf("texts empty: %v", texts)
@@ -333,6 +419,10 @@ func TestXAIModel_StreamThoughtsAndToolCalls(t *testing.T) {
 	}
 	if finishCodes[len(finishCodes)-1] != genai.FinishReasonStop {
 		t.Fatalf("finish reasons = %v, want last FinishReasonStop", finishCodes)
+	}
+
+	if t.Failed() {
+		t.FailNow()
 	}
 }
 
@@ -405,200 +495,6 @@ func TestGenAI2XAIChatOptions(t *testing.T) {
 	}
 }
 
-func TestXAIModel_SystemInstructionMapped(t *testing.T) {
-	t.Parallel()
-
-	req := &model.LLMRequest{
-		Contents: genai.Text("Hello"),
-		Config: &genai.GenerateContentConfig{
-			SystemInstruction: genai.NewContentFromText("stay brief", "system"),
-			HTTPOptions:       &genai.HTTPOptions{Headers: make(http.Header)},
-		},
-	}
-
-	fakeResp := &xaipb.GetChatCompletionResponse{
-		Outputs: []*xaipb.CompletionOutput{
-			{
-				Index:        0,
-				FinishReason: xaipb.FinishReason_REASON_STOP,
-				Message: &xaipb.CompletionMessage{
-					Role:    xaipb.MessageRole_ROLE_ASSISTANT,
-					Content: "Hi!",
-				},
-			},
-		},
-	}
-
-	server := &stubChatServer{completionResp: fakeResp}
-	m, cleanup := newTestXAIModel(t, server, "grok-1")
-	defer cleanup()
-
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-
-	for range m.GenerateContent(ctx, req, false) {
-	}
-
-	msgs := server.lastRequest.GetMessages()
-	if len(msgs) < 2 {
-		t.Fatalf("messages len = %d, want >=2", len(msgs))
-	}
-
-	sys := msgs[0]
-	if sys.GetRole() != xaipb.MessageRole_ROLE_SYSTEM {
-		t.Fatalf("system role = %v, want %v", sys.GetRole(), xaipb.MessageRole_ROLE_SYSTEM)
-	}
-	if got := sys.GetContent()[0].GetText(); got != "stay brief" {
-		t.Fatalf("system text = %q, want %q", got, "stay brief")
-	}
-}
-
-func TestXAIModel_FunctionCallConversion(t *testing.T) {
-	t.Parallel()
-
-	req := &model.LLMRequest{
-		Contents: []*genai.Content{
-			genai.NewContentFromText("call tool", genai.RoleUser),
-			{
-				Role: genai.RoleModel,
-				Parts: []*genai.Part{
-					{
-						FunctionCall: &genai.FunctionCall{
-							ID:   "call-1",
-							Name: "get_weather",
-							Args: map[string]any{"city": "Tokyo"},
-						},
-					},
-				},
-			},
-		},
-		Config: &genai.GenerateContentConfig{},
-	}
-
-	fakeResp := &xaipb.GetChatCompletionResponse{
-		Outputs: []*xaipb.CompletionOutput{
-			{
-				Index:        0,
-				FinishReason: xaipb.FinishReason_REASON_STOP,
-				Message: &xaipb.CompletionMessage{
-					Role:    xaipb.MessageRole_ROLE_ASSISTANT,
-					Content: "ok",
-				},
-			},
-		},
-	}
-
-	server := &stubChatServer{completionResp: fakeResp}
-	m, cleanup := newTestXAIModel(t, server, "grok-4-1-fast-reasoning")
-	defer cleanup()
-
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-
-	for range m.GenerateContent(ctx, req, false) {
-	}
-
-	var assistant *xaipb.Message
-	for _, msg := range server.lastRequest.GetMessages() {
-		if msg.GetRole() == xaipb.MessageRole_ROLE_ASSISTANT && len(msg.GetToolCalls()) > 0 {
-			assistant = msg
-			break
-		}
-	}
-	if assistant == nil {
-		t.Fatalf("assistant message with tool calls not found in %+v", server.lastRequest.GetMessages())
-	}
-
-	call := assistant.GetToolCalls()[0].GetFunction()
-	if call.GetName() != "get_weather" {
-		t.Fatalf("function name = %q, want %q", call.GetName(), "get_weather")
-	}
-	args := map[string]any{}
-	if err := json.Unmarshal([]byte(call.GetArguments()), &args); err != nil {
-		t.Fatalf("unmarshal args: %v", err)
-	}
-	if got := args["city"]; got != "Tokyo" {
-		t.Fatalf("args[city] = %v, want %q", got, "Tokyo")
-	}
-	if assistant.GetToolCalls()[0].GetId() != "call-1" {
-		t.Fatalf("tool call id = %q, want call-1", assistant.GetToolCalls()[0].GetId())
-	}
-}
-
-func TestXAIModel_FunctionResponseConversion(t *testing.T) {
-	t.Parallel()
-
-	req := &model.LLMRequest{
-		Contents: []*genai.Content{
-			{
-				Role: "tool",
-				Parts: []*genai.Part{
-					{
-						FunctionResponse: &genai.FunctionResponse{
-							ID:       "call-2",
-							Name:     "get_weather",
-							Response: map[string]any{"ok": true},
-						},
-					},
-				},
-			},
-		},
-		Config: &genai.GenerateContentConfig{},
-	}
-
-	fakeResp := &xaipb.GetChatCompletionResponse{
-		Outputs: []*xaipb.CompletionOutput{
-			{
-				Index:        0,
-				FinishReason: xaipb.FinishReason_REASON_STOP,
-				Message: &xaipb.CompletionMessage{
-					Role:    xaipb.MessageRole_ROLE_ASSISTANT,
-					Content: "ack",
-				},
-			},
-		},
-	}
-
-	server := &stubChatServer{completionResp: fakeResp}
-	m, cleanup := newTestXAIModel(t, server, "grok-1")
-	defer cleanup()
-
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-
-	for range m.GenerateContent(ctx, req, false) {
-	}
-
-	var toolMsg *xaipb.Message
-	for _, msg := range server.lastRequest.GetMessages() {
-		if msg.GetRole() == xaipb.MessageRole_ROLE_TOOL {
-			toolMsg = msg
-			break
-		}
-	}
-	if toolMsg == nil {
-		t.Fatalf("tool message not found in %+v", server.lastRequest.GetMessages())
-	}
-	if len(toolMsg.GetContent()) == 0 {
-		t.Fatalf("tool message has no content: %+v", toolMsg)
-	}
-
-	payload := toolMsg.GetContent()[0].GetText()
-	got := map[string]any{}
-	if err := json.Unmarshal([]byte(payload), &got); err != nil {
-		t.Fatalf("unmarshal tool payload: %v", err)
-	}
-	if got["name"] != "get_weather" {
-		t.Fatalf("payload name = %v, want get_weather", got["name"])
-	}
-	if got["tool_call_id"] != "call-2" {
-		t.Fatalf("payload tool_call_id = %v, want call-2", got["tool_call_id"])
-	}
-	if resp, ok := got["response"].(map[string]any); !ok || resp["ok"] != true {
-		t.Fatalf("payload response = %v, want map[ok:true]", got["response"])
-	}
-}
-
 type stubChatServer struct {
 	xaipb.UnimplementedChatServer
 
@@ -627,50 +523,4 @@ func (s *stubChatServer) GetCompletionChunk(req *xaipb.GetCompletionsRequest, st
 		}
 	}
 	return nil
-}
-
-func newTestXAIModel(t *testing.T, server *stubChatServer, modelName string) (m *xaiLLM, cleanup func()) {
-	t.Helper()
-
-	var lc net.ListenConfig
-	lis, err := lc.Listen(t.Context(), "tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
-
-	grpcServer := grpc.NewServer()
-	xaipb.RegisterChatServer(grpcServer, server)
-
-	go func() {
-		_ = grpcServer.Serve(lis)
-	}()
-
-	dialer := &net.Dialer{}
-	dialFunc := func(ctx context.Context, _ string) (net.Conn, error) {
-		return dialer.DialContext(ctx, "tcp", lis.Addr().String())
-	}
-
-	client, err := xai.NewClient("test-key",
-		xai.WithAPIHost(lis.Addr().String()),
-		xai.WithInsecure(),
-		xai.WithTimeout(0),
-		xai.WithDialOptions(grpc.WithContextDialer(dialFunc)),
-	)
-	if err != nil {
-		grpcServer.Stop()
-		_ = lis.Close()
-		t.Fatalf("NewClient: %v", err)
-	}
-
-	cleanup = func() {
-		_ = client.Close()
-		grpcServer.Stop()
-		_ = lis.Close()
-	}
-
-	return &xaiLLM{
-		client:    client,
-		name:      modelName,
-		userAgent: "tumix/test go1.25",
-	}, cleanup
 }

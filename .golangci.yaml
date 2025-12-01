@@ -180,9 +180,13 @@ linters:
       ignore:
         - 0C0C
     errcheck:
-      disable-default-exclusions: false
       check-type-assertions: false
+      disable-default-exclusions: true
       check-blank: true
+      exclude-functions:
+        - (*bytes.Buffer).Write
+        - (*strings.Builder).WriteString
+      verbose: true
     errchkjson:
       check-error-free-encoding: true
       report-no-exported: false
@@ -367,7 +371,6 @@ linters:
         path: gollm/xai/examples
 
       - linters:
-          - errcheck
           - funlen
           - gocognit
           - goconst

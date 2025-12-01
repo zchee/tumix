@@ -1,0 +1,38 @@
+RPCReTxt1
+""
+271
+kind: REQUEST
+method: "/xai_api.Chat/GetCompletion"
+message: {
+  [type.googleapis.com/xai_api.GetCompletionsRequest]: {
+    messages: {
+      content: {
+        text: "What is the capital of France?"
+      }
+      role: ROLE_USER
+    }
+    model: "grok-1"
+    n: 1
+  }
+}
+383
+kind: RESPONSE
+message: {
+  [type.googleapis.com/xai_api.GetChatCompletionResponse]: {
+    outputs: {
+      finish_reason: REASON_STOP
+      message: {
+        content: "Paris"
+        role: ROLE_ASSISTANT
+      }
+    }
+    model: "grok-1"
+    system_fingerprint: "fp-rr"
+    usage: {
+      completion_tokens: 2
+      prompt_tokens: 8
+      total_tokens: 10
+    }
+  }
+}
+ref_index: 1

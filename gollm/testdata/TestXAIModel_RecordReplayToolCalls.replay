@@ -1,0 +1,78 @@
+RPCReTxt1
+""
+63
+kind: CREATE_STREAM
+method: "/xai_api.Chat/GetCompletionChunk"
+256
+kind: SEND
+message: {
+  [type.googleapis.com/xai_api.GetCompletionsRequest]: {
+    messages: {
+      content: {
+        text: "Call a tool with reasoning"
+      }
+      role: ROLE_USER
+    }
+    model: "grok-4-1-fast-reasoning"
+    n: 1
+  }
+}
+ref_index: 1
+234
+kind: RECV
+message: {
+  [type.googleapis.com/xai_api.GetChatCompletionChunk]: {
+    outputs: {
+      delta: {
+        content: "Par"
+        reasoning_content: "Thinking "
+        role: ROLE_ASSISTANT
+      }
+    }
+  }
+}
+ref_index: 1
+336
+kind: RECV
+message: {
+  [type.googleapis.com/xai_api.GetChatCompletionChunk]: {
+    outputs: {
+      delta: {
+        role: ROLE_ASSISTANT
+        tool_calls: {
+          id: "tc1"
+          function: {
+            name: "lookup_city"
+            arguments: "{\"city\":\"Paris\"}"
+          }
+        }
+      }
+    }
+  }
+}
+ref_index: 1
+372
+kind: RECV
+message: {
+  [type.googleapis.com/xai_api.GetChatCompletionChunk]: {
+    outputs: {
+      delta: {
+        content: "is"
+        role: ROLE_ASSISTANT
+      }
+      finish_reason: REASON_STOP
+    }
+    model: "grok-1"
+    system_fingerprint: "fp-tool"
+    usage: {
+      completion_tokens: 5
+      prompt_tokens: 3
+      total_tokens: 8
+    }
+  }
+}
+ref_index: 1
+39
+kind: RECV
+is_error: true
+ref_index: 1

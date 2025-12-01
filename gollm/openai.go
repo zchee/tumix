@@ -26,10 +26,9 @@ import (
 
 	openai "github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
-	"google.golang.org/adk/model"
-
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/adk/model"
 
 	"github.com/zchee/tumix/gollm/internal/adapter"
 	"github.com/zchee/tumix/gollm/internal/httputil"
@@ -172,7 +171,7 @@ func (m *openAILLM) chatCompletionParams(req *model.LLMRequest) (*openai.ChatCom
 	}
 
 	if len(cfg.Tools) > 0 {
-		tools, tc := adapter.GenaiToolsToOpenAI(cfg.Tools, cfg.ToolConfig)
+		tools, tc := adapter.GenAIToolsToOpenAI(cfg.Tools, cfg.ToolConfig)
 		params.Tools = tools
 		if tc != nil {
 			params.ToolChoice = *tc

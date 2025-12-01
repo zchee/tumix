@@ -82,9 +82,13 @@ func NewClient(apiKey string, optFns ...ClientOption) (*Client, error) {
 		opts.managementKey = os.Getenv("XAI_MANAGEMENT_KEY")
 	}
 
-	apiConn, err := grpc.NewClient(opts.apiHost, buildDialOptions(opts, opts.apiKey)...)
-	if err != nil {
-		return nil, err
+	apiConn := opts.apiConn
+	var err error
+	if apiConn == nil {
+		apiConn, err = grpc.NewClient(opts.apiHost, buildDialOptions(opts, opts.apiKey)...)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	client := &Client{
@@ -115,13 +119,16 @@ func NewClient(apiKey string, optFns ...ClientOption) (*Client, error) {
 		},
 	}
 
-	if opts.managementKey != "" {
-		client.managementConn, err = grpc.NewClient(opts.managementHost, buildDialOptions(opts, opts.managementKey)...)
-		if err != nil {
-			if cloneErr := apiConn.Close(); cloneErr != nil {
-				err = errors.Join(err, cloneErr)
+	if opts.managementKey != "" { //nolint:nestif // TODO(zchee): fix nolint
+		client.managementConn = opts.managementConn
+		if client.managementConn == nil {
+			client.managementConn, err = grpc.NewClient(opts.managementHost, buildDialOptions(opts, opts.managementKey)...)
+			if err != nil {
+				if cloneErr := apiConn.Close(); cloneErr != nil {
+					err = errors.Join(err, cloneErr)
+				}
+				return nil, err
 			}
-			return nil, err
 		}
 		client.Billing = &BillingClient{
 			uisvc: billingpb.NewUISvcClient(client.managementConn),

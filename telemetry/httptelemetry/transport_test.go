@@ -17,6 +17,7 @@
 package httptelemetry_test
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -122,7 +123,9 @@ func TestTransportTracingToggle(t *testing.T) {
 			otel.SetTracerProvider(tp)
 			t.Cleanup(func() {
 				otel.SetTracerProvider(prev)
-				_ = tp.Shutdown(t.Context())
+				if err := tp.Shutdown(context.Background()); err != nil {
+					t.Fatal(err)
+				}
 			})
 
 			stub := &stubRoundTripper{
