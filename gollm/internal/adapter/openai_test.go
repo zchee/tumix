@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package adapter
+package adapter_test
 
 import (
 	json "encoding/json/v2"
@@ -26,6 +26,8 @@ import (
 	"github.com/openai/openai-go/v3/packages/respjson"
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
+
+	"github.com/zchee/tumix/gollm/internal/adapter"
 )
 
 func TestGenAIToOpenAIMessages(t *testing.T) {
@@ -51,7 +53,7 @@ func TestGenAIToOpenAIMessages(t *testing.T) {
 		},
 	}
 
-	msgs, err := GenAIToOpenAIMessages(contents)
+	msgs, err := adapter.GenAIToOpenAIMessages(contents)
 	if err != nil {
 		t.Fatalf("GenAIToOpenAIMessages err = %v", err)
 	}
@@ -127,7 +129,7 @@ func TestOpenAIResponseToLLM(t *testing.T) {
 	if err := json.Unmarshal([]byte(raw), &resp); err != nil {
 		t.Fatalf("unmarshal chat completion: %v", err)
 	}
-	got, err := OpenAIResponseToLLM(&resp)
+	got, err := adapter.OpenAIResponseToLLM(&resp)
 	if err != nil {
 		t.Fatalf("OpenAIResponseToLLM err = %v", err)
 	}
@@ -181,7 +183,7 @@ func TestOpenAIResponseToLLM_LegacyFunctionCall(t *testing.T) {
 		t.Fatalf("unmarshal legacy chat completion: %v", err)
 	}
 
-	got, err := OpenAIResponseToLLM(&resp)
+	got, err := adapter.OpenAIResponseToLLM(&resp)
 	if err != nil {
 		t.Fatalf("OpenAIResponseToLLM err = %v", err)
 	}
@@ -199,7 +201,7 @@ func TestOpenAIResponseToLLM_LegacyFunctionCall(t *testing.T) {
 }
 
 func TestOpenAIStreamAggregator(t *testing.T) {
-	agg := NewOpenAIStreamAggregator()
+	agg := adapter.NewOpenAIStreamAggregator()
 
 	chunk1 := openai.ChatCompletionChunk{
 		Choices: []openai.ChatCompletionChunkChoice{{
