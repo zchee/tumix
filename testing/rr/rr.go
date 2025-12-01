@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"cloud.google.com/go/auth/credentials"
+	gcp_credentials "cloud.google.com/go/auth/credentials"
 	"cloud.google.com/go/auth/oauth2adapt"
 	"github.com/google/go-replayers/grpcreplay"
 	"github.com/google/go-replayers/httpreplay"
@@ -34,6 +34,7 @@ import (
 	grpc_oauth "google.golang.org/grpc/credentials/oauth"
 
 	"github.com/zchee/tumix/internal/version"
+	"github.com/zchee/tumix/log"
 )
 
 // NewRecordHTTPClient creates a new [*http.Client] for testing.
@@ -66,7 +67,6 @@ func NewRecordHTTPClient(_ context.Context, t *testing.T, rf func(r *httpreplay.
 
 	recoder, err := httpreplay.NewRecorderWithOpts(golden,
 		httpreplay.RecorderInitial(b),
-		httpreplay.RecorderPort(0),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -137,15 +137,16 @@ func NewGRPCConn(_ context.Context, t *testing.T, apiName, endPoint string, opts
 
 // NewGCPGRPCConn creates a new [*grpc.ClientConn] for testing against Google Cloud.
 //
-// TODO(zchee): Use [google.FindDefaultCredentials] instead of [credentials.DetectDefault] ?
+// TODO(zchee): Use [google.FindDefaultCredentials] instead of [gcp_credentials.DetectDefault]?
 func NewGCPGRPCConn(ctx context.Context, t *testing.T, apiName, endPoint string, opts ...grpc.DialOption) (conn *grpc.ClientConn, done func()) {
 	t.Helper()
 
 	// Add GCP credentials for real RPCs
-	gcpOpts := &credentials.DetectOptions{
+	gcpOpts := &gcp_credentials.DetectOptions{
 		Scopes: []string{"https://www.googleapis.com/auth/cloud-platform"},
+		Logger: log.FromContext(ctx),
 	}
-	adcCreds, err := credentials.DetectDefault(gcpOpts)
+	adcCreds, err := gcp_credentials.DetectDefault(gcpOpts)
 	if err != nil {
 		t.Fatal(err)
 	}
