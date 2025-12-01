@@ -1,0 +1,58 @@
+RPCReTxt1
+""
+63
+kind: CREATE_STREAM
+method: "/xai_api.Chat/GetCompletionChunk"
+243
+kind: SEND
+message: {
+  [type.googleapis.com/xai_api.GetCompletionsRequest]: {
+    messages: {
+      content: {
+        text: "Stream please"
+      }
+      role: ROLE_USER
+    }
+    model: "grok-4-1-fast-reasoning"
+    n: 1
+  }
+}
+ref_index: 1
+195
+kind: RECV
+message: {
+  [type.googleapis.com/xai_api.GetChatCompletionChunk]: {
+    outputs: {
+      delta: {
+        content: "Par"
+        role: ROLE_ASSISTANT
+      }
+    }
+  }
+}
+ref_index: 1
+376
+kind: RECV
+message: {
+  [type.googleapis.com/xai_api.GetChatCompletionChunk]: {
+    outputs: {
+      delta: {
+        content: "is"
+        role: ROLE_ASSISTANT
+      }
+      finish_reason: REASON_STOP
+    }
+    model: "grok-1"
+    system_fingerprint: "fp-stream"
+    usage: {
+      completion_tokens: 2
+      prompt_tokens: 10
+      total_tokens: 12
+    }
+  }
+}
+ref_index: 1
+39
+kind: RECV
+is_error: true
+ref_index: 1
