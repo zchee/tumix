@@ -26,12 +26,16 @@ import (
 )
 
 const (
-	// DefaultAPIHost is the default host for the data plane API.
-	DefaultAPIHost = "api.x.ai:443"
-	// DefaultManagementAPIHost is the default host for the management API.
-	DefaultManagementAPIHost               = "management-api.x.ai:443"
-	defaultMaxMessageBytes   int           = 20 << 20 // 20 MiB
-	defaultTimeout           time.Duration = 15 * time.Minute
+	// APIHost is the default host for the data plane API.
+	APIHost = "api.x.ai:443"
+	// ManagementAPIHost is the default host for the management API.
+	ManagementAPIHost = "management-api.x.ai:443"
+)
+
+const (
+	// APIHost is the default host for the data plane API.
+	defaultMaxMessageBytes int           = 20 << 20 // 20 MiB
+	defaultTimeout         time.Duration = 15 * time.Minute
 )
 
 // ClientOption configures the xAI client.
@@ -50,10 +54,11 @@ type clientOptions struct {
 	timeout        time.Duration
 }
 
-func defaultClientOptions() *clientOptions {
+// DefaultClientOptions returns the default client configuration.
+func DefaultClientOptions() *clientOptions {
 	return &clientOptions{
-		apiHost:        DefaultAPIHost,
-		managementHost: DefaultManagementAPIHost,
+		apiHost:        APIHost,
+		managementHost: ManagementAPIHost,
 		metadata: map[string]string{
 			"xai-sdk-version":  "go/" + sdkVersion(),
 			"xai-sdk-language": "go/" + runtime.Version(),
