@@ -1,0 +1,78 @@
+RPCReTxt1
+""
+63
+kind: CREATE_STREAM
+method: "/xai_api.Chat/GetCompletionChunk"
+274
+kind: SEND
+message: {
+  [type.googleapis.com/xai_api.GetCompletionsRequest]: {
+    messages: {
+      content: {
+        text: "What is the capital of France? One word."
+      }
+      role: ROLE_USER
+    }
+    model: "grok-4-1-fast-non-reasoning"
+    n: 1
+  }
+}
+ref_index: 1
+557
+kind: RECV
+message: {
+  [type.googleapis.com/xai_api.GetChatCompletionChunk]: {
+    id: "f3634013-9124-38fd-b035-6ec54de90bf0"
+    outputs: {
+      delta: {
+        content: "Paris"
+        role: ROLE_ASSISTANT
+      }
+    }
+    created: {
+      seconds: 1764664389
+      nanos: 806932630
+    }
+    model: "grok-4-1-fast-non-reasoning"
+    system_fingerprint: "fp_ed3b9934bf"
+    usage: {
+      completion_tokens: 1
+      prompt_tokens: 178
+      total_tokens: 179
+      prompt_text_tokens: 178
+      cached_prompt_text_tokens: 177
+    }
+  }
+}
+ref_index: 1
+565
+kind: RECV
+message: {
+  [type.googleapis.com/xai_api.GetChatCompletionChunk]: {
+    id: "f3634013-9124-38fd-b035-6ec54de90bf0"
+    outputs: {
+      delta: {
+        role: ROLE_ASSISTANT
+      }
+      finish_reason: REASON_STOP
+    }
+    created: {
+      seconds: 1764664389
+      nanos: 826653440
+    }
+    model: "grok-4-1-fast-non-reasoning"
+    system_fingerprint: "fp_ed3b9934bf"
+    usage: {
+      completion_tokens: 1
+      prompt_tokens: 178
+      total_tokens: 179
+      prompt_text_tokens: 178
+      cached_prompt_text_tokens: 177
+    }
+  }
+}
+ref_index: 1
+39
+kind: RECV
+is_error: true
+ref_index: 1

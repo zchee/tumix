@@ -137,7 +137,7 @@ func (m *anthropicLLM) buildParams(req *model.LLMRequest, system []anthropic.Tex
 	}
 
 	params := &anthropic.MessageNewParams{
-		Model:         anthropic.Model(resolveModelName(req, m.name)),
+		Model:         anthropic.Model(adapter.ModelName(m.name, req)),
 		Messages:      msgs,
 		System:        system,
 		MaxTokens:     int64(req.Config.MaxOutputTokens),

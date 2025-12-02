@@ -24,13 +24,13 @@ import (
 )
 
 func TestDefaultClientOptions(t *testing.T) {
-	opts := defaultClientOptions()
+	opts := DefaultClientOptions()
 
-	if opts.apiHost != DefaultAPIHost {
-		t.Fatalf("apiHost = %s, want %s", opts.apiHost, DefaultAPIHost)
+	if opts.apiHost != APIHost {
+		t.Fatalf("apiHost = %s, want %s", opts.apiHost, APIHost)
 	}
-	if opts.managementHost != DefaultManagementAPIHost {
-		t.Fatalf("managementHost = %s, want %s", opts.managementHost, DefaultManagementAPIHost)
+	if opts.managementHost != ManagementAPIHost {
+		t.Fatalf("managementHost = %s, want %s", opts.managementHost, ManagementAPIHost)
 	}
 	if opts.timeout != defaultTimeout {
 		t.Fatalf("timeout = %v, want %v", opts.timeout, defaultTimeout)
@@ -47,7 +47,7 @@ func TestDefaultClientOptions(t *testing.T) {
 }
 
 func TestClientOptionMutators(t *testing.T) {
-	opts := defaultClientOptions()
+	opts := DefaultClientOptions()
 
 	WithAPIKey("k1")(opts)
 	if opts.apiKey != "k1" {

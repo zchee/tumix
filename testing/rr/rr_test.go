@@ -17,7 +17,6 @@
 package rr
 
 import (
-	"context"
 	"errors"
 	"io"
 	"net"
@@ -28,50 +27,7 @@ import (
 	"testing"
 
 	"github.com/google/go-replayers/httpreplay"
-	"google.golang.org/grpc"
-	"google.golang.org/protobuf/types/known/emptypb"
 )
-
-type pingServer struct{}
-
-func (pingServer) Ping(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
-	return &emptypb.Empty{}, nil
-}
-
-type pingService interface {
-	Ping(ctx context.Context, req *emptypb.Empty) (*emptypb.Empty, error)
-}
-
-func registerPingService(s *grpc.Server) {
-	s.RegisterService(&grpc.ServiceDesc{
-		ServiceName: "test.Ping",
-		HandlerType: (*pingService)(nil),
-		Methods: []grpc.MethodDesc{
-			{
-				MethodName: "Ping",
-				Handler: func(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
-					in := &emptypb.Empty{}
-					if err := dec(in); err != nil {
-						return nil, err
-					}
-					if interceptor == nil {
-						return srv.(pingServer).Ping(ctx, in)
-					}
-					info := &grpc.UnaryServerInfo{
-						Server:     srv,
-						FullMethod: "/test.Ping/Ping",
-					}
-					handler := func(ctx context.Context, req any) (any, error) {
-						return srv.(pingServer).Ping(ctx, req.(*emptypb.Empty))
-					}
-					return interceptor(ctx, in, info, handler)
-				},
-			},
-		},
-		Streams:  []grpc.StreamDesc{},
-		Metadata: "test.proto",
-	}, pingServer{})
-}
 
 func TestNewHTTPClientRecordCreatesReplay(t *testing.T) {
 	t.Parallel()
@@ -189,65 +145,6 @@ func TestNewHTTPClientReplayUsesGoldenFile(t *testing.T) {
 	}
 	if got := strings.TrimSpace(string(body2)); got != "pong" {
 		t.Fatalf("replay body #2 = %q, want pong", got)
-	}
-}
-
-func TestNewInsecureGRPCConnRecordCreatesReplay(t *testing.T) {
-	const grpcAddr = "127.0.0.1:28091"
-	replayPath := filepath.Join("testdata", t.Name()+".replay")
-	restore, recording := withRecordMode(t, replayPath)
-	t.Cleanup(restore)
-
-	if recording {
-		ln := mustListen(t, grpcAddr)
-		s := grpc.NewServer()
-		registerPingService(s)
-		go func() {
-			if err := s.Serve(ln); err != nil {
-				t.Error(err)
-			}
-		}()
-		t.Cleanup(s.Stop)
-	}
-
-	conn, cleanup := NewInsecureGRPCConn(t, "rr-test", grpcAddr)
-
-	ctx := t.Context()
-	if err := conn.Invoke(ctx, "/test.Ping/Ping", &emptypb.Empty{}, &emptypb.Empty{}); err != nil {
-		t.Fatalf("Invoke Ping: %v", err)
-	}
-
-	cleanup()
-
-	if !recording {
-		return
-	}
-	if _, statErr := os.Stat(replayPath); statErr != nil {
-		t.Fatalf("expected replay file %s: %v", replayPath, statErr)
-	}
-
-	if t.Failed() {
-		t.FailNow()
-	}
-}
-
-func TestNewInsecureGRPCConnReplayUsesGoldenFile(t *testing.T) {
-	const grpcAddr = "127.0.0.1:28091"
-
-	orig := *Record
-	*Record = false
-	t.Cleanup(func() { *Record = orig })
-
-	replayPath := filepath.Join("testdata", t.Name()+".replay")
-	src := filepath.Join("testdata", "TestNewInsecureGRPCConnRecordCreatesReplay.replay")
-	copyReplay(t, src, replayPath)
-
-	conn, cleanup := NewInsecureGRPCConn(t, "rr-test", grpcAddr)
-	defer cleanup()
-
-	ctx := t.Context()
-	if err := conn.Invoke(ctx, "/test.Ping/Ping", &emptypb.Empty{}, &emptypb.Empty{}); err != nil {
-		t.Fatalf("Invoke Ping on replay: %v", err)
 	}
 }
 

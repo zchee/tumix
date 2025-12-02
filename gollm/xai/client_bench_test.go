@@ -27,13 +27,13 @@ import (
 var dialOptionsSink []grpc.DialOption
 
 func BenchmarkBuildDialOptions(b *testing.B) {
-	base := defaultClientOptions()
+	base := DefaultClientOptions()
 	base.metadata = maps.Clone(base.metadata)
 
 	b.Run("default_tls", func(b *testing.B) {
 		b.ReportAllocs()
 		for b.Loop() {
-			dialOptionsSink = buildDialOptions(base, "api-token")
+			dialOptionsSink = BuildDialOptions(base, "api-token")
 		}
 		if len(dialOptionsSink) == 0 {
 			b.Fatalf("expected dial options")
@@ -53,7 +53,7 @@ func BenchmarkBuildDialOptions(b *testing.B) {
 
 		b.ReportAllocs()
 		for b.Loop() {
-			dialOptionsSink = buildDialOptions(&opts, "management-token")
+			dialOptionsSink = BuildDialOptions(&opts, "management-token")
 		}
 		if len(dialOptionsSink) == 0 {
 			b.Fatalf("expected dial options")

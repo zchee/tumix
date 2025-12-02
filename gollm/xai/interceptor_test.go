@@ -73,6 +73,66 @@ func TestTimeoutStreamInterceptor_NoImplicitCancel(t *testing.T) {
 	}
 }
 
+func TestTimeoutStreamInterceptor_CloseSendDoesNotCancel(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		desc *grpc.StreamDesc
+	}{
+		"server streaming": {
+			desc: &grpc.StreamDesc{
+				ServerStreams: true,
+			},
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := t.Context()
+			interceptor := TimeoutStreamInterceptor(10 * time.Millisecond)
+
+			var streamerCtx context.Context
+			stream, err := interceptor(ctx, tt.desc, nil, "/xai.Chat/GetCompletionChunk",
+				func(ctx context.Context, desc *grpc.StreamDesc, _ *grpc.ClientConn, _ string, _ ...grpc.CallOption) (grpc.ClientStream, error) {
+					streamerCtx = ctx //nolint:fatcontext
+					if desc != tt.desc {
+						t.Fatalf("stream desc mismatch")
+					}
+					return &noopClientStream{ctx: ctx}, nil
+				})
+			if err != nil {
+				t.Fatalf("interceptor returned error: %v", err)
+			}
+			if streamerCtx == nil {
+				t.Fatalf("streamer was not invoked")
+			}
+
+			if err := stream.CloseSend(); err != nil {
+				t.Fatalf("CloseSend() error = %v", err)
+			}
+			if err := stream.Context().Err(); err != nil {
+				t.Fatalf("context canceled after CloseSend: %v", err)
+			}
+
+			if err := stream.RecvMsg(nil); err != nil {
+				t.Fatalf("first RecvMsg() error = %v", err)
+			}
+			if err := stream.Context().Err(); err != nil {
+				t.Fatalf("context canceled after first RecvMsg: %v", err)
+			}
+
+			if err := stream.RecvMsg(nil); err == nil {
+				t.Fatalf("expected terminal RecvMsg error")
+			}
+			if stream.Context().Err() == nil {
+				t.Fatalf("context should be canceled after terminal RecvMsg")
+			}
+		})
+	}
+}
+
 type noopClientStream struct {
 	ctx       context.Context
 	recvCalls int

@@ -27,72 +27,122 @@ import (
 	"github.com/zchee/tumix/testing/rr"
 )
 
-func TestOpenAILLMRecordReplay(t *testing.T) {
-	t.Parallel()
-
-	const openaiReplayAddr = "127.0.0.1:28082"
-	const openaiReplayBaseURL = "http://" + openaiReplayAddr + "/v1"
-
-	if *rr.Record {
-		cleanup := startStubHTTP(t, openaiReplayAddr, []string{"/v1/chat/completions", "/chat/completions"}, `{
-  "id": "chatcmpl-rreplay",
-  "object": "chat.completion",
-  "created": 1730000000,
-  "model": "gpt-4o",
-  "choices": [
-    {
-      "index": 0,
-      "finish_reason": "stop",
-      "message": {
-        "role": "assistant",
-        "content": "Paris"
-      }
-    }
-  ],
-  "usage": {
-    "prompt_tokens": 8,
-    "completion_tokens": 2,
-    "total_tokens": 10
-  }
-}`)
-		t.Cleanup(cleanup)
-	}
-
-	httpClient, cleanup, _ := rr.NewHTTPClient(t, func(r *rr.Recorder) {})
-	t.Cleanup(cleanup)
-
-	llm, err := NewOpenAILLM(t.Context(), AuthMethodAPIKey("test-key"), "gpt-4o",
-		option.WithHTTPClient(httpClient),
-		option.WithBaseURL(openaiReplayBaseURL),
-	)
-	if err != nil {
-		t.Fatalf("NewOpenAILLM() error = %v", err)
-	}
-
-	req := &model.LLMRequest{
-		Contents: genai.Text("What is the capital of France?"),
-		Config:   &genai.GenerateContentConfig{},
-	}
-
-	var got *model.LLMResponse
-	for resp, err := range llm.GenerateContent(t.Context(), req, false) {
-		if err != nil {
-			t.Fatalf("GenerateContent() unexpected error: %v", err)
-		}
-		got = resp
-	}
-
-	want := &model.LLMResponse{
-		Content: genai.NewContentFromText("Paris", genai.RoleModel),
-		UsageMetadata: &genai.GenerateContentResponseUsageMetadata{
-			PromptTokenCount:     8,
-			CandidatesTokenCount: 2,
-			TotalTokenCount:      10,
+func TestOpenAILLM_Generate(t *testing.T) {
+	tests := map[string]struct {
+		modelName string
+		req       *model.LLMRequest
+		want      *model.LLMResponse
+		wantErr   bool
+	}{
+		"ok": {
+			modelName: "gpt-5-mini",
+			req: &model.LLMRequest{
+				Contents: genai.Text("What is the capital of France?"),
+				Config:   &genai.GenerateContentConfig{},
+			},
+			want: &model.LLMResponse{
+				Content: genai.NewContentFromText("The capital of France is Paris.", genai.RoleModel),
+				UsageMetadata: &genai.GenerateContentResponseUsageMetadata{
+					PromptTokenCount:     13,
+					CandidatesTokenCount: 16,
+					TotalTokenCount:      29,
+				},
+				FinishReason: genai.FinishReasonStop,
+			},
 		},
-		FinishReason: genai.FinishReasonStop,
 	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			httpClient, cleanup, _ := rr.NewHTTPClient(t, func(r *rr.Recorder) {
+				r.RemoveResponseHeaders(
+					"Openai-Organization",
+					"Openai-Project",
+					"Set-Cookie",
+				)
+			})
+			t.Cleanup(cleanup)
 
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Fatalf("GenerateContent() diff (-want +got):\n%s", diff)
+			apiKey := AuthMethod(nil)
+			if rr.Replaying() {
+				apiKey = AuthMethodAPIKey("test-key")
+			}
+
+			llm, err := NewOpenAILLM(t.Context(), apiKey, tt.modelName,
+				option.WithHTTPClient(httpClient),
+			)
+			if err != nil {
+				t.Fatalf("NewOpenAILLM() error = %v", err)
+			}
+
+			var got *model.LLMResponse
+			for resp, err := range llm.GenerateContent(t.Context(), tt.req, false) {
+				if err != nil {
+					t.Fatalf("GenerateContent() unexpected error: %v", err)
+				}
+				got = resp
+			}
+
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Fatalf("GenerateContent() diff (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestOpenAILLM_GenerateStream(t *testing.T) {
+	tests := map[string]struct {
+		modelName string
+		req       *model.LLMRequest
+		want      string
+		wantErr   bool
+	}{
+		"ok": {
+			modelName: "gpt-5-mini",
+			req: &model.LLMRequest{
+				Contents: genai.Text("What is the capital of France? One word."),
+				Config:   &genai.GenerateContentConfig{},
+			},
+			want: "Paris",
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			httpClient, cleanup, _ := rr.NewHTTPClient(t, func(r *rr.Recorder) {
+				r.RemoveResponseHeaders(
+					"Openai-Organization",
+					"Openai-Project",
+					"Set-Cookie",
+				)
+			})
+			t.Cleanup(cleanup)
+
+			apiKey := AuthMethod(nil)
+			if rr.Replaying() {
+				apiKey = AuthMethodAPIKey("test-key")
+			}
+
+			llm, err := NewOpenAILLM(t.Context(), apiKey, tt.modelName,
+				option.WithHTTPClient(httpClient),
+			)
+			if err != nil {
+				t.Fatalf("NewOpenAILLM() error = %v", err)
+			}
+
+			// Transforms the stream into strings, concatenating the text value of the response parts
+			got, err := readResponse(llm.GenerateContent(t.Context(), tt.req, true))
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GenerateStream() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if diff := cmp.Diff(tt.want, got.PartialText); diff != "" {
+				t.Errorf("Model.GenerateStream() = %v, want %v\ndiff(-want +got):\n%v", got.PartialText, tt.want, diff)
+			}
+
+			// Since we are expecting GenerateStream to aggregate partial events, the text should be the same
+			if diff := cmp.Diff(tt.want, got.FinalText); diff != "" {
+				t.Errorf("Model.GenerateStream() = %v, want %v\ndiff(-want +got):\n%v", got.FinalText, tt.want, diff)
+			}
+		})
 	}
 }

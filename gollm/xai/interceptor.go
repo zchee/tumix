@@ -83,11 +83,6 @@ type cancelOnCloseClientStream struct {
 
 func (c *cancelOnCloseClientStream) CloseSend() error {
 	err := c.ClientStream.CloseSend()
-	c.once.Do(func() {
-		if c.cancel != nil {
-			c.cancel()
-		}
-	})
 	return err
 }
 

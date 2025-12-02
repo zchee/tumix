@@ -17,52 +17,53 @@
 package gollm
 
 import (
-	"net"
-	"net/http"
-	"slices"
-	"testing"
+	"fmt"
+	"iter"
+	"strings"
+
+	"google.golang.org/adk/model"
 )
 
-// startStubHTTP spins up a minimal HTTP server that responds with payload when the request path matches any allowed path.
-// The caller is responsible for selecting unique addresses per test.
-func startStubHTTP(t *testing.T, addr string, allowed []string, payload string) func() {
-	t.Helper()
+// TextResponse holds the concatenated text from a response stream,
+// separated into partial and final parts.
+type TextResponse struct {
+	// PartialText is the full text concatenated from all partial (streaming) responses.
+	PartialText string
+	// FinalText is the full text concatenated from all final (non-partial) responses.
+	FinalText string
+}
 
-	var lc net.ListenConfig
-	ln, err := lc.Listen(t.Context(), "tcp", addr)
-	if err != nil {
-		t.Fatalf("listen %s: %v", addr, err)
+// readResponse transforms a sequence into a TextResponse, concatenating the text value of the response parts
+// depending on the readPartial value it will only concatenate the text of partial events or the text of non partial events.
+func readResponse(s iter.Seq2[*model.LLMResponse, error]) (TextResponse, error) {
+	var partialBuilder, finalBuilder strings.Builder
+	var result TextResponse
+
+	for resp, err := range s {
+		if err != nil {
+			// Return what we have so far, along with the error.
+			result.PartialText = partialBuilder.String()
+			result.FinalText = finalBuilder.String()
+			return result, err
+		}
+		if resp.Content == nil || len(resp.Content.Parts) == 0 {
+			return result, fmt.Errorf("encountered an empty response: %v", resp)
+		}
+
+		text := resp.Content.Parts[0].Text
+		if resp.Partial {
+			existing := partialBuilder.String()
+			delta := text
+			if strings.HasPrefix(text, existing) {
+				delta = text[len(existing):]
+			}
+			partialBuilder.WriteString(delta)
+		} else {
+			finalBuilder.WriteString(text)
+		}
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		ok := slices.Contains(allowed, r.URL.Path)
-		if !ok {
-			http.NotFound(w, r)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		if _, err := w.Write([]byte(payload)); err != nil {
-			t.Fatal(err)
-		}
-	})
-
-	srv := &http.Server{Handler: mux}
-	go func() {
-		if err := srv.Serve(ln); err != nil {
-			t.Error(err)
-		}
-	}()
-
-	return func() {
-		if err := srv.Shutdown(t.Context()); err != nil {
-			t.Fatal(err)
-		}
-		if err := ln.Close(); err != nil {
-			t.Fatal(err)
-		}
-		if t.Failed() {
-			t.FailNow()
-		}
-	}
+	result.PartialText = partialBuilder.String()
+	result.FinalText = finalBuilder.String()
+	return result, nil
 }

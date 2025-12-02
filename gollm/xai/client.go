@@ -66,7 +66,7 @@ type Client struct {
 
 // NewClient creates a new xAI API client with optional configuration.
 func NewClient(apiKey string, optFns ...ClientOption) (*Client, error) {
-	opts := defaultClientOptions()
+	opts := DefaultClientOptions()
 	opts.apiKey = apiKey
 	for _, fn := range optFns {
 		fn(opts)
@@ -85,7 +85,7 @@ func NewClient(apiKey string, optFns ...ClientOption) (*Client, error) {
 	apiConn := opts.apiConn
 	var err error
 	if apiConn == nil {
-		apiConn, err = grpc.NewClient(opts.apiHost, buildDialOptions(opts, opts.apiKey)...)
+		apiConn, err = grpc.NewClient(opts.apiHost, BuildDialOptions(opts, opts.apiKey)...)
 		if err != nil {
 			return nil, err
 		}
@@ -122,7 +122,7 @@ func NewClient(apiKey string, optFns ...ClientOption) (*Client, error) {
 	if opts.managementKey != "" { //nolint:nestif // TODO(zchee): fix nolint
 		client.managementConn = opts.managementConn
 		if client.managementConn == nil {
-			client.managementConn, err = grpc.NewClient(opts.managementHost, buildDialOptions(opts, opts.managementKey)...)
+			client.managementConn, err = grpc.NewClient(opts.managementHost, BuildDialOptions(opts, opts.managementKey)...)
 			if err != nil {
 				if cloneErr := apiConn.Close(); cloneErr != nil {
 					err = errors.Join(err, cloneErr)
@@ -159,7 +159,8 @@ func (c *Client) Close() error {
 	return firstErr
 }
 
-func buildDialOptions(opts *clientOptions, token string) []grpc.DialOption {
+// BuildDialOptions builds gRPC dial options based on the provided client options and token.
+func BuildDialOptions(opts *clientOptions, token string) []grpc.DialOption {
 	creds := credentials.NewTLS(&tls.Config{
 		MinVersion: tls.VersionTLS12,
 	})
