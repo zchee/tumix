@@ -88,13 +88,15 @@ func TestTimeoutStreamInterceptor_CloseSendDoesNotCancel(t *testing.T) {
 
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			ctx := context.Background()
+			t.Parallel()
+
+			ctx := t.Context()
 			interceptor := TimeoutStreamInterceptor(10 * time.Millisecond)
 
 			var streamerCtx context.Context
 			stream, err := interceptor(ctx, tt.desc, nil, "/xai.Chat/GetCompletionChunk",
 				func(ctx context.Context, desc *grpc.StreamDesc, _ *grpc.ClientConn, _ string, _ ...grpc.CallOption) (grpc.ClientStream, error) {
-					streamerCtx = ctx
+					streamerCtx = ctx //nolint:fatcontext
 					if desc != tt.desc {
 						t.Fatalf("stream desc mismatch")
 					}
