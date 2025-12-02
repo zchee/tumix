@@ -322,6 +322,7 @@ func (m *InlineCitation) CloneVT() *InlineCitation {
 	r := new(InlineCitation)
 	r.Id = m.Id
 	r.StartIndex = m.StartIndex
+	r.EndIndex = m.EndIndex
 	if m.Citation != nil {
 		r.Citation = m.Citation.(interface {
 			CloneVT() isInlineCitation_Citation
@@ -1792,6 +1793,9 @@ func (this *InlineCitation) EqualVT(that *InlineCitation) bool {
 		return false
 	}
 	if this.StartIndex != that.StartIndex {
+		return false
+	}
+	if this.EndIndex != that.EndIndex {
 		return false
 	}
 	return string(this.unknownFields) == string(that.unknownFields)
@@ -4182,6 +4186,11 @@ func (m *InlineCitation) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 			return 0, err
 		}
 		i -= size
+	}
+	if m.EndIndex != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.EndIndex))
+		i--
+		dAtA[i] = 0x30
 	}
 	if m.StartIndex != 0 {
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.StartIndex))
@@ -7365,6 +7374,11 @@ func (m *InlineCitation) MarshalToSizedBufferVTStrict(dAtA []byte) (int, error) 
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.EndIndex != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.EndIndex))
+		i--
+		dAtA[i] = 0x30
+	}
 	if msg, ok := m.Citation.(*InlineCitation_CollectionsCitation); ok {
 		size, err := msg.MarshalToSizedBufferVTStrict(dAtA[:i])
 		if err != nil {
@@ -10149,6 +10163,9 @@ func (m *InlineCitation) SizeVT() (n int) {
 	}
 	if vtmsg, ok := m.Citation.(interface{ SizeVT() int }); ok {
 		n += vtmsg.SizeVT()
+	}
+	if m.EndIndex != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.EndIndex))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -13620,6 +13637,25 @@ func (m *InlineCitation) UnmarshalVT(dAtA []byte) error {
 				m.Citation = &InlineCitation_CollectionsCitation{CollectionsCitation: v}
 			}
 			iNdEx = postIndex
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field EndIndex", wireType)
+			}
+			m.EndIndex = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.EndIndex |= int32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -21376,6 +21412,25 @@ func (m *InlineCitation) UnmarshalVTUnsafe(dAtA []byte) error {
 				m.Citation = &InlineCitation_CollectionsCitation{CollectionsCitation: v}
 			}
 			iNdEx = postIndex
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field EndIndex", wireType)
+			}
+			m.EndIndex = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.EndIndex |= int32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
