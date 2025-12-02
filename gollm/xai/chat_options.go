@@ -282,7 +282,7 @@ func (s *ChatSession) Messages() []*xaipb.Message {
 
 // Completion sends the chat request and returns the first response.
 func (s *ChatSession) Completion(ctx context.Context) (*Response, error) {
-	ctx, span := tracer.Start(ctx, fmt.Sprintf("chat.sample %s", s.request.GetModel()),
+	ctx, span := tracer.Start(ctx, fmt.Sprintf("chat.completion %s", s.request.GetModel()),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(s.makeSpanRequestAttributes()...),
 	)
@@ -303,7 +303,7 @@ func (s *ChatSession) Completion(ctx context.Context) (*Response, error) {
 
 // CompletionBatch requests n responses in a single call.
 func (s *ChatSession) CompletionBatch(ctx context.Context, n int32) ([]*Response, error) {
-	ctx, span := tracer.Start(ctx, fmt.Sprintf("chat.sample_batch %s", s.request.GetModel()),
+	ctx, span := tracer.Start(ctx, fmt.Sprintf("chat.completion_batch %s", s.request.GetModel()),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(s.makeSpanRequestAttributes()...),
 	)
