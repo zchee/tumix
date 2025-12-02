@@ -52,7 +52,12 @@ func readResponse(s iter.Seq2[*model.LLMResponse, error]) (TextResponse, error) 
 
 		text := resp.Content.Parts[0].Text
 		if resp.Partial {
-			partialBuilder.WriteString(text)
+			existing := partialBuilder.String()
+			delta := text
+			if strings.HasPrefix(text, existing) {
+				delta = text[len(existing):]
+			}
+			partialBuilder.WriteString(delta)
 		} else {
 			finalBuilder.WriteString(text)
 		}
