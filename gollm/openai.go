@@ -131,7 +131,7 @@ func (m *openAILLM) chatCompletionParams(req *model.LLMRequest) (*openai.ChatCom
 	}
 
 	params := openai.ChatCompletionNewParams{
-		Model:    resolveModelName(req, m.name),
+		Model:    adapter.ModelName(m.name, req),
 		Messages: msgs,
 	}
 
