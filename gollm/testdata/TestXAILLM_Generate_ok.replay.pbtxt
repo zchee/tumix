@@ -1,0 +1,48 @@
+RPCReTxt1
+""
+292
+kind: REQUEST
+method: "/xai_api.Chat/GetCompletion"
+message: {
+  [type.googleapis.com/xai_api.GetCompletionsRequest]: {
+    messages: {
+      content: {
+        text: "What is the capital of France?"
+      }
+      role: ROLE_USER
+    }
+    model: "grok-4-1-fast-non-reasoning"
+    n: 1
+  }
+}
+1106
+kind: RESPONSE
+message: {
+  [type.googleapis.com/xai_api.GetChatCompletionResponse]: {
+    id: "67fd1696-813c-bef5-9a8e-44e6644a2351"
+    outputs: {
+      finish_reason: REASON_STOP
+      message: {
+        content: "**Paris** is the capital of France. \n\nThis has been the case since 987 AD under the Capetian dynasty, when Hugh Capet established it as the political center. Paris remains the seat of the French government, including the Élysée Palace (presidential residence), the National Assembly, and the Senate. It's also France's largest city, with a population of about 2.1 million in the city proper and 12.6 million in the metropolitan area (INSEE data, 2023)."
+        role: ROLE_ASSISTANT
+      }
+    }
+    created: {
+      seconds: 1764653354
+      nanos: 357860939
+    }
+    model: "grok-4-1-fast-non-reasoning"
+    system_fingerprint: "fp_ed3b9934bf"
+    usage: {
+      completion_tokens: 104
+      prompt_tokens: 175
+      total_tokens: 279
+      prompt_text_tokens: 175
+      cached_prompt_text_tokens: 161
+    }
+    settings: {
+      parallel_tool_calls: true
+    }
+  }
+}
+ref_index: 1

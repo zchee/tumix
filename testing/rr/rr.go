@@ -140,7 +140,7 @@ func NewHTTPClient(t *testing.T, rf func(r *Recorder)) (c *http.Client, cleanup 
 func NewGRPCConn(t *testing.T, apiName, endPoint string, opts ...grpc.DialOption) (conn *grpc.ClientConn, cleanup func()) {
 	t.Helper()
 
-	golden := filepath.Join("testdata", strings.ReplaceAll(t.Name(), "/", "_")+".replay")
+	golden := filepath.Join("testdata", strings.ReplaceAll(t.Name(), "/", "_")+".replay.pbtxt")
 	if err := os.MkdirAll(filepath.Dir(golden), 0o755); err != nil {
 		t.Fatal(err)
 	}
