@@ -31,7 +31,7 @@ const (
 
 // NormalizeRequest ensures request config, HTTP headers, and user turn presence are set, then applies the provided user-agent.
 func NormalizeRequest(req *model.LLMRequest, userAgent string) *genai.GenerateContentConfig {
-	EnsureUserContent(req)
+	req.Contents = EnsureUserContent(req.Contents)
 	cfg := ensureConfig(req)
 
 	if ua := strings.TrimSpace(userAgent); ua != "" {
@@ -42,19 +42,16 @@ func NormalizeRequest(req *model.LLMRequest, userAgent string) *genai.GenerateCo
 }
 
 // EnsureUserContent appends a user turn if the content list is empty or does not end with a user role.
-func EnsureUserContent(req *model.LLMRequest) {
-	if req == nil {
-		return
+func EnsureUserContent(contents []*genai.Content) []*genai.Content {
+	if len(contents) == 0 {
+		contents = append(contents, genai.NewContentFromText(defaultUserPrompt, genai.RoleUser))
+		return contents
 	}
 
-	if len(req.Contents) == 0 {
-		req.Contents = append(req.Contents, genai.NewContentFromText(defaultUserPrompt, genai.RoleUser))
-		return
+	if last := contents[len(contents)-1]; last == nil || last.Role != genai.RoleUser {
+		contents = append(contents, genai.NewContentFromText(continueUserPrompt, genai.RoleUser))
 	}
-
-	if last := req.Contents[len(req.Contents)-1]; last == nil || last.Role != genai.RoleUser {
-		req.Contents = append(req.Contents, genai.NewContentFromText(continueUserPrompt, genai.RoleUser))
-	}
+	return contents
 }
 
 // ModelName returns the trimmed request model if set, otherwise the provided default.
