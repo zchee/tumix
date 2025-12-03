@@ -73,6 +73,69 @@ func AnthropicMessageToLLMResponse(msg *anthropic.Message) (*model.LLMResponse, 
 	}, nil
 }
 
+// AnthropicBetaMessageToLLMResponse converts a Beta Anthropic message into an ADK LLM response.
+func AnthropicBetaMessageToLLMResponse(msg *anthropic.BetaMessage) (*model.LLMResponse, error) {
+	if msg == nil {
+		return nil, errors.New("nil anthropic beta message")
+	}
+
+	parts := make([]*genai.Part, 0, len(msg.Content))
+	for block := range slices.Values(msg.Content) {
+		switch v := block.AsAny().(type) {
+		case anthropic.BetaTextBlock:
+			parts = append(parts, genai.NewPartFromText(v.Text))
+		case anthropic.BetaToolUseBlock:
+			args := map[string]any{}
+			switch inp := v.Input.(type) {
+			case nil:
+			case map[string]any:
+				args = inp
+			default:
+				raw, _ := json.Marshal(inp)
+				if err := json.Unmarshal(raw, &args); err != nil {
+					return nil, fmt.Errorf("unmarshal tool input: %w", err)
+				}
+			}
+			parts = append(parts, &genai.Part{
+				FunctionCall: &genai.FunctionCall{
+					ID:   v.ID,
+					Name: v.Name,
+					Args: args,
+				},
+			})
+		}
+	}
+
+	usage := msg.Usage
+	llmUsage := &genai.GenerateContentResponseUsageMetadata{
+		PromptTokenCount:     int32(usage.InputTokens),
+		CandidatesTokenCount: int32(usage.OutputTokens),
+		TotalTokenCount:      int32(usage.InputTokens + usage.OutputTokens),
+	}
+
+	return &model.LLMResponse{
+		Content: &genai.Content{
+			Role:  genai.RoleModel,
+			Parts: parts,
+		},
+		UsageMetadata: llmUsage,
+		FinishReason:  mapAnthropicBetaFinishReason(msg.StopReason),
+	}, nil
+}
+
+func mapAnthropicBetaFinishReason(reason anthropic.BetaStopReason) genai.FinishReason {
+	switch reason {
+	case anthropic.BetaStopReasonStopSequence, anthropic.BetaStopReasonEndTurn:
+		return genai.FinishReasonStop
+	case anthropic.BetaStopReasonMaxTokens:
+		return genai.FinishReasonMaxTokens
+	case anthropic.BetaStopReasonToolUse:
+		return genai.FinishReasonOther
+	default:
+		return genai.FinishReasonUnspecified
+	}
+}
+
 func mapAnthropicFinishReason(reason anthropic.StopReason) genai.FinishReason {
 	switch reason {
 	case anthropic.StopReasonStopSequence, anthropic.StopReasonEndTurn:
@@ -94,6 +157,20 @@ func AccText(msg *anthropic.Message) string {
 	var sb strings.Builder
 	for block := range slices.Values(msg.Content) {
 		if v, ok := block.AsAny().(anthropic.TextBlock); ok {
+			sb.WriteString(v.Text)
+		}
+	}
+	return sb.String()
+}
+
+// AccTextBeta concatenates all text blocks from an Anthropic Beta message.
+func AccTextBeta(msg *anthropic.BetaMessage) string {
+	if msg == nil {
+		return ""
+	}
+	var sb strings.Builder
+	for block := range slices.Values(msg.Content) {
+		if v, ok := block.AsAny().(anthropic.BetaTextBlock); ok {
 			sb.WriteString(v.Text)
 		}
 	}
