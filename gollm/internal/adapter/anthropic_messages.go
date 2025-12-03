@@ -113,3 +113,90 @@ func GenAIToAnthropicMessages(system *genai.Content, contents []*genai.Content) 
 
 	return systemBlocks, msgs, nil
 }
+
+// GenAIToAnthropicBetaMessages converts GenAI contents into Anthropic Beta message parameters.
+func GenAIToAnthropicBetaMessages(system *genai.Content, contents []*genai.Content) ([]anthropic.BetaTextBlockParam, []anthropic.BetaMessageParam, error) {
+	var systemBlocks []anthropic.BetaTextBlockParam
+	if system != nil {
+		text := joinTextParts(system.Parts)
+		if text != "" {
+			systemBlocks = append(systemBlocks, anthropic.BetaTextBlockParam{
+				Type: constant.ValueOf[constant.Text](),
+				Text: text,
+			})
+		}
+	}
+
+	msgs := make([]anthropic.BetaMessageParam, 0, len(contents))
+	for idx, c := range contents {
+		if c == nil {
+			continue
+		}
+		role := strings.ToLower(c.Role)
+		mp := anthropic.BetaMessageParam{
+			Content: make([]anthropic.BetaContentBlockParamUnion, 0, len(c.Parts)),
+		}
+		if role == genai.RoleUser {
+			mp.Role = anthropic.BetaMessageParamRoleUser
+		} else {
+			mp.Role = anthropic.BetaMessageParamRoleAssistant
+		}
+
+		for pi, part := range c.Parts {
+			if part == nil {
+				continue
+			}
+			switch {
+			case part.Text != "":
+				mp.Content = append(mp.Content, anthropic.NewBetaTextBlock(part.Text))
+
+			case part.FunctionCall != nil:
+				fc := part.FunctionCall
+				if fc.Name == "" {
+					return nil, nil, fmt.Errorf("content[%d] part[%d]: function call missing name", idx, pi)
+				}
+				args := fc.Args
+				if args == nil {
+					args = map[string]any{}
+				}
+				mp.Content = append(mp.Content, anthropic.BetaContentBlockParamUnion{
+					OfToolUse: &anthropic.BetaToolUseBlockParam{
+						ID:    toolID(fc.ID, idx, pi),
+						Name:  fc.Name,
+						Input: args,
+						Type:  constant.ValueOf[constant.ToolUse](),
+					},
+				})
+
+			case part.FunctionResponse != nil:
+				fr := part.FunctionResponse
+				if fr.Name == "" {
+					return nil, nil, fmt.Errorf("content[%d] part[%d]: function response missing name", idx, pi)
+				}
+				contentJSON, err := json.Marshal(fr.Response)
+				if err != nil {
+					return nil, nil, fmt.Errorf("marshal json: %w", err)
+				}
+				mp.Content = append(mp.Content, anthropic.BetaContentBlockParamUnion{
+					OfToolResult: &anthropic.BetaToolResultBlockParam{
+						ToolUseID: toolID(fr.ID, idx, pi),
+						Content: []anthropic.BetaToolResultBlockParamContentUnion{
+							{OfText: &anthropic.BetaTextBlockParam{Type: constant.ValueOf[constant.Text](), Text: string(contentJSON)}},
+						},
+						Type: constant.ValueOf[constant.ToolResult](),
+					},
+				})
+
+			default:
+				return nil, nil, fmt.Errorf("content[%d] part[%d]: unsupported part", idx, pi)
+			}
+		}
+
+		if len(mp.Content) == 0 {
+			return nil, nil, fmt.Errorf("content[%d]: empty parts", idx)
+		}
+		msgs = append(msgs, mp)
+	}
+
+	return systemBlocks, msgs, nil
+}
