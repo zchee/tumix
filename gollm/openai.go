@@ -28,7 +28,6 @@ import (
 	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
-	"github.com/openai/openai-go/v3/shared"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/adk/model"
@@ -134,7 +133,7 @@ func (m *openAILLM) responseParams(req *model.LLMRequest) (*responses.ResponseNe
 	}
 
 	params := responses.ResponseNewParams{
-		Model: shared.ResponsesModel(adapter.ModelName(m.name, req)),
+		Model: adapter.ModelName(m.name, req),
 		Input: responses.ResponseNewParamsInputUnion{OfInputItemList: responses.ResponseInputParam(items)},
 	}
 
@@ -194,7 +193,7 @@ func (m *openAILLM) stream(ctx context.Context, span trace.Span, params *respons
 		for stream.Next() {
 			event := stream.Current()
 
-			for _, resp := range agg.Process(event) {
+			for _, resp := range agg.Process(&event) {
 				if !yield(resp, nil) {
 					return
 				}

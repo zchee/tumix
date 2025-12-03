@@ -31,7 +31,7 @@ func BenchmarkOpenAIStreamAggregator(b *testing.B) {
 	b.ReportAllocs()
 	for b.Loop() {
 		agg := NewOpenAIStreamAggregator()
-		if out := agg.Process(event); len(out) != 1 {
+		if out := agg.Process(&event); len(out) != 1 {
 			b.Fatalf("got %d partials, want 1", len(out))
 		}
 		if final := agg.Final(); final == nil {

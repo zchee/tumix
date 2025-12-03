@@ -18,7 +18,8 @@ package gollm
 
 import (
 	"bytes"
-	"encoding/json"
+	json "encoding/json/v2"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -48,7 +49,12 @@ func TestOpenAILLM_Generate(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(syncResp); err != nil {
+		raw, err := json.Marshal(syncResp)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if _, err := w.Write(raw); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 	}))
@@ -93,8 +99,12 @@ func TestOpenAILLM_GenerateStream(t *testing.T) {
 	streamResp := mockResponse("resp-stream", "Paris", 7, 5, "completed")
 
 	sseBody := bytes.NewBuffer(nil)
-	sseBody.WriteString("data: {\"type\":\"response.output_text.delta\",\"delta\":\"Par\",\"content_index\":0,\"item_id\":\"\",\"output_index\":0,\"sequence_number\":1,\"logprobs\":[]}\n\n")
-	sseBody.WriteString("data: {\"type\":\"response.output_text.delta\",\"delta\":\"is\",\"content_index\":0,\"item_id\":\"\",\"output_index\":0,\"sequence_number\":2,\"logprobs\":[]}\n\n")
+	if _, err := sseBody.WriteString("data: {\"type\":\"response.output_text.delta\",\"delta\":\"Par\",\"content_index\":0,\"item_id\":\"\",\"output_index\":0,\"sequence_number\":1,\"logprobs\":[]}\n\n"); err != nil {
+		t.Fatalf("WriteString delta1: %v", err)
+	}
+	if _, err := sseBody.WriteString("data: {\"type\":\"response.output_text.delta\",\"delta\":\"is\",\"content_index\":0,\"item_id\":\"\",\"output_index\":0,\"sequence_number\":2,\"logprobs\":[]}\n\n"); err != nil {
+		t.Fatalf("WriteString delta2: %v", err)
+	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/responses" && r.URL.Path != "/v1/responses" {
@@ -103,15 +113,28 @@ func TestOpenAILLM_GenerateStream(t *testing.T) {
 		}
 
 		var body map[string]any
-		_ = json.NewDecoder(r.Body).Decode(&body)
+		reqBytes, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read request body: %v", err)
+		}
+		if err := json.Unmarshal(reqBytes, &body); err != nil {
+			t.Fatalf("Decode body: %v", err)
+		}
 		if stream, ok := body["stream"].(bool); ok && stream {
 			w.Header().Set("Content-Type", "text/event-stream")
-			_, _ = w.Write(sseBody.Bytes())
+			if _, err := w.Write(sseBody.Bytes()); err != nil {
+				t.Fatalf("write sse body: %v", err)
+			}
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(streamResp); err != nil {
+		raw, err := json.Marshal(streamResp)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if _, err := w.Write(raw); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 	}))

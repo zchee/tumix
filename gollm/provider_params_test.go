@@ -118,10 +118,10 @@ func TestProviderParams_XAIOptions(t *testing.T) {
 		opt(gotReq, &xai.ChatSession{})
 	}
 
-	if gotReq.User != "user-abc" {
-		t.Fatalf("User = %q, want %q", gotReq.User, "user-abc")
+	if gotReq.GetUser() != "user-abc" {
+		t.Fatalf("User = %q, want %q", gotReq.GetUser(), "user-abc")
 	}
-	if gotReq.MaxTokens == nil || *gotReq.MaxTokens != 321 {
-		t.Fatalf("MaxTokens = %v, want 321", gotReq.MaxTokens)
+	if gotReq.GetMaxTokens() != 321 {
+		t.Fatalf("MaxTokens = %v, want 321", gotReq.GetMaxTokens())
 	}
 }

@@ -91,7 +91,10 @@ func AnthropicBetaMessageToLLMResponse(msg *anthropic.BetaMessage) (*model.LLMRe
 			case map[string]any:
 				args = inp
 			default:
-				raw, _ := json.Marshal(inp)
+				raw, err := json.Marshal(inp)
+				if err != nil {
+					return nil, fmt.Errorf("marshal tool input: %w", err)
+				}
 				if err := json.Unmarshal(raw, &args); err != nil {
 					return nil, fmt.Errorf("unmarshal tool input: %w", err)
 				}
