@@ -25,8 +25,6 @@ import (
 )
 
 func TestFileServiceCreateGetAppend(t *testing.T) {
-	t.Parallel()
-
 	dir := t.TempDir()
 	svc, err := Service(dir)
 	if err != nil {
