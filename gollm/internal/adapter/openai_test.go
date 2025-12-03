@@ -17,20 +17,18 @@
 package adapter_test
 
 import (
-	json "encoding/json/v2"
-	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	openai "github.com/openai/openai-go/v3"
-	"github.com/openai/openai-go/v3/packages/respjson"
+	"github.com/openai/openai-go/v3/responses"
+	"github.com/openai/openai-go/v3/shared/constant"
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
 
 	"github.com/zchee/tumix/gollm/internal/adapter"
 )
 
-func TestGenAIToOpenAIMessages(t *testing.T) {
+func TestGenAIToResponsesInput(t *testing.T) {
 	contents := []*genai.Content{
 		genai.NewContentFromText("hello", genai.RoleUser),
 		{
@@ -53,83 +51,78 @@ func TestGenAIToOpenAIMessages(t *testing.T) {
 		},
 	}
 
-	msgs, err := adapter.GenAIToOpenAIMessages(contents)
+	items, err := adapter.GenAIToResponsesInput(contents)
 	if err != nil {
-		t.Fatalf("GenAIToOpenAIMessages err = %v", err)
+		t.Fatalf("GenAIToResponsesInput err = %v", err)
 	}
 
-	if got, want := len(msgs), 3; got != want {
-		t.Fatalf("len(msgs) = %d, want %d", got, want)
+	if got, want := len(items), 4; got != want {
+		t.Fatalf("len(items) = %d, want %d", got, want)
 	}
 
-	if user := msgs[0].OfUser; user == nil || user.Content.OfString.Value != "hello" {
+	user := items[0].OfMessage
+	if user == nil || user.Content.OfString.Value != "hello" {
 		t.Fatalf("user message = %+v", user)
 	}
 
-	tool := msgs[1].OfTool
-	if tool == nil {
-		t.Fatalf("tool response message missing")
-	}
-	if got, want := tool.ToolCallID, "tool_1_2"; got != want {
-		t.Fatalf("tool call id = %q, want %q", got, want)
-	}
-	if got := tool.Content.OfString.Value; !strings.Contains(got, `"result":"bar"`) {
-		t.Fatalf("tool response content = %q", got)
+	asst := items[1].OfMessage
+	if asst == nil || asst.Role != responses.EasyInputMessageRoleAssistant || asst.Content.OfString.Value != "thinking" {
+		t.Fatalf("assistant message = %+v", asst)
 	}
 
-	asst := msgs[2].OfAssistant
-	if asst == nil {
-		t.Fatalf("assistant message missing")
+	fc := items[2].OfFunctionCall
+	if fc == nil {
+		t.Fatalf("function call missing")
 	}
-	if got, want := asst.Content.OfString.Value, "thinking"; got != want {
-		t.Fatalf("assistant content = %q, want %q", got, want)
+	if got, want := fc.CallID, "tool_1_1"; got != want {
+		t.Fatalf("function call id = %q, want %q", got, want)
 	}
-	if len(asst.ToolCalls) != 1 {
-		t.Fatalf("assistant tool calls = %d, want 1", len(asst.ToolCalls))
+	if got, want := fc.Name, "lookup"; got != want {
+		t.Fatalf("function call name = %q, want %q", got, want)
 	}
-	fn := asst.ToolCalls[0].OfFunction
-	if fn == nil {
-		t.Fatalf("assistant tool call missing function payload")
+	if got, want := fc.Arguments, `{"q":"foo"}`; got != want {
+		t.Fatalf("function call args = %q, want %q", got, want)
 	}
-	if got, want := fn.ID, "tool_1_1"; got != want {
-		t.Fatalf("function id = %q, want %q", got, want)
+
+	fcOut := items[3].OfFunctionCallOutput
+	if fcOut == nil {
+		t.Fatalf("function call output missing")
 	}
-	if got, want := fn.Function.Name, "lookup"; got != want {
-		t.Fatalf("function name = %q, want %q", got, want)
+	if got, want := fcOut.CallID, "tool_1_2"; got != want {
+		t.Fatalf("function call output id = %q, want %q", got, want)
 	}
-	if got, want := fn.Function.Arguments, `{"q":"foo"}`; got != want {
-		t.Fatalf("function args = %q, want %q", got, want)
+	if got := fcOut.Output.OfString.Value; got == "" || got == "{}" {
+		t.Fatalf("function call output empty: %q", got)
 	}
 }
 
 func TestOpenAIResponseToLLM(t *testing.T) {
-	const raw = `{
-		"id": "chatcmpl-1",
-		"object": "chat.completion",
-		"created": 1,
-		"model": "gpt-4o",
-		"choices": [{
-			"index": 0,
-			"finish_reason": "stop",
-			"logprobs": {"content": [], "refusal": []},
-			"message": {
-				"role": "assistant",
-				"content": "hello",
-				"tool_calls": [{
-					"id": "call-1",
-					"type": "function",
-					"function": {"name": "lookup_city", "arguments": "{\"city\":\"Paris\"}"}
-				}]
-			}
-		}],
-		"usage": {"prompt_tokens": 3, "completion_tokens": 5, "total_tokens": 8}
-	}`
-
-	var resp openai.ChatCompletion
-	if err := json.Unmarshal([]byte(raw), &resp); err != nil {
-		t.Fatalf("unmarshal chat completion: %v", err)
+	resp := &responses.Response{
+		ID:     "resp-1",
+		Status: responses.ResponseStatusCompleted,
+		Output: []responses.ResponseOutputItemUnion{
+			{
+				Type: "message",
+				Role: constant.ValueOf[constant.Assistant](),
+				Content: []responses.ResponseOutputMessageContentUnion{
+					{Type: "output_text", Text: "hello"},
+				},
+			},
+			{
+				Type:      "function_call",
+				CallID:    "call-1",
+				Name:      "lookup_city",
+				Arguments: `{"city":"Paris"}`,
+			},
+		},
+		Usage: responses.ResponseUsage{
+			InputTokens:  3,
+			OutputTokens: 5,
+			TotalTokens:  8,
+		},
 	}
-	got, err := adapter.OpenAIResponseToLLM(&resp)
+
+	got, err := adapter.OpenAIResponseToLLM(resp)
 	if err != nil {
 		t.Fatalf("OpenAIResponseToLLM err = %v", err)
 	}
@@ -153,6 +146,7 @@ func TestOpenAIResponseToLLM(t *testing.T) {
 			CandidatesTokenCount: 5,
 			TotalTokenCount:      8,
 		},
+		TurnComplete: true,
 		FinishReason: genai.FinishReasonStop,
 	}
 
@@ -161,136 +155,73 @@ func TestOpenAIResponseToLLM(t *testing.T) {
 	}
 }
 
-func TestOpenAIResponseToLLM_LegacyFunctionCall(t *testing.T) {
-	const raw = `{
-		"id": "chatcmpl-legacy",
-		"object": "chat.completion",
-		"created": 1,
-		"model": "gpt-4o",
-		"choices": [{
-			"index": 0,
-			"finish_reason": "function_call",
-			"logprobs": {"content": [], "refusal": []},
-			"message": {
-				"role": "assistant",
-				"content": "",
-				"function_call": {"name": "legacy", "arguments": "{\"foo\":123}"}
-			}
-		}]
-	}`
-	var resp openai.ChatCompletion
-	if err := json.Unmarshal([]byte(raw), &resp); err != nil {
-		t.Fatalf("unmarshal legacy chat completion: %v", err)
-	}
-
-	got, err := adapter.OpenAIResponseToLLM(&resp)
-	if err != nil {
-		t.Fatalf("OpenAIResponseToLLM err = %v", err)
-	}
-
-	if len(got.Content.Parts) != 1 || got.Content.Parts[0].FunctionCall == nil {
-		t.Fatalf("function call not parsed: %+v", got.Content.Parts)
-	}
-	fn := got.Content.Parts[0].FunctionCall
-	if fn.Name != "legacy" || fn.Args["foo"] != float64(123) {
-		t.Fatalf("function call = %+v", fn)
-	}
-	if got.FinishReason != genai.FinishReasonOther {
-		t.Fatalf("finish reason = %q, want %q", got.FinishReason, genai.FinishReasonOther)
-	}
-}
-
 func TestOpenAIStreamAggregator(t *testing.T) {
 	agg := adapter.NewOpenAIStreamAggregator()
 
-	chunk1 := openai.ChatCompletionChunk{
-		Choices: []openai.ChatCompletionChunkChoice{{
-			Delta: openai.ChatCompletionChunkChoiceDelta{
-				Content: "Hel",
-				ToolCalls: []openai.ChatCompletionChunkChoiceDeltaToolCall{{
-					Index: 0,
-					Function: openai.ChatCompletionChunkChoiceDeltaToolCallFunction{
-						Name:      "lookup_city",
-						Arguments: `{"city":"Par`,
-					},
-				}},
-			},
-		}},
+	partials := agg.Process(responses.ResponseStreamEventUnion{
+		Type:  "response.output_text.delta",
+		Delta: "Hel",
+	})
+	if len(partials) != 1 || !partials[0].Partial || partials[0].Content.Parts[0].Text != "Hel" {
+		t.Fatalf("delta partial = %+v", partials)
 	}
-	chunk2 := openai.ChatCompletionChunk{
-		Choices: []openai.ChatCompletionChunkChoice{{
-			Delta: openai.ChatCompletionChunkChoiceDelta{
-				Content: "lo",
-				ToolCalls: []openai.ChatCompletionChunkChoiceDeltaToolCall{{
-					Index: 0,
-					ID:    "call-1",
-					Function: openai.ChatCompletionChunkChoiceDeltaToolCallFunction{
-						Arguments: `is"}`,
-					},
-				}},
-			},
-		}},
-	}
-	chunk3 := openai.ChatCompletionChunk{
-		Choices: []openai.ChatCompletionChunkChoice{
+
+	agg.Process(responses.ResponseStreamEventUnion{
+		Type:        "response.function_call_arguments.delta",
+		ItemID:      "call-1",
+		OutputIndex: 0,
+		Delta:       `{"city":"Par`,
+	})
+	agg.Process(responses.ResponseStreamEventUnion{
+		Type:        "response.function_call_arguments.delta",
+		ItemID:      "call-1",
+		OutputIndex: 0,
+		Delta:       `is"}`,
+	})
+
+	finalResp := responses.Response{
+		ID:     "resp-1",
+		Status: responses.ResponseStatusCompleted,
+		Output: []responses.ResponseOutputItemUnion{
 			{
-				FinishReason: "stop",
+				Type: "message",
+				Role: constant.ValueOf[constant.Assistant](),
+				Content: []responses.ResponseOutputMessageContentUnion{
+					{Type: "output_text", Text: "Hello"},
+				},
+			},
+			{
+				Type:      "function_call",
+				CallID:    "call-1",
+				Name:      "lookup_city",
+				Arguments: `{"city":"Paris"}`,
 			},
 		},
-		Usage: openai.CompletionUsage{
-			PromptTokens:     4,
-			CompletionTokens: 2,
-			TotalTokens:      6,
+		Usage: responses.ResponseUsage{
+			InputTokens:  4,
+			OutputTokens: 2,
+			TotalTokens:  6,
 		},
 	}
-	chunk3.JSON.Usage = respjson.NewField("{}") // mark usage as present
 
-	out := agg.Process(&chunk1)
-	if len(out) != 1 || !out[0].Partial || out[0].Content.Parts[0].Text != "Hel" {
-		t.Fatalf("chunk1 partial = %+v", out)
+	finals := agg.Process(responses.ResponseStreamEventUnion{
+		Type:     "response.completed",
+		Response: finalResp,
+	})
+	if len(finals) != 1 {
+		t.Fatalf("expected final response, got %d", len(finals))
 	}
-
-	out = agg.Process(&chunk2)
-	if len(out) != 1 || !out[0].Partial || out[0].Content.Parts[0].Text != "lo" {
-		t.Fatalf("chunk2 partial = %+v", out)
-	}
-
-	if fin := agg.Process(&chunk3); len(fin) != 0 {
-		t.Fatalf("chunk3 should not yield partials, got %d", len(fin))
-	}
-
-	final := agg.Final()
-	if final == nil {
-		t.Fatal("Final() returned nil")
-	}
+	final := finals[0]
 	if final.Partial {
-		t.Fatal("Final response should not be partial")
+		t.Fatalf("final should not be partial: %+v", final)
 	}
-	if final.Content == nil || len(final.Content.Parts) != 2 {
-		t.Fatalf("final content parts = %+v", final.Content)
+	if final.FinishReason != genai.FinishReasonStop || !final.TurnComplete {
+		t.Fatalf("finish reason/turn complete mismatch: %+v", final)
 	}
-	if got, want := final.Content.Parts[0].Text, "Hello"; got != want {
-		t.Fatalf("aggregated text = %q, want %q", got, want)
-	}
-
-	fn := final.Content.Parts[1].FunctionCall
-	if fn == nil || fn.Name != "lookup_city" {
-		t.Fatalf("function call = %+v", fn)
-	}
-	if got, want := fn.ID, "call-1"; got != want {
-		t.Fatalf("function call id = %q, want %q", got, want)
-	}
-	if city, ok := fn.Args["city"]; !ok || city != "Paris" {
-		t.Fatalf("function call args = %+v", fn.Args)
-	}
-
 	if final.UsageMetadata == nil || final.UsageMetadata.TotalTokenCount != 6 {
 		t.Fatalf("usage metadata = %+v", final.UsageMetadata)
 	}
-	if !final.TurnComplete {
-		t.Fatalf("TurnComplete = false, want true")
-	}
-	if got, want := final.FinishReason, genai.FinishReasonStop; got != want {
-		t.Fatalf("FinishReason = %q, want %q", got, want)
+	if err := agg.Err(); err != nil {
+		t.Fatalf("aggregator error = %v", err)
 	}
 }

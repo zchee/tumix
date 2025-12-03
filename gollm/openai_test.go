@@ -17,132 +17,165 @@
 package gollm
 
 import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/openai/openai-go/v3/option"
+	"github.com/openai/openai-go/v3/responses"
+	"github.com/openai/openai-go/v3/shared"
+	"github.com/openai/openai-go/v3/shared/constant"
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
-
-	"github.com/zchee/tumix/testing/rr"
 )
 
 func TestOpenAILLM_Generate(t *testing.T) {
-	tests := map[string]struct {
-		modelName string
-		req       *model.LLMRequest
-		want      *model.LLMResponse
-		wantErr   bool
-	}{
-		"ok": {
-			modelName: "gpt-5-mini",
-			req: &model.LLMRequest{
-				Contents: genai.Text("What is the capital of France?"),
-				Config:   &genai.GenerateContentConfig{},
-			},
-			want: &model.LLMResponse{
-				Content: genai.NewContentFromText("The capital of France is Paris.", genai.RoleModel),
-				UsageMetadata: &genai.GenerateContentResponseUsageMetadata{
-					PromptTokenCount:     13,
-					CandidatesTokenCount: 16,
-					TotalTokenCount:      29,
-				},
-				FinishReason: genai.FinishReasonStop,
-			},
-		},
+	syncResp := mockResponse(
+		"resp-sync",
+		"The capital of France is Paris.",
+		13,
+		16,
+		"completed",
+	)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/responses" && r.URL.Path != "/v1/responses" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(syncResp); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	llm, err := NewOpenAILLM(t.Context(), AuthMethodAPIKey("test-key"), "gpt-5-mini",
+		option.WithHTTPClient(server.Client()),
+		option.WithBaseURL(server.URL),
+	)
+	if err != nil {
+		t.Fatalf("NewOpenAILLM() error = %v", err)
 	}
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			httpClient, cleanup, _ := rr.NewHTTPClient(t, func(r *rr.Recorder) {
-				r.RemoveResponseHeaders(
-					"Openai-Organization",
-					"Openai-Project",
-					"Set-Cookie",
-				)
-			})
-			t.Cleanup(cleanup)
 
-			apiKey := AuthMethod(nil)
-			if rr.Replaying() {
-				apiKey = AuthMethodAPIKey("test-key")
-			}
+	var got *model.LLMResponse
+	for resp, err := range llm.GenerateContent(t.Context(), &model.LLMRequest{
+		Contents: genai.Text("What is the capital of France?"),
+		Config:   &genai.GenerateContentConfig{},
+	}, false) {
+		if err != nil {
+			t.Fatalf("GenerateContent() unexpected error: %v", err)
+		}
+		got = resp
+	}
 
-			llm, err := NewOpenAILLM(t.Context(), apiKey, tt.modelName,
-				option.WithHTTPClient(httpClient),
-			)
-			if err != nil {
-				t.Fatalf("NewOpenAILLM() error = %v", err)
-			}
+	want := &model.LLMResponse{
+		Content: genai.NewContentFromText("The capital of France is Paris.", genai.RoleModel),
+		UsageMetadata: &genai.GenerateContentResponseUsageMetadata{
+			PromptTokenCount:     13,
+			CandidatesTokenCount: 16,
+			TotalTokenCount:      29,
+		},
+		FinishReason: genai.FinishReasonStop,
+		TurnComplete: true,
+	}
 
-			var got *model.LLMResponse
-			for resp, err := range llm.GenerateContent(t.Context(), tt.req, false) {
-				if err != nil {
-					t.Fatalf("GenerateContent() unexpected error: %v", err)
-				}
-				got = resp
-			}
-
-			if diff := cmp.Diff(tt.want, got); diff != "" {
-				t.Fatalf("GenerateContent() diff (-want +got):\n%s", diff)
-			}
-		})
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("GenerateContent() diff (-want +got):\n%s", diff)
 	}
 }
 
 func TestOpenAILLM_GenerateStream(t *testing.T) {
-	tests := map[string]struct {
-		modelName string
-		req       *model.LLMRequest
-		want      string
-		wantErr   bool
-	}{
-		"ok": {
-			modelName: "gpt-5-mini",
-			req: &model.LLMRequest{
-				Contents: genai.Text("What is the capital of France? One word."),
-				Config:   &genai.GenerateContentConfig{},
-			},
-			want: "Paris",
-		},
+	streamResp := mockResponse("resp-stream", "Paris", 7, 5, "completed")
+
+	sseBody := bytes.NewBuffer(nil)
+	sseBody.WriteString("data: {\"type\":\"response.output_text.delta\",\"delta\":\"Par\",\"content_index\":0,\"item_id\":\"\",\"output_index\":0,\"sequence_number\":1,\"logprobs\":[]}\n\n")
+	sseBody.WriteString("data: {\"type\":\"response.output_text.delta\",\"delta\":\"is\",\"content_index\":0,\"item_id\":\"\",\"output_index\":0,\"sequence_number\":2,\"logprobs\":[]}\n\n")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/responses" && r.URL.Path != "/v1/responses" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if stream, ok := body["stream"].(bool); ok && stream {
+			w.Header().Set("Content-Type", "text/event-stream")
+			_, _ = w.Write(sseBody.Bytes())
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(streamResp); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	llm, err := NewOpenAILLM(t.Context(), AuthMethodAPIKey("test-key"), "gpt-5-mini",
+		option.WithHTTPClient(server.Client()),
+		option.WithBaseURL(server.URL),
+	)
+	if err != nil {
+		t.Fatalf("NewOpenAILLM() error = %v", err)
 	}
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			httpClient, cleanup, _ := rr.NewHTTPClient(t, func(r *rr.Recorder) {
-				r.RemoveResponseHeaders(
-					"Openai-Organization",
-					"Openai-Project",
-					"Set-Cookie",
-				)
-			})
-			t.Cleanup(cleanup)
 
-			apiKey := AuthMethod(nil)
-			if rr.Replaying() {
-				apiKey = AuthMethodAPIKey("test-key")
-			}
+	got, err := readResponse(llm.GenerateContent(t.Context(), &model.LLMRequest{
+		Contents: genai.Text("What is the capital of France? One word."),
+		Config:   &genai.GenerateContentConfig{},
+	}, true))
+	if err != nil {
+		t.Fatalf("GenerateStream() error = %v", err)
+	}
 
-			llm, err := NewOpenAILLM(t.Context(), apiKey, tt.modelName,
-				option.WithHTTPClient(httpClient),
-			)
-			if err != nil {
-				t.Fatalf("NewOpenAILLM() error = %v", err)
-			}
+	if diff := cmp.Diff("Paris", got.PartialText); diff != "" {
+		t.Errorf("GenerateStream() partial diff (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff("Paris", got.FinalText); diff != "" {
+		t.Errorf("GenerateStream() final diff (-want +got):\n%s", diff)
+	}
+}
 
-			// Transforms the stream into strings, concatenating the text value of the response parts
-			got, err := readResponse(llm.GenerateContent(t.Context(), tt.req, true))
-			if (err != nil) != tt.wantErr {
-				t.Errorf("GenerateStream() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-
-			if diff := cmp.Diff(tt.want, got.PartialText); diff != "" {
-				t.Errorf("Model.GenerateStream() = %v, want %v\ndiff(-want +got):\n%v", got.PartialText, tt.want, diff)
-			}
-
-			// Since we are expecting GenerateStream to aggregate partial events, the text should be the same
-			if diff := cmp.Diff(tt.want, got.FinalText); diff != "" {
-				t.Errorf("Model.GenerateStream() = %v, want %v\ndiff(-want +got):\n%v", got.FinalText, tt.want, diff)
-			}
-		})
+func mockResponse(id, text string, promptTokens, completionTokens int64, status string) *responses.Response {
+	return &responses.Response{
+		ID:        id,
+		CreatedAt: 1,
+		Error: responses.ResponseError{
+			Code:    "",
+			Message: "",
+		},
+		IncompleteDetails: responses.ResponseIncompleteDetails{},
+		Instructions:      responses.ResponseInstructionsUnion{OfString: ""},
+		Metadata:          shared.Metadata{},
+		Model:             shared.ResponsesModel("gpt-5-mini"),
+		Object:            constant.ValueOf[constant.Response](),
+		Output: []responses.ResponseOutputItemUnion{{
+			Type:    "message",
+			Role:    constant.ValueOf[constant.Assistant](),
+			Content: []responses.ResponseOutputMessageContentUnion{{Type: "output_text", Text: text}},
+		}},
+		ParallelToolCalls: false,
+		Temperature:       0,
+		ToolChoice:        responses.ResponseToolChoiceUnion{OfToolChoiceMode: responses.ToolChoiceOptionsAuto},
+		Tools:             []responses.ToolUnion{},
+		TopP:              1,
+		Status:            responses.ResponseStatus(status),
+		Text:              responses.ResponseTextConfig{},
+		Usage: responses.ResponseUsage{
+			InputTokens:  promptTokens,
+			OutputTokens: completionTokens,
+			TotalTokens:  promptTokens + completionTokens,
+			InputTokensDetails: responses.ResponseUsageInputTokensDetails{
+				CachedTokens: 0,
+			},
+			OutputTokensDetails: responses.ResponseUsageOutputTokensDetails{
+				ReasoningTokens: 0,
+			},
+		},
 	}
 }
