@@ -16,7 +16,12 @@
 
 package main
 
-import "testing"
+import (
+	"context"
+	"testing"
+
+	"google.golang.org/genai"
+)
 
 func TestEnvOrDefault(t *testing.T) {
 	const key = "TUMIX_ENV_OR_DEFAULT"
@@ -88,5 +93,30 @@ func TestLoadPricingInvalidPath(t *testing.T) {
 	loadPricing() // should not panic when env unset
 	if _, ok := prices["gemini-2.5-flash"]; !ok {
 		t.Fatalf("default pricing missing")
+	}
+}
+
+func TestEnforcePromptTokensWithCounter(t *testing.T) {
+	cfg := config{Prompt: "hello world", MaxPromptTokens: 20, ModelName: "m"}
+	callCount := 0
+	counter := func(ctx context.Context, model string, contents []*genai.Content, config *genai.CountTokensConfig) (*genai.CountTokensResponse, error) {
+		callCount++
+		return &genai.CountTokensResponse{TotalTokens: 5}, nil
+	}
+	if err := enforcePromptTokensWithCounter(context.Background(), cfg, counter); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if callCount != 1 {
+		t.Fatalf("expected counter called once, got %d", callCount)
+	}
+}
+
+func TestEnforcePromptTokensWithCounterRejects(t *testing.T) {
+	cfg := config{Prompt: "hello world", MaxPromptTokens: 4, ModelName: "m"}
+	counter := func(ctx context.Context, model string, contents []*genai.Content, config *genai.CountTokensConfig) (*genai.CountTokensResponse, error) {
+		return &genai.CountTokensResponse{TotalTokens: 10}, nil
+	}
+	if err := enforcePromptTokensWithCounter(context.Background(), cfg, counter); err == nil {
+		t.Fatalf("expected error when tokens exceed limit")
 	}
 }
