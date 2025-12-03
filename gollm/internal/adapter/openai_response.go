@@ -42,14 +42,16 @@ func OpenAIResponseToLLM(resp *responses.Response) (*model.LLMResponse, error) {
 
 	parts := make([]*genai.Part, 0, len(resp.Output))
 
-	for _, item := range resp.Output {
+	for i := range resp.Output {
+		item := &resp.Output[i]
 		typ := strings.ToLower(strings.TrimSpace(item.Type))
 		switch typ {
 		case "message":
 			if len(item.Content) == 0 {
 				continue
 			}
-			for _, c := range item.Content {
+			for ci := range item.Content {
+				c := &item.Content[ci]
 				ctype := strings.ToLower(strings.TrimSpace(c.Type))
 				switch ctype {
 				case "output_text":
@@ -119,7 +121,11 @@ func NewOpenAIStreamAggregator() *OpenAIStreamAggregator {
 }
 
 // Process consumes a streaming event and emits any partial LLM responses produced by it.
-func (a *OpenAIStreamAggregator) Process(event responses.ResponseStreamEventUnion) []*model.LLMResponse {
+func (a *OpenAIStreamAggregator) Process(event *responses.ResponseStreamEventUnion) []*model.LLMResponse {
+	if event == nil {
+		return nil
+	}
+
 	switch event.Type {
 	case "response.output_text.delta":
 		if event.Delta == "" {

@@ -165,6 +165,8 @@ func (m *anthropicLLM) buildBetaParams(req *model.LLMRequest, system []anthropic
 		}
 	}
 
+	applyAnthropicProviderParams(req, params)
+
 	return params, nil
 }
 
@@ -222,4 +224,38 @@ func (m *anthropicLLM) streamBeta(ctx context.Context, span trace.Span, params *
 			yield(nil, err)
 		}
 	}
+}
+
+func applyAnthropicProviderParams(req *model.LLMRequest, params *anthropic.BetaMessageNewParams) {
+	pp, ok := providerParams(req)
+	if !ok || pp.Anthropic == nil {
+		return
+	}
+
+	// Bridge mutators defined for MessageNewParams onto BetaMessageNewParams by
+	// copying the overlapping fields we support.
+	proxy := anthropic.MessageNewParams{
+		MaxTokens:     params.MaxTokens,
+		StopSequences: params.StopSequences,
+		Temperature:   params.Temperature,
+		TopP:          params.TopP,
+		TopK:          params.TopK,
+		Metadata: anthropic.MetadataParam{
+			UserID: params.Metadata.UserID,
+		},
+	}
+
+	for _, mutate := range pp.Anthropic.Mutate {
+		if mutate == nil {
+			continue
+		}
+		mutate(&proxy)
+	}
+
+	params.MaxTokens = proxy.MaxTokens
+	params.StopSequences = proxy.StopSequences
+	params.Temperature = proxy.Temperature
+	params.TopP = proxy.TopP
+	params.TopK = proxy.TopK
+	params.Metadata.UserID = proxy.Metadata.UserID
 }

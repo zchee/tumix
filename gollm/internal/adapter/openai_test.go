@@ -158,7 +158,7 @@ func TestOpenAIResponseToLLM(t *testing.T) {
 func TestOpenAIStreamAggregator(t *testing.T) {
 	agg := adapter.NewOpenAIStreamAggregator()
 
-	partials := agg.Process(responses.ResponseStreamEventUnion{
+	partials := agg.Process(&responses.ResponseStreamEventUnion{
 		Type:  "response.output_text.delta",
 		Delta: "Hel",
 	})
@@ -166,13 +166,13 @@ func TestOpenAIStreamAggregator(t *testing.T) {
 		t.Fatalf("delta partial = %+v", partials)
 	}
 
-	agg.Process(responses.ResponseStreamEventUnion{
+	agg.Process(&responses.ResponseStreamEventUnion{
 		Type:        "response.function_call_arguments.delta",
 		ItemID:      "call-1",
 		OutputIndex: 0,
 		Delta:       `{"city":"Par`,
 	})
-	agg.Process(responses.ResponseStreamEventUnion{
+	agg.Process(&responses.ResponseStreamEventUnion{
 		Type:        "response.function_call_arguments.delta",
 		ItemID:      "call-1",
 		OutputIndex: 0,
@@ -204,7 +204,7 @@ func TestOpenAIStreamAggregator(t *testing.T) {
 		},
 	}
 
-	finals := agg.Process(responses.ResponseStreamEventUnion{
+	finals := agg.Process(&responses.ResponseStreamEventUnion{
 		Type:     "response.completed",
 		Response: finalResp,
 	})

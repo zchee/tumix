@@ -27,6 +27,8 @@ import (
 )
 
 // GenAIToAnthropicMessages converts GenAI contents into Anthropic message parameters.
+//
+//nolint:dupl
 func GenAIToAnthropicMessages(system *genai.Content, contents []*genai.Content) ([]anthropic.TextBlockParam, []anthropic.MessageParam, error) {
 	var systemBlocks []anthropic.TextBlockParam
 	if system != nil {
@@ -115,6 +117,8 @@ func GenAIToAnthropicMessages(system *genai.Content, contents []*genai.Content) 
 }
 
 // GenAIToAnthropicBetaMessages converts GenAI contents into Anthropic Beta message parameters.
+//
+//nolint:dupl // Accept duplication to keep clarity and avoid template abstraction.
 func GenAIToAnthropicBetaMessages(system *genai.Content, contents []*genai.Content) ([]anthropic.BetaTextBlockParam, []anthropic.BetaMessageParam, error) {
 	var systemBlocks []anthropic.BetaTextBlockParam
 	if system != nil {
