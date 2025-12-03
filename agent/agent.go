@@ -48,6 +48,7 @@ import (
 	"google.golang.org/adk/model"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/functiontool"
+	"google.golang.org/genai"
 )
 
 func Prompt() *dotprompt.Dotprompt {
@@ -76,15 +77,24 @@ func code(s string) string {
 	return "`" + s + "`"
 }
 
+func cloneGenConfig(cfg *genai.GenerateContentConfig) *genai.GenerateContentConfig {
+	if cfg == nil {
+		return nil
+	}
+	copy := *cfg
+	return &copy
+}
+
 // NewBaseAgent creates a Base Agent that uses direct prompting to solve problems.
 //
 // This agent is responsible for "1. w/o TTS (Base)".
-func NewBaseAgent(llm model.LLM) (agent.Agent, error) {
+func NewBaseAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
 	cfg := llmagent.Config{
 		Name: "Base",
 		Description: `Direct prompt.
 - Short name: {Base}.`,
-		Model: llm,
+		Model:                 llm,
+		GenerateContentConfig: cloneGenConfig(genCfg),
 	}
 
 	a, err := llmagent.New(cfg)
@@ -98,12 +108,13 @@ func NewBaseAgent(llm model.LLM) (agent.Agent, error) {
 // NewCoTAgent creates a CoT Agent that uses chain-of-thought reasoning to solve problems.
 //
 // This agent is responsible for "2. CoT Agent (CoT)".
-func NewCoTAgent(llm model.LLM) (agent.Agent, error) {
+func NewCoTAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
 	cfg := llmagent.Config{
 		Name: "CoT",
 		Description: `Chain-of-thought text-only reasoning.
 - Short name: {CoT}`,
-		Model: llm,
+		Model:                 llm,
+		GenerateContentConfig: cloneGenConfig(genCfg),
 		Instruction: `• Analyze the question step by step and try to list all the careful points.
 • Then try to acquire the final answer with step by step analysis.
 • In the end of your response, directly output the answer to the question.
@@ -122,11 +133,12 @@ func NewCoTAgent(llm model.LLM) (agent.Agent, error) {
 // NewCoTCodeAgent creates a CoT Code Agent that uses chain-of-thought reasoning and output code to solve problems.
 //
 // This agent is responsible for "3. CoT-Code Agent (CoT code)".
-func NewCoTCodeAgent(llm model.LLM) (agent.Agent, error) {
+func NewCoTCodeAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
 	cfg := llmagent.Config{
 		Name: "CoT code",
 		Description: `Chain-of-thought text-only reasoning and output code.
 - Short name: {CoT code}`,
+		GenerateContentConfig: cloneGenConfig(genCfg),
 		Instruction: `You are a helpful AI assistant. Solve tasks using your coding skills.
 In the following cases, suggest python code (in a python coding block) for the user to execute.
 
@@ -152,12 +164,13 @@ Start the python block with ` + "```" + `python`,
 // NewSearchAgent creates a Search Agent that uses web search to solve problems.
 //
 // This agent is responsible for "4. Search Agent (S)".
-func NewSearchAgent(llm model.LLM) (agent.Agent, error) {
+func NewSearchAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
 	cfg := llmagent.Config{
 		Name: "Search",
 		Description: `Uses WebSearch.
 - Short name: {S}`,
-		Model: llm,
+		Model:                 llm,
+		GenerateContentConfig: cloneGenConfig(genCfg),
 		Instruction: `You are a helpful AI assistant. Solve tasks using WebSearch tool.
 
 You can use the Google Search Tool to search the web and get the information.
@@ -180,12 +193,13 @@ generation. Then, the search platform will return the searched results.
 // NewCodeAgent creates a Code Agent that uses code execution to solve problems.
 //
 // This agent is responsible for "5. Code Agent (C)".
-func NewCodeAgent(llm model.LLM) (agent.Agent, error) {
+func NewCodeAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
 	cfg := llmagent.Config{
 		Name: "Code",
 		Description: `Code-execution strategy for precise computation.
 - Short name: {C}`,
-		Model: llm,
+		Model:                 llm,
+		GenerateContentConfig: cloneGenConfig(genCfg),
 		Instruction: `The User asks a question, and you solve it. You first generate the reasoning and thinking process and
 then provide the User with the final answer.
 
@@ -209,12 +223,13 @@ query to solve the problem.`,
 // NewCodePlusAgent creates a Code+ Agent that uses code execution with extra human-pre-designed priors to solve problems.
 //
 // This agent is responsible for "6. Code Agent+ (C+)".
-func NewCodePlusAgent(llm model.LLM) (agent.Agent, error) {
+func NewCodePlusAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
 	cfg := llmagent.Config{
 		Name: "Code+",
 		Description: `Code-execution strategy for precise computation with a hinted version with extra human-pre-designed priors.
 - Short name: {C+}`,
-		Model: llm,
+		Model:                 llm,
+		GenerateContentConfig: cloneGenConfig(genCfg),
 		Instruction: `The User asks a question, and you solve it. You first generate the reasoning and thinking process and
 then provide the User with the final answer.
 
@@ -238,12 +253,13 @@ query to solve the problem.`,
 // NewDualToolGSAgent creates a Dual-Tool Agent that uses both code execution and Google Search API to solve problems.
 //
 // This agent is responsible for "7. Dual-Tool Agent (CS gs)".
-func NewDualToolGSAgent(llm model.LLM) (agent.Agent, error) {
+func NewDualToolGSAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
 	cfg := llmagent.Config{
 		Name: "Dual-Tool",
 		Description: `Dual-tool strategy combining code execution and Google Search API search.
 - Short name: {CSgs}`,
-		Model: llm,
+		Model:                 llm,
+		GenerateContentConfig: cloneGenConfig(genCfg),
 		Instruction: `The User asks a question, and you solve it. You first generate the reasoning and thinking process and then
 provide the User with the final answer.
 
@@ -278,12 +294,13 @@ generate more code or search queries to solve the problem.`,
 // NewDualToolLLMAgent creates a Dual-Tool Agent that uses both code execution and LLM search function to solve problems.
 //
 // This agent is responsible for "8. Dual-Tool Agent (CS llm)".
-func NewDualToolLLMAgent(llm model.LLM) (agent.Agent, error) {
+func NewDualToolLLMAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
 	cfg := llmagent.Config{
 		Name: "Dual-Tool",
 		Description: `Dual-tool strategy combining code execution and LLM search function.
 - Short name: {CSllm}`,
-		Model: llm,
+		Model:                 llm,
+		GenerateContentConfig: cloneGenConfig(genCfg),
 		Instruction: `The User asks a question, and you solve it. You first generate the reasoning and thinking process and then
 provide the User with the final answer.
 
@@ -318,12 +335,13 @@ generate more code or search queries to solve the problem.`,
 // NewDualToolComAgent creates a Dual-Tool Agent that uses both code execution and a combination of Google Search API and LLM search function to solve problems.
 //
 // This agent is responsible for "9. Dual-Tool Agent (CS com)".
-func NewDualToolComAgent(llm model.LLM) (agent.Agent, error) {
+func NewDualToolComAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
 	cfg := llmagent.Config{
 		Name: "Dual-Tool",
 		Description: `Dual-tool strategy combining code execution and combination of Google Search API search and LLM search function.
 - Short name: {CScom}`,
-		Model: llm,
+		Model:                 llm,
+		GenerateContentConfig: cloneGenConfig(genCfg),
 		Instruction: `The User asks a question, and you solve it. You first generate the reasoning and thinking process and then
 provide the User with the final answer.
 
@@ -358,12 +376,13 @@ generate more code or search queries to solve the problem.`,
 // NewGuidedGSAgent creates a Guided Agent that uses both code execution and Google Search API to solve problems.
 //
 // This agent is responsible for "10. Guided Agent (CSGgs)".
-func NewGuidedGSAgent(llm model.LLM) (agent.Agent, error) {
+func NewGuidedGSAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
 	cfg := llmagent.Config{
 		Name: "Guided",
 		Description: `Dual-tool strategy combining code execution and Google Search API search.
 - Short name: {CSG}`,
-		Model: llm,
+		Model:                 llm,
+		GenerateContentConfig: cloneGenConfig(genCfg),
 		Instruction: `You are guiding another TaskLLM to solve a task. You will be presented with a task that can be solved using
 textual reasoning, coding, and web searching. Sometimes the TaskLLM may need extra help to solve the
 task, such as generating code or searching the web. Then must follow the rules below for both query and
@@ -405,12 +424,13 @@ Now, here is the task:`,
 // NewGuidedLLMAgent creates a Guided Agent that uses both code execution and LLM search function to solve problems.
 //
 // This agent is responsible for "11. Guided Agent (CSGllm)".
-func NewGuidedLLMAgent(llm model.LLM) (agent.Agent, error) {
+func NewGuidedLLMAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
 	cfg := llmagent.Config{
 		Name: "Guided",
 		Description: `Dual-tool strategy combining code execution and LLM search function.
 - Short name: {CSGllm}`,
-		Model: llm,
+		Model:                 llm,
+		GenerateContentConfig: cloneGenConfig(genCfg),
 		Instruction: `You are guiding another TaskLLM to solve a task. You will be presented with a task that can be solved using
 textual reasoning, coding, and web searching. Sometimes the TaskLLM may need extra help to solve the
 task, such as generating code or searching the web. Then must follow the rules below for both query and
@@ -452,12 +472,13 @@ Now, here is the task:`,
 // NewGuidedComAgent creates a Guided Agent that uses both code execution and a combination of Google Search API and LLM search function to solve problems.
 //
 // This agent is responsible for "12. Guided Agent (CSGcom)".
-func NewGuidedComAgent(llm model.LLM) (agent.Agent, error) {
+func NewGuidedComAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
 	cfg := llmagent.Config{
 		Name: "Guided",
 		Description: `Dual-tool strategy combining code execution and combination of Google Search API search and LLM search function.
 - Short name: {CSGcom}`,
-		Model: llm,
+		Model:                 llm,
+		GenerateContentConfig: cloneGenConfig(genCfg),
 		Instruction: `You are guiding another TaskLLM to solve a task. You will be presented with a task that can be solved using
 textual reasoning, coding, and web searching. Sometimes the TaskLLM may need extra help to solve the
 task, such as generating code or searching the web. Then must follow the rules below for both query and
@@ -590,17 +611,18 @@ func newFinalizeTool() (tool.Tool, error) {
 // NewJudgeAgent creates a Judge Agent that evaluates candidate answers and decides whether to finalize or continue.
 //
 // TODO(zchee): support [agent.InvocationContext] for `{round_num}`, `{question}` and `{joined_answers}`.
-func NewJudgeAgent(llm model.LLM) (agent.Agent, error) {
+func NewJudgeAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
 	finalizeTool, err := newFinalizeTool()
 	if err != nil {
 		return nil, fmt.Errorf("build finalize tool: %w", err)
 	}
 
 	cfg := llmagent.Config{
-		Name:        "LLM-as-Judge",
-		Description: `Ranks candidate agent outputs and signals when to stop.`,
-		Model:       llm,
-		Tools:       []tool.Tool{finalizeTool},
+		Name:                  "LLM-as-Judge",
+		Description:           `Ranks candidate agent outputs and signals when to stop.`,
+		Model:                 llm,
+		GenerateContentConfig: cloneGenConfig(genCfg),
+		Tools:                 []tool.Tool{finalizeTool},
 		Instruction: `Task: Carefully assess whether the answers below (enclosed by ` + code(`«< »>`) + `) show clear and strong consensus, or
 if another round of reasoning is needed to improve alignment.
 
@@ -655,13 +677,23 @@ func NewRoundAgent(subAgents ...agent.Agent) (agent.Agent, error) {
 
 // NewTumixAgent creates the TUMIX Agent that performs multi-agent test-time scaling with tool-use mixture.
 func NewTumixAgent(subAgents ...agent.Agent) (agent.Loader, error) {
+	return NewTumixAgentWithMaxRounds(subAgents, defaultMaxRounds)
+}
+
+// NewTumixAgentWithMaxRounds creates the TUMIX Agent with a configurable
+// maximum number of iterations.
+func NewTumixAgentWithMaxRounds(subAgents []agent.Agent, maxRounds uint) (agent.Loader, error) {
+	if maxRounds == 0 {
+		maxRounds = defaultMaxRounds
+	}
+
 	a, err := loopagent.New(loopagent.Config{
 		AgentConfig: agent.Config{
 			Name:        "tumix",
 			Description: "TUMIX: Multi-Agent Test-Time Scaling with Tool-Use Mixture.",
 			SubAgents:   subAgents,
 		},
-		MaxIterations: defaultMaxRounds,
+		MaxIterations: maxRounds,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("build tumix agent: %w", err)
