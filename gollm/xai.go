@@ -94,6 +94,7 @@ func (m *xaiLLM) generate(ctx context.Context, req *model.LLMRequest, msgs []*xa
 	if opt := adapter.GenAI2XAIChatOptions(req.Config); opt != nil {
 		opts = append(opts, opt)
 	}
+	opts = appendXAIProviderOptions(req, opts)
 	sess := m.client.Chat.Create(adapter.ModelName(m.name, req), opts...)
 
 	resp, err := sess.Completion(ctx)
@@ -120,6 +121,7 @@ func (m *xaiLLM) generateStream(ctx context.Context, req *model.LLMRequest, msgs
 		if opt := adapter.GenAI2XAIChatOptions(req.Config); opt != nil {
 			opts = append(opts, opt)
 		}
+		opts = appendXAIProviderOptions(req, opts)
 		sess := m.client.Chat.Create(adapter.ModelName(m.name, req), opts...)
 
 		stream, err := sess.Stream(ctx)
@@ -143,4 +145,13 @@ func (m *xaiLLM) generateStream(ctx context.Context, req *model.LLMRequest, msgs
 			yield(closeResult, nil)
 		}
 	}
+}
+
+func appendXAIProviderOptions(req *model.LLMRequest, opts []xai.ChatOption) []xai.ChatOption {
+	pp, ok := providerParams(req)
+	if !ok || pp.XAI == nil || len(pp.XAI.Options) == 0 {
+		return opts
+	}
+
+	return append(opts, pp.XAI.Options...)
 }

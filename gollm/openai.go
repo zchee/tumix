@@ -178,6 +178,8 @@ func (m *openAILLM) chatCompletionParams(req *model.LLMRequest) (*openai.ChatCom
 		}
 	}
 
+	applyOpenAIProviderParams(req, &params)
+
 	return &params, nil
 }
 
@@ -214,5 +216,18 @@ func (m *openAILLM) stream(ctx context.Context, span trace.Span, params *openai.
 		if final := agg.Final(); final != nil {
 			yield(final, nil)
 		}
+	}
+}
+
+func applyOpenAIProviderParams(req *model.LLMRequest, params *openai.ChatCompletionNewParams) {
+	pp, ok := providerParams(req)
+	if !ok || pp.OpenAI == nil {
+		return
+	}
+	for _, mutate := range pp.OpenAI.Mutate {
+		if mutate == nil {
+			continue
+		}
+		mutate(params)
 	}
 }

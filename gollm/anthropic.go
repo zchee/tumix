@@ -165,7 +165,22 @@ func (m *anthropicLLM) buildParams(req *model.LLMRequest, system []anthropic.Tex
 		}
 	}
 
+	applyAnthropicProviderParams(req, params)
+
 	return params, nil
+}
+
+func applyAnthropicProviderParams(req *model.LLMRequest, params *anthropic.MessageNewParams) {
+	pp, ok := providerParams(req)
+	if !ok || pp.Anthropic == nil {
+		return
+	}
+	for _, mutate := range pp.Anthropic.Mutate {
+		if mutate == nil {
+			continue
+		}
+		mutate(params)
+	}
 }
 
 // stream consumes Anthropic streaming responses and converts them to LLM responses.
