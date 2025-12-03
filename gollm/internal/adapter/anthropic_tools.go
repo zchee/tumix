@@ -17,6 +17,8 @@
 package adapter
 
 import (
+	"strings"
+
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/packages/param"
 	"github.com/anthropics/anthropic-sdk-go/shared/constant"
@@ -61,4 +63,51 @@ func GenAIToolsToAnthropic(tools []*genai.Tool, cfg *genai.ToolConfig) ([]anthro
 	}
 
 	return out, tc
+}
+
+// GenAIToolsToAnthropicBeta converts GenAI tool declarations to Anthropic Beta tool definitions and choice hints.
+func GenAIToolsToAnthropicBeta(tools []*genai.Tool, cfg *genai.ToolConfig) ([]anthropic.BetaToolUnionParam, *anthropic.BetaToolChoiceUnionParam) {
+	if len(tools) == 0 {
+		return nil, nil
+	}
+
+	out := make([]anthropic.BetaToolUnionParam, 0, len(tools))
+	for _, t := range tools {
+		for _, decl := range t.FunctionDeclarations {
+			if decl == nil || decl.Name == "" {
+				continue
+			}
+			out = append(out, anthropic.BetaToolUnionParam{
+				OfTool: &anthropic.BetaToolParam{
+					Name: decl.Name,
+					InputSchema: anthropic.BetaToolInputSchemaParam{
+						Type:       constant.ValueOf[constant.Object](),
+						Properties: decl.Parameters,
+					},
+					Description: declDescription(decl.Description),
+					Type:        anthropic.BetaToolTypeCustom,
+				},
+			})
+		}
+	}
+
+	var tc *anthropic.BetaToolChoiceUnionParam
+	if cfg != nil && cfg.FunctionCallingConfig != nil {
+		switch cfg.FunctionCallingConfig.Mode {
+		case genai.FunctionCallingConfigModeNone:
+			none := anthropic.NewBetaToolChoiceNoneParam()
+			tc = &anthropic.BetaToolChoiceUnionParam{OfNone: &none}
+		case genai.FunctionCallingConfigModeAny, genai.FunctionCallingConfigModeAuto:
+			tc = &anthropic.BetaToolChoiceUnionParam{OfAuto: &anthropic.BetaToolChoiceAutoParam{Type: constant.ValueOf[constant.Auto]()}}
+		}
+	}
+
+	return out, tc
+}
+
+func declDescription(desc string) param.Opt[string] {
+	if strings.TrimSpace(desc) == "" {
+		return param.Opt[string]{}
+	}
+	return param.NewOpt(desc)
 }
