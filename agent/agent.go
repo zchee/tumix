@@ -895,6 +895,8 @@ type tumixOrchestrator struct {
 	judge          agent.Agent
 	maxRounds      uint
 	minRounds      uint
+	prevTopAnswer  string
+	prevVoteMargin float64
 }
 
 type candidateAnswer struct {
@@ -925,6 +927,17 @@ func (t *tumixOrchestrator) run(ctx agent.InvocationContext) iter.Seq2[*session.
 				_ = ctx.Session().State().Set(stateKeyCoverage, stats.coverage)
 				_ = ctx.Session().State().Set(stateKeyEntropy, stats.answerEntropy)
 				_ = ctx.Session().State().Set(stateKeyTopAnswer, stats.topAnswer)
+
+				if round >= t.minRounds && stats.topAnswer != "" {
+					if stats.topAnswer == t.prevTopAnswer && stats.voteMargin >= defaultConfidenceThreshold && t.prevVoteMargin >= defaultConfidenceThreshold {
+						_ = ctx.Session().State().Set(stateKeyAnswer, stats.topAnswer)
+						_ = ctx.Session().State().Set(stateKeyConfidence, stats.voteMargin)
+						t.emitFinalFromState(ctx, yield)
+						return
+					}
+					t.prevTopAnswer = stats.topAnswer
+					t.prevVoteMargin = stats.voteMargin
+				}
 			}
 
 			if round < t.minRounds {
