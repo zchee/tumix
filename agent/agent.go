@@ -35,17 +35,20 @@
 package agent
 
 import (
+	"errors"
 	"fmt"
+	"iter"
+	"sort"
 	"strings"
 
 	"github.com/google/dotprompt/go/dotprompt"
 	"github.com/invopop/jsonschema"
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
-	"google.golang.org/adk/agent/workflowagents/loopagent"
 	"google.golang.org/adk/agent/workflowagents/parallelagent"
 	"google.golang.org/adk/agent/workflowagents/sequentialagent"
 	"google.golang.org/adk/model"
+	"google.golang.org/adk/session"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/functiontool"
 	"google.golang.org/genai"
@@ -85,6 +88,18 @@ func cloneGenConfig(cfg *genai.GenerateContentConfig) *genai.GenerateContentConf
 	return &copy
 }
 
+const sharedContext = `**TUMIX shared context**
+- Round: {round_num}
+- Question: {question}
+- Previous answers (may be empty):
+{joined_answers?}
+
+Use the shared context to refine your reasoning. Continue producing an explicit answer enclosed in «< and »>.`
+
+func applySharedContext(cfg *llmagent.Config) {
+	cfg.GlobalInstruction = sharedContext
+}
+
 // NewBaseAgent creates a Base Agent that uses direct prompting to solve problems.
 //
 // This agent is responsible for "1. w/o TTS (Base)".
@@ -96,6 +111,8 @@ func NewBaseAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Age
 		Model:                 llm,
 		GenerateContentConfig: cloneGenConfig(genCfg),
 	}
+
+	applySharedContext(&cfg)
 
 	a, err := llmagent.New(cfg)
 	if err != nil {
@@ -121,6 +138,8 @@ func NewCoTAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agen
 
 **Do not output the code for execution.**`,
 	}
+
+	applySharedContext(&cfg)
 
 	a, err := llmagent.New(cfg)
 	if err != nil {
@@ -153,6 +172,8 @@ output your thinking steps with texts and then the final python code.
 Start the python block with ` + "```" + `python`,
 	}
 
+	applySharedContext(&cfg)
+
 	a, err := llmagent.New(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("build CoT code agent: %w", err)
@@ -181,6 +202,8 @@ generation. Then, the search platform will return the searched results.
 
 **Do not output the code for execution.**`,
 	}
+
+	applySharedContext(&cfg)
 
 	a, err := llmagent.New(cfg)
 	if err != nil {
@@ -212,6 +235,8 @@ of your response. Otherwise, you can continue your reasoning process and possibl
 query to solve the problem.`,
 	}
 
+	applySharedContext(&cfg)
+
 	a, err := llmagent.New(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("build Code agent: %w", err)
@@ -241,6 +266,8 @@ ready for the final answer, directly return the answer with the format <<<answer
 of your response. Otherwise, you can continue your reasoning process and possibly generate more code
 query to solve the problem.`,
 	}
+
+	applySharedContext(&cfg)
 
 	a, err := llmagent.New(cfg)
 	if err != nil {
@@ -283,6 +310,8 @@ at the end of your response. Otherwise, you can continue your reasoning process 
 generate more code or search queries to solve the problem.`,
 	}
 
+	applySharedContext(&cfg)
+
 	a, err := llmagent.New(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("build Dual-Tool(CSgs) agent: %w", err)
@@ -324,6 +353,8 @@ at the end of your response. Otherwise, you can continue your reasoning process 
 generate more code or search queries to solve the problem.`,
 	}
 
+	applySharedContext(&cfg)
+
 	a, err := llmagent.New(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("build Dual-Tool(CSllm) agent: %w", err)
@@ -364,6 +395,8 @@ Once you feel you are ready for the final answer, directly return the answer wit
 at the end of your response. Otherwise, you can continue your reasoning process and possibly
 generate more code or search queries to solve the problem.`,
 	}
+
+	applySharedContext(&cfg)
 
 	a, err := llmagent.New(cfg)
 	if err != nil {
@@ -413,6 +446,8 @@ should be included between ` + code(`«<`) + ` and ` + code(`»>`) + `, such as 
 Now, here is the task:`,
 	}
 
+	applySharedContext(&cfg)
+
 	a, err := llmagent.New(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("build Guided(CSGgs) agent: %w", err)
@@ -460,6 +495,8 @@ the guidance prompt for the TaskLLM to follow in the next round. The final retur
 should be included between ` + code(`«<`) + ` and ` + code(`»>`) + `, such as ` + code(`«<You need to generate more complex code to solve...»>`) + `.
 Now, here is the task:`,
 	}
+
+	applySharedContext(&cfg)
 
 	a, err := llmagent.New(cfg)
 	if err != nil {
@@ -509,6 +546,8 @@ should be included between ` + code(`«<`) + ` and ` + code(`»>`) + `, such as 
 Now, here is the task:`,
 	}
 
+	applySharedContext(&cfg)
+
 	a, err := llmagent.New(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("build Guided(CSGcom) agent: %w", err)
@@ -548,6 +587,8 @@ Based on the candidates above, analyze the question step by step and try to list
 end of your response, directly output the answer to the question with the format ` + code(`«<answer content»>`) + `.`,
 	}
 
+	applySharedContext(&cfg)
+
 	a, err := llmagent.New(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("build Refinement agent: %w", err)
@@ -558,10 +599,14 @@ end of your response, directly output the answer to the question with the format
 
 const (
 	defaultMaxRounds           uint    = 10
+	defaultMinRounds           uint    = 2
 	defaultConfidenceThreshold float64 = 0.6
 
 	stateKeyAnswer     = "tumix_final_answer"
 	stateKeyConfidence = "tumix_final_confidence"
+	stateKeyQuestion   = "question"
+	stateKeyJoined     = "joined_answers"
+	stateKeyRound      = "round_num"
 )
 
 type finalizeArgs struct {
@@ -650,6 +695,8 @@ Output your reasoning first, then conclude clearly with ` + code(`«<YES»>`) + 
 finalization is safe, or ` + code(`«<NO»>`) + ` if further refinement is needed.`,
 	}
 
+	applySharedContext(&cfg)
+
 	a, err := llmagent.New(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("build Judge agent: %w", err)
@@ -675,29 +722,272 @@ func NewRoundAgent(subAgents ...agent.Agent) (agent.Agent, error) {
 	return a, nil
 }
 
+type TumixConfig struct {
+	Candidates []agent.Agent
+	Judge      agent.Agent
+	MaxRounds  uint
+	MinRounds  uint
+}
+
 // NewTumixAgent creates the TUMIX Agent that performs multi-agent test-time scaling with tool-use mixture.
-func NewTumixAgent(subAgents ...agent.Agent) (agent.Loader, error) {
-	return NewTumixAgentWithMaxRounds(subAgents, defaultMaxRounds)
+func NewTumixAgent(candidates []agent.Agent, judge agent.Agent) (agent.Loader, error) {
+	return NewTumixAgentWithMaxRounds(candidates, judge, defaultMaxRounds)
 }
 
 // NewTumixAgentWithMaxRounds creates the TUMIX Agent with a configurable
 // maximum number of iterations.
-func NewTumixAgentWithMaxRounds(subAgents []agent.Agent, maxRounds uint) (agent.Loader, error) {
-	if maxRounds == 0 {
-		maxRounds = defaultMaxRounds
+func NewTumixAgentWithMaxRounds(candidates []agent.Agent, judge agent.Agent, maxRounds uint) (agent.Loader, error) {
+	return NewTumixAgentWithConfig(TumixConfig{
+		Candidates: candidates,
+		Judge:      judge,
+		MaxRounds:  maxRounds,
+		MinRounds:  defaultMinRounds,
+	})
+}
+
+// NewTumixAgentWithConfig creates an orchestrated TUMIX loader that
+// propagates previous round answers and consults the judge for early stop.
+func NewTumixAgentWithConfig(cfg TumixConfig) (agent.Loader, error) {
+	if len(cfg.Candidates) == 0 {
+		return nil, errors.New("at least one candidate agent is required")
+	}
+	if cfg.Judge == nil {
+		return nil, errors.New("judge agent is required")
+	}
+	if cfg.MaxRounds == 0 {
+		cfg.MaxRounds = defaultMaxRounds
+	}
+	if cfg.MinRounds == 0 {
+		cfg.MinRounds = defaultMinRounds
+	}
+	if cfg.MinRounds > cfg.MaxRounds {
+		cfg.MinRounds = cfg.MaxRounds
 	}
 
-	a, err := loopagent.New(loopagent.Config{
+	parallel, err := parallelagent.New(parallelagent.Config{
 		AgentConfig: agent.Config{
-			Name:        "tumix",
-			Description: "TUMIX: Multi-Agent Test-Time Scaling with Tool-Use Mixture.",
-			SubAgents:   subAgents,
+			Name:        "candidates",
+			Description: "Runs diverse tool-use agents in parallel.",
+			SubAgents:   cfg.Candidates,
 		},
-		MaxIterations: maxRounds,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("build candidates workflow: %w", err)
+	}
+
+	orchestrator := &tumixOrchestrator{
+		candidateAgent: parallel,
+		judge:          cfg.Judge,
+		maxRounds:      cfg.MaxRounds,
+		minRounds:      cfg.MinRounds,
+	}
+
+	tumix, err := agent.New(agent.Config{
+		Name:        "tumix",
+		Description: "TUMIX: Multi-Agent Test-Time Scaling with Tool-Use Mixture.",
+		SubAgents:   append([]agent.Agent{parallel}, cfg.Judge),
+		Run:         orchestrator.run,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("build tumix agent: %w", err)
 	}
 
-	return agent.NewSingleLoader(a), nil
+	return agent.NewSingleLoader(tumix), nil
+}
+
+type tumixOrchestrator struct {
+	candidateAgent agent.Agent
+	judge          agent.Agent
+	maxRounds      uint
+	minRounds      uint
+}
+
+type candidateAnswer struct {
+	Agent string
+	Text  string
+}
+
+func (t *tumixOrchestrator) run(ctx agent.InvocationContext) iter.Seq2[*session.Event, error] {
+	return func(yield func(*session.Event, error) bool) {
+		question := firstContentText(ctx.UserContent())
+		_ = ctx.Session().State().Set(stateKeyQuestion, question)
+
+		var lastAnswers []candidateAnswer
+		for round := uint(1); round <= t.maxRounds; round++ {
+			_ = ctx.Session().State().Set(stateKeyRound, round)
+			_ = ctx.Session().State().Set(stateKeyJoined, joinAnswers(lastAnswers))
+
+			answers, stop := t.runCandidates(ctx, yield)
+			if stop {
+				return
+			}
+			lastAnswers = answers
+			if len(lastAnswers) > 0 {
+				_ = ctx.Session().State().Set(stateKeyJoined, joinAnswers(lastAnswers))
+			}
+
+			if round < t.minRounds {
+				continue
+			}
+
+			if t.runJudge(ctx, yield) {
+				t.emitFinalFromState(ctx, yield)
+				return
+			}
+		}
+
+		if len(lastAnswers) > 0 {
+			answer, conf := majorityVote(lastAnswers)
+			_ = ctx.Session().State().Set(stateKeyAnswer, answer)
+			_ = ctx.Session().State().Set(stateKeyConfidence, conf)
+		}
+		t.emitFinalFromState(ctx, yield)
+	}
+}
+
+func (t *tumixOrchestrator) runCandidates(ctx agent.InvocationContext, yield func(*session.Event, error) bool) ([]candidateAnswer, bool) {
+	var answers []candidateAnswer
+	for event, err := range t.candidateAgent.Run(ctx) {
+		if !yield(event, err) {
+			return answers, true
+		}
+		if err != nil || event == nil || event.LLMResponse.Content == nil {
+			continue
+		}
+		text := firstTextFromContent(event.LLMResponse.Content)
+		if text == "" {
+			continue
+		}
+		answers = append(answers, candidateAnswer{Agent: event.Author, Text: strings.TrimSpace(text)})
+	}
+	return answers, false
+}
+
+func (t *tumixOrchestrator) runJudge(ctx agent.InvocationContext, yield func(*session.Event, error) bool) bool {
+	stop := false
+	for event, err := range t.judge.Run(ctx) {
+		if !yield(event, err) {
+			return true
+		}
+		if err != nil {
+			continue
+		}
+		if event != nil && event.Actions.Escalate {
+			stop = true
+		}
+	}
+	return stop
+}
+
+func (t *tumixOrchestrator) emitFinalFromState(ctx agent.InvocationContext, yield func(*session.Event, error) bool) {
+	answerVal, _ := ctx.Session().State().Get(stateKeyAnswer)
+	confVal, _ := ctx.Session().State().Get(stateKeyConfidence)
+	answer := fmt.Sprintf("%v", answerVal)
+	conf := fmt.Sprintf("%v", confVal)
+	if answer == "" {
+		return
+	}
+
+	content := genai.NewContentFromText(fmt.Sprintf("Final answer (conf %s): %s", conf, answer), genai.RoleModel)
+	event := session.NewEvent(ctx.InvocationID())
+	event.Author = "tumix"
+	event.LLMResponse.Content = content
+	if event.Actions.StateDelta == nil {
+		event.Actions.StateDelta = make(map[string]any)
+	}
+	event.Actions.StateDelta[stateKeyAnswer] = answerVal
+	if confVal != nil {
+		event.Actions.StateDelta[stateKeyConfidence] = confVal
+	}
+	yield(event, nil)
+}
+
+func joinAnswers(ans []candidateAnswer) string {
+	if len(ans) == 0 {
+		return ""
+	}
+	sb := strings.Builder{}
+	for i, a := range ans {
+		if i > 0 {
+			sb.WriteString("\n")
+		}
+		sb.WriteString(fmt.Sprintf("- %s: %s", a.Agent, strings.TrimSpace(a.Text)))
+	}
+	return sb.String()
+}
+
+func firstTextFromContent(c *genai.Content) string {
+	if c == nil {
+		return ""
+	}
+	for _, p := range c.Parts {
+		if p == nil {
+			continue
+		}
+		if p.Text != "" {
+			return p.Text
+		}
+	}
+	return ""
+}
+
+func firstContentText(c *genai.Content) string {
+	if c == nil {
+		return ""
+	}
+	for _, p := range c.Parts {
+		if p != nil && p.Text != "" {
+			return strings.TrimSpace(p.Text)
+		}
+	}
+	return ""
+}
+
+func getStateString(sess session.Session, key string) (string, error) {
+	v, err := sess.State().Get(key)
+	if err != nil {
+		return "", err
+	}
+	if v == nil {
+		return "", nil
+	}
+	return fmt.Sprintf("%v", v), nil
+}
+
+func majorityVote(ans []candidateAnswer) (string, float64) {
+	if len(ans) == 0 {
+		return "", 0
+	}
+	cnts := make(map[string]int)
+	for _, a := range ans {
+		key := normalizeAnswer(a.Text)
+		cnts[key]++
+	}
+	type kv struct {
+		Answer string
+		Count  int
+	}
+	var pairs []kv
+	for k, v := range cnts {
+		pairs = append(pairs, kv{Answer: k, Count: v})
+	}
+	sort.Slice(pairs, func(i, j int) bool {
+		if pairs[i].Count == pairs[j].Count {
+			return pairs[i].Answer < pairs[j].Answer
+		}
+		return pairs[i].Count > pairs[j].Count
+	})
+	best := pairs[0]
+	conf := float64(best.Count) / float64(len(ans))
+	return best.Answer, conf
+}
+
+func normalizeAnswer(text string) string {
+	trimmed := strings.TrimSpace(text)
+	start := strings.Index(trimmed, "«<")
+	end := strings.Index(trimmed, "»>")
+	if start >= 0 && end > start+2 {
+		return strings.TrimSpace(trimmed[start+2 : end])
+	}
+	return trimmed
 }
