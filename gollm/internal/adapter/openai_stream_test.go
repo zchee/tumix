@@ -19,20 +19,19 @@ package adapter
 import (
 	"testing"
 
-	openai "github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/responses"
 )
 
 func BenchmarkOpenAIStreamAggregator(b *testing.B) {
-	chunk := openai.ChatCompletionChunk{
-		Choices: []openai.ChatCompletionChunkChoice{{
-			Delta: openai.ChatCompletionChunkChoiceDelta{Content: "hello world"},
-		}},
+	event := responses.ResponseStreamEventUnion{
+		Type:  "response.output_text.delta",
+		Delta: "hello world",
 	}
 
 	b.ReportAllocs()
 	for b.Loop() {
 		agg := NewOpenAIStreamAggregator()
-		if out := agg.Process(&chunk); len(out) != 1 {
+		if out := agg.Process(event); len(out) != 1 {
 			b.Fatalf("got %d partials, want 1", len(out))
 		}
 		if final := agg.Final(); final == nil {
