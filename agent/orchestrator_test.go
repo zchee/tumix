@@ -118,6 +118,53 @@ func TestTumixMajorityFallback(t *testing.T) {
 	}
 }
 
+func TestTumixAutoStopOnStableMajority(t *testing.T) {
+	candidates := []agent.Agent{
+		staticCandidate("X", "foo"),
+		staticCandidate("Y", "foo"),
+		staticCandidate("Z", "foo"),
+	}
+	judge := noOpJudge()
+	loader, err := NewTumixAgentWithConfig(TumixConfig{
+		Candidates: candidates,
+		Judge:      judge,
+		MaxRounds:  5,
+		MinRounds:  2,
+	})
+	if err != nil {
+		t.Fatalf("loader: %v", err)
+	}
+
+	ctx := context.Background()
+	svc := session.InMemoryService()
+	if _, err := svc.Create(ctx, &session.CreateRequest{AppName: "app", UserID: "u", SessionID: "s3"}); err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	r, err := runner.New(runner.Config{AppName: "app", Agent: loader.RootAgent(), SessionService: svc})
+	if err != nil {
+		t.Fatalf("runner: %v", err)
+	}
+
+	for range r.Run(ctx, "u", "s3", genai.NewContentFromText("q3", genai.RoleUser), agent.RunConfig{}) {
+		// drain
+	}
+
+	res, err := svc.Get(ctx, &session.GetRequest{AppName: "app", UserID: "u", SessionID: "s3"})
+	if err != nil {
+		t.Fatalf("get session: %v", err)
+	}
+	answer, _ := res.Session.State().Get(stateKeyAnswer)
+	if answer != "foo" {
+		t.Fatalf("expected final answer foo, got %v", answer)
+	}
+	roundVal, _ := res.Session.State().Get(stateKeyRound)
+	if roundVal != nil {
+		if rv, ok := roundVal.(uint); ok && rv > 2 {
+			t.Fatalf("expected auto-stop by round 2, got round %d", rv)
+		}
+	}
+}
+
 func stubCandidate(name string) agent.Agent {
 	return mustAgent(agent.New(agent.Config{
 		Name:        name,
