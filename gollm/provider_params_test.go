@@ -46,13 +46,13 @@ func TestProviderParams_AnthropicMutate(t *testing.T) {
 	})
 
 	cfg := adapter.NormalizeRequest(req, "test-agent")
-	system, msgs, err := adapter.GenAIToAnthropicMessages(cfg.SystemInstruction, req.Contents)
+	system, msgs, err := adapter.GenAIToAnthropicBetaMessages(cfg.SystemInstruction, req.Contents)
 	if err != nil {
 		t.Fatalf("GenAIToAnthropicMessages() error = %v", err)
 	}
 
 	llm := &anthropicLLM{name: "claude-haiku-4-5", userAgent: "test-agent"}
-	params, err := llm.buildParams(req, system, msgs)
+	params, err := llm.buildBetaParams(req, system, msgs)
 	if err != nil {
 		t.Fatalf("buildParams() error = %v", err)
 	}
