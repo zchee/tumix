@@ -92,8 +92,13 @@ var (
 	prices = map[string]struct {
 		inUSDPerKT, outUSDPerKT float64
 	}{
-		"gemini-2.5-flash": {inUSDPerKT: 0.00015, outUSDPerKT: 0.0006},
-		"gemini-2.5-pro":   {inUSDPerKT: 0.00125, outUSDPerKT: 0.0050},
+		"gemini-2.5-flash":     {inUSDPerKT: 0.00015, outUSDPerKT: 0.0006},
+		"gemini-2.5-flash-002": {inUSDPerKT: 0.00015, outUSDPerKT: 0.0006},
+		"gemini-2.5-pro":       {inUSDPerKT: 0.00125, outUSDPerKT: 0.0050},
+		"gemini-2.5-pro-002":   {inUSDPerKT: 0.00125, outUSDPerKT: 0.0050},
+		"gemini-1.5-flash":     {inUSDPerKT: 0.00020, outUSDPerKT: 0.0008},
+		"gemini-1.5-flash-8b":  {inUSDPerKT: 0.00020, outUSDPerKT: 0.0008},
+		"gemini-1.5-pro":       {inUSDPerKT: 0.00100, outUSDPerKT: 0.0040},
 	}
 	pricingLoaded    bool
 	meter            metric.Meter
@@ -101,6 +106,10 @@ var (
 	inputTokCounter  metric.Int64Counter
 	outputTokCounter metric.Int64Counter
 	costCounter      metric.Float64Counter
+	expRequests      = expvar.NewInt("tumix_requests")
+	expInputTokens   = expvar.NewInt("tumix_input_tokens")
+	expOutputTokens  = expvar.NewInt("tumix_output_tokens")
+	expCostUSD       = expvar.NewFloat("tumix_cost_usd")
 )
 
 func main() {
@@ -130,6 +139,10 @@ func main() {
 	}
 
 	httpClient := newHTTPClient(cfg.TraceHTTP)
+	if err := enforcePromptTokens(ctx, cfg, httpClient); err != nil {
+		logger.Error("prompt too large", "error", err)
+		os.Exit(1)
+	}
 	llm, err := buildModel(ctx, cfg, httpClient)
 	if err != nil {
 		logger.Error("failed to create model", "error", err)
@@ -147,6 +160,7 @@ func main() {
 		printConfig(cfg)
 		return
 	}
+
 	if cfg.BenchLocal > 0 {
 		benchLocal(cfg)
 		return
@@ -256,6 +270,45 @@ func newHTTPClient(traceEnabled bool) *http.Client {
 	}
 }
 
+type countTokensFunc func(ctx context.Context, model string, contents []*genai.Content, config *genai.CountTokensConfig) (*genai.CountTokensResponse, error)
+
+func enforcePromptTokens(ctx context.Context, cfg config, httpClient *http.Client) error {
+	if cfg.MaxPromptTokens <= 0 {
+		return nil
+	}
+	client, err := genai.NewClient(ctx, &genai.ClientConfig{
+		APIKey:     cfg.APIKey,
+		HTTPClient: httpClient,
+		HTTPOptions: genai.HTTPOptions{Headers: http.Header{
+			"User-Agent": []string{version.UserAgent("genai")},
+		}},
+	})
+	if err != nil {
+		return fmt.Errorf("init token client: %w", err)
+	}
+	return enforcePromptTokensWithCounter(ctx, cfg, func(ctx context.Context, model string, contents []*genai.Content, config *genai.CountTokensConfig) (*genai.CountTokensResponse, error) {
+		return client.Models.CountTokens(ctx, model, contents, config)
+	})
+}
+
+func enforcePromptTokensWithCounter(ctx context.Context, cfg config, counter countTokensFunc) error {
+	if cfg.MaxPromptTokens <= 0 {
+		return nil
+	}
+	contents := []*genai.Content{genai.NewContentFromText(cfg.Prompt, genai.RoleUser)}
+	resp, err := counter(ctx, cfg.ModelName, contents, nil)
+	if err != nil {
+		return fmt.Errorf("count tokens: %w", err)
+	}
+	if resp == nil {
+		return errors.New("count tokens: empty response")
+	}
+	if tokens := int(resp.TotalTokens); tokens > cfg.MaxPromptTokens {
+		return fmt.Errorf("prompt tokens %d exceed max_prompt_tokens %d", tokens, cfg.MaxPromptTokens)
+	}
+	return nil
+}
+
 func buildModel(ctx context.Context, cfg config, httpClient *http.Client) (model.LLM, error) {
 	clientConfig := &genai.ClientConfig{
 		APIKey:     cfg.APIKey,
@@ -323,21 +376,12 @@ func buildTumixLoader(llm model.LLM, genCfg *genai.GenerateContentConfig, maxRou
 		}
 		candidates = append(candidates, a)
 	}
-
-	refinement, err := tumixagent.NewRefinementAgent(candidates...)
-	if err != nil {
-		return nil, err
-	}
 	judge, err := tumixagent.NewJudgeAgent(llm, genCfg)
 	if err != nil {
 		return nil, err
 	}
-	round, err := tumixagent.NewRoundAgent(refinement, judge)
-	if err != nil {
-		return nil, err
-	}
 
-	return tumixagent.NewTumixAgentWithMaxRounds([]adkagent.Agent{round}, maxRounds)
+	return tumixagent.NewTumixAgentWithMaxRounds(candidates, judge, maxRounds)
 }
 
 func runOnce(ctx context.Context, cfg config, loader adkagent.Loader) error {
@@ -422,6 +466,9 @@ func runOnce(ctx context.Context, cfg config, loader adkagent.Loader) error {
 }
 
 func runBatch(ctx context.Context, cfg config, loader adkagent.Loader) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	f, err := os.Open(filepath.Clean(cfg.BatchFile))
 	if err != nil {
 		return fmt.Errorf("open batch file: %w", err)
@@ -449,6 +496,9 @@ func runBatch(ctx context.Context, cfg config, loader adkagent.Loader) error {
 		go func(worker int) {
 			defer wg.Done()
 			for p := range promptCh {
+				if ctx.Err() != nil {
+					return
+				}
 				local := cfg
 				local.Prompt = p
 				if local.SessionID == "" {
@@ -456,6 +506,7 @@ func runBatch(ctx context.Context, cfg config, loader adkagent.Loader) error {
 				}
 				if err := runOnce(ctx, local, loader); err != nil {
 					errCh <- fmt.Errorf("prompt %q: %w", p, err)
+					cancel()
 					return
 				}
 			}
@@ -548,11 +599,26 @@ func serveMetrics(addr string) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
 	mux.Handle("/debug/vars", expvar.Handler())
+	mux.HandleFunc("/metrics", func(w http.ResponseWriter, _ *http.Request) {
+		writePromMetrics(w)
+	})
 	go func() {
 		if err := http.ListenAndServe(addr, mux); err != nil {
 			log.FromContext(context.Background()).Warn("metrics server stopped", "error", err)
 		}
 	}()
+}
+
+func writePromMetrics(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+	fmt.Fprintf(w, "# TYPE tumix_requests counter\n")
+	fmt.Fprintf(w, "tumix_requests %d\n", expRequests.Value())
+	fmt.Fprintf(w, "# TYPE tumix_input_tokens counter\n")
+	fmt.Fprintf(w, "tumix_input_tokens %d\n", expInputTokens.Value())
+	fmt.Fprintf(w, "# TYPE tumix_output_tokens counter\n")
+	fmt.Fprintf(w, "tumix_output_tokens %d\n", expOutputTokens.Value())
+	fmt.Fprintf(w, "# TYPE tumix_cost_usd counter\n")
+	fmt.Fprintf(w, "tumix_cost_usd %f\n", expCostUSD.Value())
 }
 
 func estimateTokensFromChars(n int) int {
@@ -599,6 +665,7 @@ func estimateAndWarn(cfg config, totalIn, totalOut int) {
 	}
 	if cost := estimateCost(cfg.ModelName, totalIn, totalOut); cost > 0 {
 		costCounter.Add(context.Background(), cost)
+		expCostUSD.Add(cost)
 		log.FromContext(context.Background()).Info("usage", "input_tokens", totalIn, "output_tokens", totalOut, "cost_usd", cost)
 	}
 }
@@ -646,6 +713,9 @@ func recordUsage(event *session.Event, modelName string) (int64, int64) {
 	requestCounter.Add(ctx, 1)
 	inputTokCounter.Add(ctx, in)
 	outputTokCounter.Add(ctx, out)
+	expRequests.Add(1)
+	expInputTokens.Add(in)
+	expOutputTokens.Add(out)
 	return in, out
 }
 
