@@ -38,6 +38,7 @@ import (
 	"errors"
 	"fmt"
 	"iter"
+	"math"
 	"sort"
 	"strings"
 
@@ -91,6 +92,7 @@ func cloneGenConfig(cfg *genai.GenerateContentConfig) *genai.GenerateContentConf
 const sharedContext = `**TUMIX shared context**
 - Round: {round_num}
 - Question: {question}
+- Vote margin (0-1): {vote_margin?}; Unique answers: {unique_answers?}; Coverage: {coverage?}; Entropy: {answer_entropy?}
 - Previous answers (may be empty):
 {joined_answers?}
 
@@ -556,6 +558,95 @@ Now, here is the task:`,
 	return a, nil
 }
 
+// NewGuidedPlusGSAgent creates a Guided+ Agent that uses both code execution and Google Search API with extra priors.
+//
+// This agent is responsible for "13. Guided Agent+ (CSG+gs)".
+func NewGuidedPlusGSAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
+	cfg := llmagent.Config{
+		Name: "Guided+ gs",
+		Description: `Guided dual-tool with stronger priors combining code execution and Google Search API search.
+- Short name: {CSG+gs}`,
+		Model:                 llm,
+		GenerateContentConfig: cloneGenConfig(genCfg),
+		Instruction: `You steer a TaskLLM with explicit, actionable guidance. Use text, code, and Google Search.
+
+Priority rules:
+- Prefer code when arithmetic/symbolic reasoning is involved; isolate a single python block with print outputs.
+- Prefer search when facts/dates/entities are uncertain; emit exactly one <search>query</search> per turn.
+- Never mix code and search in the same turn.
+- Keep guidance concise: 1–3 bullet steps plus a concrete next action.
+
+When ready, output the guidance between «< and »>, e.g., «<Run a short Python script to factor the polynomial, then verify with a quick search.>».`,
+	}
+
+	applySharedContext(&cfg)
+
+	a, err := llmagent.New(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("build Guided+(CSG+gs) agent: %w", err)
+	}
+
+	return a, nil
+}
+
+// NewGuidedPlusLLMAgent creates a Guided+ Agent that uses both code execution and LLM search with extra priors.
+//
+// This agent is responsible for "14. Guided Agent+ (CSG+llm)".
+func NewGuidedPlusLLMAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
+	cfg := llmagent.Config{
+		Name: "Guided+ llm",
+		Description: `Guided dual-tool with stronger priors combining code execution and LLM search function.
+- Short name: {CSG+llm}`,
+		Model:                 llm,
+		GenerateContentConfig: cloneGenConfig(genCfg),
+		Instruction: `You steer a TaskLLM with explicit, actionable guidance. Use text, code, and LLM search.
+
+Priority rules:
+- Prefer code for math/logic; emit one python block with print outputs only.
+- Prefer search when factual uncertainty is high; emit one <search>query</search>.
+- Do not mix code and search in the same turn.
+- Keep guidance concise: 1–3 bullet steps plus a concrete next action.
+
+Return guidance between «< and »>.`,
+	}
+
+	applySharedContext(&cfg)
+
+	a, err := llmagent.New(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("build Guided+(CSG+llm) agent: %w", err)
+	}
+
+	return a, nil
+}
+
+// NewGuidedPlusComAgent creates a Guided+ Agent that uses both code execution and combined search with extra priors.
+//
+// This agent is responsible for "15. Guided Agent+ (CSG+com)".
+func NewGuidedPlusComAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
+	cfg := llmagent.Config{
+		Name: "Guided+ com",
+		Description: `Guided dual-tool with stronger priors combining code execution and mixed Google/LLM search.
+- Short name: {CSG+com}`,
+		Model:                 llm,
+		GenerateContentConfig: cloneGenConfig(genCfg),
+		Instruction: `You steer a TaskLLM with explicit, actionable guidance. Use text, code, and either Google Search or LLM search.
+
+Priority rules mirror Guided+gs/llm: choose code for computation, search for facts, never mix both in one turn, keep one action per turn, and provide crisp bullets.
+
+Return guidance between «< and »>.`,
+	}
+
+	applySharedContext(&cfg)
+
+	a, err := llmagent.New(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("build Guided+(CSG+com) agent: %w", err)
+	}
+
+	return a, nil
+}
+
 // NewRefinementAgent creates a Refinement Agent that gathers candidate answers from sub-agents and judges the final answer.
 //
 // TODO(zchee): support [agent.InvocationContext] for `{question}` and `{joined_answers}`.
@@ -602,11 +693,18 @@ const (
 	defaultMinRounds           uint    = 2
 	defaultConfidenceThreshold float64 = 0.6
 
-	stateKeyAnswer     = "tumix_final_answer"
-	stateKeyConfidence = "tumix_final_confidence"
-	stateKeyQuestion   = "question"
-	stateKeyJoined     = "joined_answers"
-	stateKeyRound      = "round_num"
+	stateKeyAnswer          = "tumix_final_answer"
+	stateKeyConfidence      = "tumix_final_confidence"
+	stateKeyQuestion        = "question"
+	stateKeyJoined          = "joined_answers"
+	stateKeyRound           = "round_num"
+	stateKeyVoteMargin      = "vote_margin"
+	stateKeyUnique          = "unique_answers"
+	stateKeyCoverage        = "coverage"
+	stateKeyEntropy         = "answer_entropy"
+	stateKeyTopAnswer       = "top_answer"
+	stateKeyJudgeAnswer     = "judge_recommended_answer"
+	stateKeyJudgeConfidence = "judge_recommended_confidence"
 )
 
 type finalizeArgs struct {
@@ -668,31 +766,28 @@ func NewJudgeAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Ag
 		Model:                 llm,
 		GenerateContentConfig: cloneGenConfig(genCfg),
 		Tools:                 []tool.Tool{finalizeTool},
-		Instruction: `Task: Carefully assess whether the answers below (enclosed by ` + code(`«< »>`) + `) show clear and strong consensus, or
-if another round of reasoning is needed to improve alignment.
+		Instruction: `Task: Decide STOP or CONTINUE; do not solve the problem yourself.
 
-**IMPORTANT**: If there are any differences in reasoning, phrasing, emphasis, conclusions, or interpretation of
-key details, you should conservatively decide to continue refinement.
+Round {round_num}; vote margin {vote_margin?}; unique answers {unique_answers?}; coverage {coverage?}; entropy {answer_entropy?}.
 
-The current round number is {round_num}. Note: **Finalizing before round 3 is uncommon and discouraged unless answers are fully aligned in both logic and language.**
+Stop only when:
+- vote margin >= ` + fmt.Sprintf("%.2f", defaultConfidenceThreshold) + ` AND round >= 2; and
+- no material differences in reasoning or conclusions.
 
-**Question**:
+Otherwise continue.
+
+Question:
 {question}
 
-**Candidate answers from different methods**:
+Candidate answers:
 {joined_answers}
 
-**Instructions**:
-1. Identify any differences in wording, structure, or logic.
-2. Be especially cautious about subtle variations in conclusion or emphasis.
-3. Err on the side of caution: if there’s any ambiguity or divergence, recommend another round.
-4. Pick the best answer, justify briefly, then call the finalize tool exactly once with:
-	- answer: the final answer string
-	- confidence: 0-1
-	- stop: true when confidence >= ` + fmt.Sprintf("%.2f", defaultConfidenceThreshold) + ` else false.
+Instructions:
+1. Briefly compare answers; highlight disagreements or uncertainties.
+2. Choose the best current answer (copy verbatim); call finalize exactly once with answer, confidence 0-1, stop=true only when conditions met.
+3. If not safe to stop, call finalize with stop=false.
 
-Output your reasoning first, then conclude clearly with ` + code(`«<YES»>`) + ` if the answers are highly consistent and
-finalization is safe, or ` + code(`«<NO»>`) + ` if further refinement is needed.`,
+End with ` + code(`«<YES»>`) + ` when you set stop=true, else ` + code(`«<NO»>`) + `.`,
 	}
 
 	applySharedContext(&cfg)
@@ -824,6 +919,12 @@ func (t *tumixOrchestrator) run(ctx agent.InvocationContext) iter.Seq2[*session.
 			lastAnswers = answers
 			if len(lastAnswers) > 0 {
 				_ = ctx.Session().State().Set(stateKeyJoined, joinAnswers(lastAnswers))
+				stats := computeStats(lastAnswers, len(t.candidateAgent.SubAgents()))
+				_ = ctx.Session().State().Set(stateKeyVoteMargin, stats.voteMargin)
+				_ = ctx.Session().State().Set(stateKeyUnique, stats.unique)
+				_ = ctx.Session().State().Set(stateKeyCoverage, stats.coverage)
+				_ = ctx.Session().State().Set(stateKeyEntropy, stats.answerEntropy)
+				_ = ctx.Session().State().Set(stateKeyTopAnswer, stats.topAnswer)
 			}
 
 			if round < t.minRounds {
@@ -874,6 +975,9 @@ func (t *tumixOrchestrator) runJudge(ctx agent.InvocationContext, yield func(*se
 		}
 		if event != nil && event.Actions.Escalate {
 			stop = true
+			if text := firstTextFromContent(event.LLMResponse.Content); text != "" {
+				_ = ctx.Session().State().Set(stateKeyJudgeAnswer, normalizeAnswer(text))
+			}
 		}
 	}
 	return stop
@@ -882,6 +986,11 @@ func (t *tumixOrchestrator) runJudge(ctx agent.InvocationContext, yield func(*se
 func (t *tumixOrchestrator) emitFinalFromState(ctx agent.InvocationContext, yield func(*session.Event, error) bool) {
 	answerVal, _ := ctx.Session().State().Get(stateKeyAnswer)
 	confVal, _ := ctx.Session().State().Get(stateKeyConfidence)
+	if answerVal == nil {
+		if judgeVal, _ := ctx.Session().State().Get(stateKeyJudgeAnswer); judgeVal != nil {
+			answerVal = judgeVal
+		}
+	}
 	answer := fmt.Sprintf("%v", answerVal)
 	conf := fmt.Sprintf("%v", confVal)
 	if answer == "" {
@@ -982,12 +1091,52 @@ func majorityVote(ans []candidateAnswer) (string, float64) {
 	return best.Answer, conf
 }
 
+type roundStats struct {
+	voteMargin    float64
+	unique        int
+	coverage      float64
+	answerEntropy float64
+	topAnswer     string
+}
+
+func computeStats(ans []candidateAnswer, candidateCount int) roundStats {
+	if len(ans) == 0 || candidateCount <= 0 {
+		return roundStats{}
+	}
+
+	cnts := make(map[string]int)
+	for _, a := range ans {
+		key := normalizeAnswer(a.Text)
+		cnts[key]++
+	}
+
+	unique := len(cnts)
+	total := len(ans)
+	topCount := 0
+	topAnswer := ""
+	entropy := 0.0
+	for k, v := range cnts {
+		if v > topCount || (v == topCount && k < topAnswer) {
+			topCount, topAnswer = v, k
+		}
+		p := float64(v) / float64(total)
+		if p > 0 {
+			entropy -= p * math.Log2(p)
+		}
+	}
+
+	return roundStats{
+		voteMargin:    float64(topCount) / float64(total),
+		unique:        unique,
+		coverage:      float64(total) / float64(candidateCount),
+		answerEntropy: entropy,
+		topAnswer:     topAnswer,
+	}
+}
+
 func normalizeAnswer(text string) string {
 	trimmed := strings.TrimSpace(text)
-	start := strings.Index(trimmed, "«<")
-	end := strings.Index(trimmed, "»>")
-	if start >= 0 && end > start+2 {
-		return strings.TrimSpace(trimmed[start+2 : end])
-	}
-	return trimmed
+	trimmed = strings.TrimPrefix(trimmed, "«<")
+	trimmed = strings.TrimSuffix(trimmed, "»>")
+	return strings.TrimSpace(trimmed)
 }
