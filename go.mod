@@ -18,7 +18,7 @@ replace (
 	go.opentelemetry.io/proto/otlp => go.opentelemetry.io/proto/otlp v1.9.0
 )
 
-replace github.com/invopop/jsonschema => github.com/zchee/jsonschema v0.0.0-20251208203204-d580d8ab15cc
+replace github.com/invopop/jsonschema => github.com/zchee/jsonschema v0.0.0-20251203212453-664582a47f4a
 
 require (
 	cloud.google.com/go/auth v0.17.0
