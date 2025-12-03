@@ -37,6 +37,10 @@ GOBIN=$PWD/tools/bin go -C tools install -v -x tool
 # Run tests (model/xai module)
 cd model/xai && ../../tools/bin/gotestsum -f standard-verbose -- -race -count=1 -shuffle=on -cover ./...
 
+# Take a benchmark (`N` is a number)
+# NOTE(zchee): gobench is alias of `sync; sudo /usr/sbin/purge; go test -v -run='^$' -benchmem "$@"`
+gobench -timeout (N) -count (N) -benchtime (N)x -bench={TARGET_BENCHMARK_NAME} ./...
+
 # Run linter
 ./tools/bin/golangci-lint run -v ./...
 
