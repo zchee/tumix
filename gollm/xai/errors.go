@@ -18,6 +18,7 @@ package xai
 
 import (
 	"errors"
+	"slices"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -73,17 +74,18 @@ func WrapError(err error) error {
 	return err
 }
 
-// IsRetryable reports whether an error is retryable (currently UNAVAILABLE or DEADLINE_EXCEEDED).
+var retryableCodes = []codes.Code{
+	codes.Unavailable,
+	codes.DeadlineExceeded,
+}
+
+// IsRetryable reports whether an error is retryable (currently [codes.Unavailable] or [codes.DeadlineExceeded]).
 //
 // This mirrors the retryable set used in the client service config.
 func IsRetryable(err error) bool {
 	if xe, ok := ParseError(err); ok {
-		switch xe.Code {
-		case codes.Unavailable, codes.DeadlineExceeded:
-			return true
-		}
+		return slices.Contains(retryableCodes, xe.Code)
 	}
-
 	return false
 }
 
