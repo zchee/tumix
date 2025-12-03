@@ -22,6 +22,7 @@ import (
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/packages/param"
 	openai "github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/responses"
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
 
@@ -72,7 +73,7 @@ func TestProviderParams_OpenAIMutate(t *testing.T) {
 	SetProviderParams(req, &ProviderParams{
 		OpenAI: &OpenAIProviderParams{
 			Mutate: []OpenAIParamMutator{
-				func(p *openai.ChatCompletionNewParams) {
+				func(p *responses.ResponseNewParams) {
 					p.Store = openai.Bool(true)
 					p.TopP = openai.Float(0.42)
 				},
@@ -81,7 +82,7 @@ func TestProviderParams_OpenAIMutate(t *testing.T) {
 	})
 
 	llm := &openAILLM{name: "gpt-4o", userAgent: "test-agent"}
-	params, err := llm.chatCompletionParams(req)
+	params, err := llm.responseParams(req)
 	if err != nil {
 		t.Fatalf("chatCompletionParams() error = %v", err)
 	}

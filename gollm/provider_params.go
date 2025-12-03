@@ -18,7 +18,7 @@ package gollm
 
 import (
 	anthropic "github.com/anthropics/anthropic-sdk-go"
-	openai "github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/responses"
 	"google.golang.org/adk/model"
 
 	"github.com/zchee/tumix/gollm/xai"
@@ -43,7 +43,7 @@ type AnthropicProviderParams struct {
 }
 
 // OpenAIParamMutator mutates the OpenAI chat completion params after defaults are applied.
-type OpenAIParamMutator func(*openai.ChatCompletionNewParams)
+type OpenAIParamMutator func(*responses.ResponseNewParams)
 
 // OpenAIProviderParams contains OpenAI-specific overrides.
 type OpenAIProviderParams struct {
