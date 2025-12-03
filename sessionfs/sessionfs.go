@@ -11,6 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
 
 // Package sessionfs provides a lightweight file-backed implementation of
 // adk's session.Service. It keeps an in-memory map and snapshots it to disk
@@ -20,6 +22,7 @@ package sessionfs
 
 import (
 	"context"
+	json "encoding/json/v2"
 	"errors"
 	"fmt"
 	"iter"
@@ -30,7 +33,6 @@ import (
 	"syscall"
 	"time"
 
-	json "encoding/json/v2"
 	"google.golang.org/adk/session"
 )
 
@@ -99,11 +101,13 @@ func (e fileEvents) All() iter.Seq[*session.Event] {
 		}
 	}
 }
+
 func (e fileEvents) Len() int {
 	e.fs.mu.RLock()
 	defer e.fs.mu.RUnlock()
 	return len(e.fs.s.Events)
 }
+
 func (e fileEvents) At(i int) *session.Event {
 	e.fs.mu.RLock()
 	defer e.fs.mu.RUnlock()
