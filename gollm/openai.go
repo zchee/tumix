@@ -26,6 +26,9 @@ import (
 
 	openai "github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
+	"github.com/openai/openai-go/v3/packages/param"
+	"github.com/openai/openai-go/v3/responses"
+	"github.com/openai/openai-go/v3/shared"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/adk/model"
@@ -84,7 +87,7 @@ func (m *openAILLM) GenerateContent(ctx context.Context, req *model.LLMRequest, 
 	ctx, span := openaiTracer.Start(ctx, "gollm.openai.GenerateContent")
 	req.Config = adapter.NormalizeRequest(req, m.userAgent)
 
-	params, err := m.chatCompletionParams(req)
+	params, err := m.responseParams(req)
 	if err != nil {
 		return func(yield func(*model.LLMResponse, error) bool) {
 			defer func() { telemetry.End(span, err) }()
@@ -100,7 +103,7 @@ func (m *openAILLM) GenerateContent(ctx context.Context, req *model.LLMRequest, 
 		var spanErr error
 		defer func() { telemetry.End(span, spanErr) }()
 
-		resp, err := m.client.Chat.Completions.New(ctx, *params)
+		resp, err := m.client.Responses.New(ctx, *params)
 		if err != nil {
 			spanErr = err
 			yield(nil, err)
@@ -117,61 +120,52 @@ func (m *openAILLM) GenerateContent(ctx context.Context, req *model.LLMRequest, 
 	}
 }
 
-// chatCompletionParams builds OpenAI chat completion parameters from the request.
+// responseParams builds OpenAI Responses parameters from the request.
 //
-// It converts genai contents to OpenAI messages and applies generation config,
-// returning an error when no messages remain after conversion.
-func (m *openAILLM) chatCompletionParams(req *model.LLMRequest) (*openai.ChatCompletionNewParams, error) {
-	msgs, err := adapter.GenAIToOpenAIMessages(req.Contents)
+// It converts GenAI contents to Responses input items and applies generation
+// config, returning an error when unsupported options are requested.
+func (m *openAILLM) responseParams(req *model.LLMRequest) (*responses.ResponseNewParams, error) {
+	items, err := adapter.GenAIToResponsesInput(req.Contents)
 	if err != nil {
 		return nil, fmt.Errorf("convert content: %w", err)
 	}
-	if len(msgs) == 0 {
-		return nil, fmt.Errorf("no messages to send")
+	if len(items) == 0 {
+		return nil, fmt.Errorf("no input items to send")
 	}
 
-	params := openai.ChatCompletionNewParams{
-		Model:    adapter.ModelName(m.name, req),
-		Messages: msgs,
+	params := responses.ResponseNewParams{
+		Model: shared.ResponsesModel(adapter.ModelName(m.name, req)),
+		Input: responses.ResponseNewParamsInputUnion{OfInputItemList: responses.ResponseInputParam(items)},
 	}
 
 	cfg := req.Config
 	if cfg.Temperature != nil {
-		params.Temperature = openai.Float(float64(*cfg.Temperature))
+		params.Temperature = param.NewOpt(float64(*cfg.Temperature))
 	}
 	if cfg.TopP != nil {
-		params.TopP = openai.Float(float64(*cfg.TopP))
+		params.TopP = param.NewOpt(float64(*cfg.TopP))
 	}
 	if cfg.MaxOutputTokens > 0 {
-		params.MaxTokens = openai.Int(int64(cfg.MaxOutputTokens))
-		params.MaxCompletionTokens = openai.Int(int64(cfg.MaxOutputTokens))
+		params.MaxOutputTokens = param.NewOpt(int64(cfg.MaxOutputTokens))
 	}
-	if cfg.CandidateCount > 0 {
-		params.N = openai.Int(int64(cfg.CandidateCount))
+	if cfg.CandidateCount > 1 {
+		return nil, fmt.Errorf("candidate_count %d not supported by Responses API", cfg.CandidateCount)
 	}
 	if len(cfg.StopSequences) > 0 {
-		// OpenAI stop accepts string or []string; we set []string.
-		params.Stop = openai.ChatCompletionNewParamsStopUnion{OfStringArray: cfg.StopSequences}
+		return nil, fmt.Errorf("stop sequences are not supported by Responses API: %v", cfg.StopSequences)
 	}
 	if cfg.Seed != nil {
-		params.Seed = openai.Int(int64(*cfg.Seed))
+		return nil, fmt.Errorf("seed is not supported by Responses API")
 	}
 	switch {
 	case cfg.Logprobs != nil:
-		params.Logprobs = openai.Bool(true)
-		params.TopLogprobs = openai.Int(int64(*cfg.Logprobs))
+		params.TopLogprobs = param.NewOpt(int64(*cfg.Logprobs))
+		params.Include = append(params.Include, responses.ResponseIncludableMessageOutputTextLogprobs)
 	case cfg.ResponseLogprobs:
-		params.Logprobs = openai.Bool(true)
+		params.Include = append(params.Include, responses.ResponseIncludableMessageOutputTextLogprobs)
 	}
-	if cfg.FrequencyPenalty != nil {
-		params.FrequencyPenalty = openai.Float(float64(*cfg.FrequencyPenalty))
-	}
-	if cfg.PresencePenalty != nil {
-		params.PresencePenalty = openai.Float(float64(*cfg.PresencePenalty))
-	}
-
 	if len(cfg.Tools) > 0 {
-		tools, tc := adapter.GenAIToolsToOpenAI(cfg.Tools, cfg.ToolConfig)
+		tools, tc := adapter.GenAIToolsToResponses(cfg.Tools, cfg.ToolConfig)
 		params.Tools = tools
 		if tc != nil {
 			params.ToolChoice = *tc
@@ -187,20 +181,20 @@ func (m *openAILLM) chatCompletionParams(req *model.LLMRequest) (*openai.ChatCom
 //
 // It forwards each streamed chunk through the OpenAI aggregator and emits final output
 // after the stream ends, respecting consumer backpressure.
-func (m *openAILLM) stream(ctx context.Context, span trace.Span, params *openai.ChatCompletionNewParams) iter.Seq2[*model.LLMResponse, error] {
+func (m *openAILLM) stream(ctx context.Context, span trace.Span, params *responses.ResponseNewParams) iter.Seq2[*model.LLMResponse, error] {
 	agg := adapter.NewOpenAIStreamAggregator()
 
 	return func(yield func(*model.LLMResponse, error) bool) {
-		stream := m.client.Chat.Completions.NewStreaming(ctx, *params)
+		stream := m.client.Responses.NewStreaming(ctx, *params)
 		defer stream.Close()
 
 		var spanErr error
 		defer func() { telemetry.End(span, spanErr) }()
 
 		for stream.Next() {
-			chunk := stream.Current()
+			event := stream.Current()
 
-			for _, resp := range agg.Process(&chunk) {
+			for _, resp := range agg.Process(event) {
 				if !yield(resp, nil) {
 					return
 				}
@@ -213,13 +207,19 @@ func (m *openAILLM) stream(ctx context.Context, span trace.Span, params *openai.
 			return
 		}
 
+		if aggErr := agg.Err(); aggErr != nil {
+			spanErr = aggErr
+			yield(nil, aggErr)
+			return
+		}
+
 		if final := agg.Final(); final != nil {
 			yield(final, nil)
 		}
 	}
 }
 
-func applyOpenAIProviderParams(req *model.LLMRequest, params *openai.ChatCompletionNewParams) {
+func applyOpenAIProviderParams(req *model.LLMRequest, params *responses.ResponseNewParams) {
 	pp, ok := providerParams(req)
 	if !ok || pp.OpenAI == nil {
 		return

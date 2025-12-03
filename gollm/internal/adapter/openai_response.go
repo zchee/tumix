@@ -25,93 +25,74 @@ import (
 	"strings"
 	"sync"
 
-	openai "github.com/openai/openai-go/v3"
-	"github.com/openai/openai-go/v3/shared/constant"
+	"github.com/openai/openai-go/v3/responses"
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
 )
 
-func toolCallsFromMessage(msg *openai.ChatCompletionMessage) []openai.ChatCompletionMessageToolCallUnion {
-	if msg == nil {
-		return nil
-	}
-
-	if len(msg.ToolCalls) > 0 {
-		return msg.ToolCalls
-	}
-
-	raw := msg.JSON.FunctionCall.Raw()
-	if !msg.JSON.FunctionCall.Valid() || raw == "" {
-		return nil
-	}
-
-	var legacyFunctionCall struct {
-		Name      string `json:"name"`
-		Arguments string `json:"arguments"`
-	}
-	if err := json.Unmarshal([]byte(raw), &legacyFunctionCall); err != nil {
-		return nil
-	}
-	if legacyFunctionCall.Name == "" {
-		return nil
-	}
-
-	return []openai.ChatCompletionMessageToolCallUnion{
-		{
-			Type: string(constant.ValueOf[constant.Function]()),
-			Function: openai.ChatCompletionMessageFunctionToolCallFunction{
-				Name:      legacyFunctionCall.Name,
-				Arguments: legacyFunctionCall.Arguments,
-			},
-		},
-	}
-}
-
-// OpenAIResponseToLLM converts an OpenAI chat completion response into an ADK LLMResponse,
-// returning an error when the payload is nil or empty.
-func OpenAIResponseToLLM(resp *openai.ChatCompletion) (*model.LLMResponse, error) {
+// OpenAIResponseToLLM converts an OpenAI Responses payload into an ADK LLMResponse,
+// returning an error when the payload is nil or contains no output items.
+func OpenAIResponseToLLM(resp *responses.Response) (*model.LLMResponse, error) {
 	if resp == nil {
 		return nil, fmt.Errorf("nil openai response")
 	}
-	if len(resp.Choices) == 0 {
-		return nil, fmt.Errorf("empty choices")
+	if len(resp.Output) == 0 {
+		return nil, fmt.Errorf("empty output")
 	}
 
-	msg := resp.Choices[0].Message
-	parts := make([]*genai.Part, 0, 2)
-	if msg.Content != "" {
-		parts = append(parts, genai.NewPartFromText(msg.Content))
-	}
+	parts := make([]*genai.Part, 0, len(resp.Output))
 
-	toolCalls := toolCallsFromMessage(&msg)
-	for tc := range slices.Values(toolCalls) {
-		var fn openai.ChatCompletionMessageFunctionToolCallFunction
-		switch v := tc.AsAny().(type) {
-		case openai.ChatCompletionMessageFunctionToolCall:
-			fn = v.Function
-		default:
-			fn = tc.Function
+	for _, item := range resp.Output {
+		typ := strings.ToLower(strings.TrimSpace(item.Type))
+		switch typ {
+		case "message":
+			if len(item.Content) == 0 {
+				continue
+			}
+			for _, c := range item.Content {
+				ctype := strings.ToLower(strings.TrimSpace(c.Type))
+				switch ctype {
+				case "output_text":
+					if c.Text != "" {
+						parts = append(parts, genai.NewPartFromText(c.Text))
+					}
+				case "refusal":
+					if c.Refusal != "" {
+						parts = append(parts, genai.NewPartFromText(c.Refusal))
+					}
+				}
+			}
+
+		case "function_call":
+			fnID := item.CallID
+			if fnID == "" {
+				fnID = item.ID
+			}
+			parts = append(parts, &genai.Part{
+				FunctionCall: &genai.FunctionCall{
+					ID:   fnID,
+					Name: item.Name,
+					Args: parseArgs(item.Arguments),
+				},
+			})
 		}
-		if fn.Name == "" {
-			fn = tc.Function
-		}
-
-		parts = append(parts, &genai.Part{
-			FunctionCall: &genai.FunctionCall{
-				ID:   tc.ID,
-				Name: fn.Name,
-				Args: parseArgs(fn.Arguments),
-			},
-		})
 	}
+
+	if len(parts) == 0 {
+		return nil, fmt.Errorf("no convertible output items")
+	}
+
+	usage := openAIUsage(&resp.Usage)
+	finish := mapResponseFinishReason(resp.Status, resp.IncompleteDetails)
 
 	return &model.LLMResponse{
 		Content: &genai.Content{
-			Parts: parts,
 			Role:  genai.RoleModel,
+			Parts: parts,
 		},
-		UsageMetadata: openAIUsage(&resp.Usage),
-		FinishReason:  mapOpenAIFinishReason(resp.Choices[0].FinishReason),
+		UsageMetadata: usage,
+		TurnComplete:  resp.Status == responses.ResponseStatusCompleted || resp.Status == responses.ResponseStatusIncomplete,
+		FinishReason:  finish,
 	}, nil
 }
 
@@ -122,66 +103,102 @@ type toolCallState struct {
 	args  strings.Builder
 }
 
-// OpenAIStreamAggregator aggregates streaming chat completion deltas into LLM responses.
+// OpenAIStreamAggregator aggregates Responses streaming events into LLM responses.
 type OpenAIStreamAggregator struct {
-	text         strings.Builder
-	toolCalls    []*toolCallState
-	finishReason string
-	usage        *openai.CompletionUsage
+	text      strings.Builder
+	toolCalls []*toolCallState
+	usage     *responses.ResponseUsage
+	status    responses.ResponseStatus
+	final     *model.LLMResponse
+	err       error
 }
 
-// NewOpenAIStreamAggregator constructs a streaming aggregator for OpenAI chat responses.
+// NewOpenAIStreamAggregator constructs a streaming aggregator for Responses events.
 func NewOpenAIStreamAggregator() *OpenAIStreamAggregator {
 	return &OpenAIStreamAggregator{}
 }
 
-// Process consumes a streaming chunk and emits any partial LLM responses produced by it.
-func (a *OpenAIStreamAggregator) Process(chunk *openai.ChatCompletionChunk) []*model.LLMResponse {
-	if chunk == nil || len(chunk.Choices) == 0 {
+// Process consumes a streaming event and emits any partial LLM responses produced by it.
+func (a *OpenAIStreamAggregator) Process(event responses.ResponseStreamEventUnion) []*model.LLMResponse {
+	switch event.Type {
+	case "response.output_text.delta":
+		if event.Delta == "" {
+			return nil
+		}
+		a.text.WriteString(event.Delta)
+		return []*model.LLMResponse{
+			{
+				Content: &genai.Content{
+					Role:  genai.RoleModel,
+					Parts: []*genai.Part{genai.NewPartFromText(event.Delta)},
+				},
+				Partial: true,
+			},
+		}
+
+	case "response.function_call_arguments.delta":
+		state := a.ensureToolCall(event.OutputIndex, event.ItemID)
+		if event.Delta != "" {
+			state.args.WriteString(event.Delta)
+		}
+		return nil
+
+	case "response.function_call_arguments.done":
+		state := a.ensureToolCall(event.OutputIndex, event.ItemID)
+		if event.Name != "" {
+			state.name = event.Name
+		}
+		if event.Arguments != "" {
+			state.args.Reset()
+			state.args.WriteString(event.Arguments)
+		}
+		if event.ItemID != "" {
+			state.id = event.ItemID
+		}
+		return nil
+
+	case "response.completed":
+		a.status = responses.ResponseStatusCompleted
+		a.usage = &event.Response.Usage
+		llm, err := OpenAIResponseToLLM(&event.Response)
+		if err == nil {
+			a.final = llm
+			return []*model.LLMResponse{llm}
+		}
+		// fall through to fallback aggregation if conversion failed.
+		return nil
+
+	case "response.incomplete":
+		a.status = responses.ResponseStatusIncomplete
+		a.usage = &event.Response.Usage
+		llm, err := OpenAIResponseToLLM(&event.Response)
+		if err == nil {
+			a.final = llm
+			return []*model.LLMResponse{llm}
+		}
+		return nil
+
+	case "response.failed", "error":
+		msg := strings.TrimSpace(event.Message)
+		if msg == "" {
+			msg = "openai response failed"
+		}
+		a.err = fmt.Errorf("%s", msg)
 		return nil
 	}
 
-	choice := chunk.Choices[0]
-	if choice.FinishReason != "" {
-		a.finishReason = choice.FinishReason
-	}
-	if chunk.JSON.Usage.Valid() {
-		a.usage = openai.Ptr(chunk.Usage)
-	}
-
-	var out []*model.LLMResponse
-	delta := choice.Delta
-
-	if delta.Content != "" {
-		a.text.WriteString(delta.Content)
-		out = append(out, &model.LLMResponse{
-			Content: &genai.Content{
-				Parts: []*genai.Part{genai.NewPartFromText(delta.Content)},
-				Role:  genai.RoleModel,
-			},
-			Partial: true,
-		})
-	}
-
-	for tc := range slices.Values(delta.ToolCalls) {
-		state := a.ensureToolCall(tc.Index, tc.ID)
-		if tc.Function.Name != "" {
-			state.name = tc.Function.Name
-		}
-		if tc.Function.Arguments != "" {
-			state.args.WriteString(tc.Function.Arguments)
-		}
-		if tc.ID != "" {
-			state.id = tc.ID
-		}
-	}
-
-	return out
+	return nil
 }
 
 // Final returns the terminal aggregated LLM response, or nil when nothing was accumulated.
 func (a *OpenAIStreamAggregator) Final() *model.LLMResponse {
-	if a.text.Len() == 0 && len(a.toolCalls) == 0 && a.finishReason == "" && a.usage == nil {
+	if a.final != nil {
+		return a.final
+	}
+	if a.err != nil {
+		return nil
+	}
+	if a.text.Len() == 0 && len(a.toolCalls) == 0 {
 		return nil
 	}
 
@@ -194,28 +211,32 @@ func (a *OpenAIStreamAggregator) Final() *model.LLMResponse {
 		slices.SortFunc(a.toolCalls, func(a, b *toolCallState) int {
 			return cmp.Compare(a.index, b.index)
 		})
-
 		for _, tc := range a.toolCalls {
-			args := parseArgs(tc.args.String())
 			parts = append(parts, &genai.Part{
 				FunctionCall: &genai.FunctionCall{
 					ID:   tc.id,
 					Name: tc.name,
-					Args: args,
+					Args: parseArgs(tc.args.String()),
 				},
 			})
 		}
 	}
 
+	finish := mapResponseFinishReason(a.status, responses.ResponseIncompleteDetails{})
 	return &model.LLMResponse{
 		Content: &genai.Content{
-			Parts: parts,
 			Role:  genai.RoleModel,
+			Parts: parts,
 		},
 		UsageMetadata: openAIUsage(a.usage),
-		TurnComplete:  a.finishReason != "",
-		FinishReason:  mapOpenAIFinishReason(a.finishReason),
+		TurnComplete:  a.status == responses.ResponseStatusCompleted || a.status == responses.ResponseStatusIncomplete,
+		FinishReason:  finish,
 	}
+}
+
+// Err returns the terminal error captured during stream aggregation.
+func (a *OpenAIStreamAggregator) Err() error {
+	return a.err
 }
 
 func (a *OpenAIStreamAggregator) ensureToolCall(idx int64, id string) *toolCallState {
@@ -258,36 +279,33 @@ var argsDecoderPool = sync.Pool{
 	},
 }
 
-func openAIUsage(u *openai.CompletionUsage) *genai.GenerateContentResponseUsageMetadata {
+func openAIUsage(u *responses.ResponseUsage) *genai.GenerateContentResponseUsageMetadata {
 	if u == nil {
 		return nil
 	}
 
 	return &genai.GenerateContentResponseUsageMetadata{
-		PromptTokenCount:     int32(u.PromptTokens),
-		CandidatesTokenCount: int32(u.CompletionTokens),
+		PromptTokenCount:     int32(u.InputTokens),
+		CandidatesTokenCount: int32(u.OutputTokens),
 		TotalTokenCount:      int32(u.TotalTokens),
 	}
 }
 
-// mapOpenAIFinishReason maps [openai.ChatCompletionChoice.FinishReason] to [genai.FinishReason].
-//
-// The [openai.ChatCompletionChoice.FinishReason] is any of:
-//
-//   - stop
-//   - length
-//   - tool_calls
-//   - content_filter
-//   - function_call (deprecated)
-func mapOpenAIFinishReason(reason string) genai.FinishReason {
-	switch strings.ToLower(reason) {
-	case "stop":
+// mapResponseFinishReason maps [responses.ResponseStatus] and incomplete details to [genai.FinishReason].
+func mapResponseFinishReason(status responses.ResponseStatus, details responses.ResponseIncompleteDetails) genai.FinishReason {
+	switch status {
+	case responses.ResponseStatusCompleted:
 		return genai.FinishReasonStop
-	case "length":
-		return genai.FinishReasonMaxTokens
-	case "content_filter":
-		return genai.FinishReasonSafety
-	case "tool_calls", "function_call":
+	case responses.ResponseStatusIncomplete:
+		switch strings.ToLower(details.Reason) {
+		case "max_output_tokens":
+			return genai.FinishReasonMaxTokens
+		case "content_filter":
+			return genai.FinishReasonSafety
+		default:
+			return genai.FinishReasonOther
+		}
+	case responses.ResponseStatusFailed:
 		return genai.FinishReasonOther
 	default:
 		return genai.FinishReasonUnspecified
