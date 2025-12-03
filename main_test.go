@@ -71,3 +71,22 @@ func TestParseBoolEnv(t *testing.T) {
 		t.Fatalf("parseBoolEnv() = %v, want false", got)
 	}
 }
+
+func TestEstimateTokensFromChars(t *testing.T) {
+	if got := estimateTokensFromChars(0); got != 0 {
+		t.Fatalf("estimateTokensFromChars(0)=%d", got)
+	}
+	if got := estimateTokensFromChars(4); got != 1 {
+		t.Fatalf("estimateTokensFromChars(4)=%d", got)
+	}
+	if got := estimateTokensFromChars(9); got != 3 {
+		t.Fatalf("estimateTokensFromChars(9)=%d", got)
+	}
+}
+
+func TestLoadPricingInvalidPath(t *testing.T) {
+	loadPricing() // should not panic when env unset
+	if _, ok := prices["gemini-2.5-flash"]; !ok {
+		t.Fatalf("default pricing missing")
+	}
+}

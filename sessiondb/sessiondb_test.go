@@ -48,4 +48,15 @@ func TestSQLiteSessionLifecycle(t *testing.T) {
 	if got2.Session.Events().Len() != 1 {
 		t.Fatalf("events len = %d", got2.Session.Events().Len())
 	}
+	iter := got2.Session.Events().All()
+	count := 0
+	for ev := range iter {
+		if ev.Author != "a" {
+			t.Fatalf("event author = %s", ev.Author)
+		}
+		count++
+	}
+	if count != 1 {
+		t.Fatalf("iter count = %d, want 1", count)
+	}
 }
