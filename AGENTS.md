@@ -8,7 +8,7 @@
   - .agent/llms/adk-docs.xml
   - .agent/llms/go-genai.xml
   - .agent/llms/anthropic-sdk-go.xml
-  - .agent/llm/openai-go.xml
+  - .agent/llms/openai-go.xml
 
 ## Project Structure
 
