@@ -28,6 +28,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"os"
 	"os/signal"
@@ -69,6 +70,7 @@ type config struct {
 	SessionID       string
 	SessionDir      string
 	MaxRounds       uint
+	MinRounds       uint
 	Temperature     float64
 	TopP            float64
 	TopK            int
@@ -83,6 +85,9 @@ type config struct {
 	Concurrency     int
 	MaxPromptChars  int
 	MaxPromptTokens int
+	MaxCostUSD      float64
+	AutoAgents      int
+	BudgetTokens    int
 	BenchLocal      int
 	MetricsAddr     string
 	Prompt          string
@@ -150,10 +155,34 @@ func main() {
 	}
 
 	genCfg := buildGenConfig(cfg)
-	loader, err := buildTumixLoader(llm, genCfg, cfg.MaxRounds)
+	candidateCount := 15 + cfg.AutoAgents
+	if cfg.MaxCostUSD > 0 {
+		capRounds := capRoundsByBudget(cfg, candidateCount)
+		if capRounds < cfg.MinRounds {
+			capRounds = cfg.MinRounds
+		}
+		if capRounds < cfg.MaxRounds {
+			logger.Info("reducing max_rounds to respect budget", "from", cfg.MaxRounds, "to", capRounds, "max_cost_usd", cfg.MaxCostUSD)
+			cfg.MaxRounds = capRounds
+		}
+	}
+
+	loader, _, err := buildTumixLoader(llm, genCfg, cfg.MinRounds, cfg.MaxRounds, cfg.AutoAgents)
 	if err != nil {
 		logger.Error("failed to build tumix agent", "error", err)
 		os.Exit(1)
+	}
+
+	if cfg.MaxCostUSD > 0 {
+		capRounds := capRoundsByBudget(cfg, candidateCount)
+		if capRounds < cfg.MinRounds {
+			logger.Warn("budget too low for requested min_rounds; raising budget to min_rounds", "budget_round_cap", capRounds, "min_rounds", cfg.MinRounds)
+			capRounds = cfg.MinRounds
+		}
+		if capRounds < cfg.MaxRounds {
+			logger.Info("reducing max_rounds to respect budget", "from", cfg.MaxRounds, "to", capRounds, "max_cost_usd", cfg.MaxCostUSD)
+			cfg.MaxRounds = capRounds
+		}
 	}
 
 	if cfg.DryRun {
@@ -190,6 +219,7 @@ func parseConfig() (config, error) {
 		SessionID:       envOrDefault("TUMIX_SESSION", ""),
 		SessionDir:      envOrDefault("TUMIX_SESSION_DIR", ""),
 		MaxRounds:       parseUintEnv("TUMIX_MAX_ROUNDS", 3),
+		MinRounds:       parseUintEnv("TUMIX_MIN_ROUNDS", 2),
 		Temperature:     parseFloatEnv("TUMIX_TEMPERATURE", -1),
 		TopP:            parseFloatEnv("TUMIX_TOP_P", -1),
 		TopK:            int(parseUintEnv("TUMIX_TOP_K", 0)),
@@ -199,6 +229,9 @@ func parseConfig() (config, error) {
 		Concurrency:     int(parseUintEnv("TUMIX_CONCURRENCY", 1)),
 		MaxPromptChars:  int(parseUintEnv("TUMIX_MAX_PROMPT_CHARS", 8000)),
 		MaxPromptTokens: int(parseUintEnv("TUMIX_MAX_PROMPT_TOKENS", 0)),
+		MaxCostUSD:      parseFloatEnv("TUMIX_MAX_COST_USD", 0.01),
+		AutoAgents:      int(parseUintEnv("TUMIX_AUTO_AGENTS", 0)),
+		BudgetTokens:    int(parseUintEnv("TUMIX_BUDGET_TOKENS", 0)),
 	}
 
 	flag.StringVar(&cfg.ModelName, "model", cfg.ModelName, "Gemini model to use (default TUMIX_MODEL or gemini-2.5-flash)")
@@ -208,6 +241,7 @@ func parseConfig() (config, error) {
 	flag.StringVar(&cfg.SessionID, "session", cfg.SessionID, "Session ID (auto-generated if empty)")
 	flag.StringVar(&cfg.SessionDir, "session_dir", cfg.SessionDir, "Directory to persist sessions (optional, uses in-memory if empty)")
 	flag.UintVar(&cfg.MaxRounds, "max_rounds", cfg.MaxRounds, "Maximum TUMIX iterations (default 3, overridable via TUMIX_MAX_ROUNDS)")
+	flag.UintVar(&cfg.MinRounds, "min_rounds", cfg.MinRounds, "Minimum TUMIX iterations before judge can stop (default 2, TUMIX_MIN_ROUNDS)")
 	flag.Float64Var(&cfg.Temperature, "temperature", cfg.Temperature, "Sampling temperature (set <0 to leave model default; env TUMIX_TEMPERATURE)")
 	flag.Float64Var(&cfg.TopP, "top_p", cfg.TopP, "Top-p nucleus sampling (set <0 to leave model default; env TUMIX_TOP_P)")
 	flag.IntVar(&cfg.TopK, "top_k", cfg.TopK, "Top-k sampling (0 to leave default; env TUMIX_TOP_K)")
@@ -222,6 +256,9 @@ func parseConfig() (config, error) {
 	flag.IntVar(&cfg.Concurrency, "concurrency", cfg.Concurrency, "Max concurrent prompts when using -batch_file")
 	flag.IntVar(&cfg.MaxPromptChars, "max_prompt_chars", cfg.MaxPromptChars, "Fail if user prompt exceeds this many characters")
 	flag.IntVar(&cfg.MaxPromptTokens, "max_prompt_tokens", cfg.MaxPromptTokens, "Fail if estimated prompt tokens exceed this value (heuristic)")
+	flag.Float64Var(&cfg.MaxCostUSD, "max_cost_usd", cfg.MaxCostUSD, "Hard cap on estimated LLM cost per run (default $0.01, TUMIX_MAX_COST_USD)")
+	flag.IntVar(&cfg.AutoAgents, "auto_agents", cfg.AutoAgents, "Number of auto-designed agents to add (0 disables; TUMIX_AUTO_AGENTS)")
+	flag.IntVar(&cfg.BudgetTokens, "budget_tokens", cfg.BudgetTokens, "Optional per-round input token budget override (0 uses estimate)")
 	flag.IntVar(&cfg.BenchLocal, "bench_local", cfg.BenchLocal, "Run local synthetic benchmark for N iterations and exit")
 	flag.StringVar(&cfg.MetricsAddr, "metrics_addr", envOrDefault("TUMIX_METRICS_ADDR", cfg.MetricsAddr), "If set, serve /debug/vars and /healthz on this address (e.g. :9090)")
 	flag.Parse()
@@ -256,6 +293,21 @@ func parseConfig() (config, error) {
 	}
 	if cfg.MaxTokens < 0 {
 		return cfg, errors.New("max_tokens cannot be negative")
+	}
+	if cfg.MinRounds == 0 {
+		cfg.MinRounds = 1
+	}
+	if cfg.MinRounds > cfg.MaxRounds {
+		return cfg, fmt.Errorf("min_rounds (%d) cannot exceed max_rounds (%d)", cfg.MinRounds, cfg.MaxRounds)
+	}
+	if cfg.MaxCostUSD < 0 {
+		return cfg, errors.New("max_cost_usd cannot be negative")
+	}
+	if cfg.AutoAgents < 0 {
+		return cfg, errors.New("auto_agents cannot be negative")
+	}
+	if cfg.BudgetTokens < 0 {
+		return cfg, errors.New("budget_tokens cannot be negative")
 	}
 	if cfg.Concurrency < 1 {
 		cfg.Concurrency = 1
@@ -352,7 +404,7 @@ func buildGenConfig(cfg config) *genai.GenerateContentConfig {
 	return c
 }
 
-func buildTumixLoader(llm model.LLM, genCfg *genai.GenerateContentConfig, maxRounds uint) (adkagent.Loader, error) {
+func buildTumixLoader(llm model.LLM, genCfg *genai.GenerateContentConfig, minRounds, maxRounds uint, autoAgents int) (adkagent.Loader, int, error) {
 	builders := []func(model.LLM, *genai.GenerateContentConfig) (adkagent.Agent, error){
 		tumixagent.NewBaseAgent,
 		tumixagent.NewCoTAgent,
@@ -366,22 +418,40 @@ func buildTumixLoader(llm model.LLM, genCfg *genai.GenerateContentConfig, maxRou
 		tumixagent.NewGuidedGSAgent,
 		tumixagent.NewGuidedLLMAgent,
 		tumixagent.NewGuidedComAgent,
+		tumixagent.NewGuidedPlusGSAgent,
+		tumixagent.NewGuidedPlusLLMAgent,
+		tumixagent.NewGuidedPlusComAgent,
 	}
 
 	var candidates []adkagent.Agent
 	for _, builder := range builders {
 		a, err := builder(llm, genCfg)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		candidates = append(candidates, a)
 	}
-	judge, err := tumixagent.NewJudgeAgent(llm, genCfg)
-	if err != nil {
-		return nil, err
+
+	if autoAgents > 0 {
+		auto, err := tumixagent.NewAutoAgents(llm, genCfg, autoAgents)
+		if err != nil {
+			return nil, 0, err
+		}
+		candidates = append(candidates, auto...)
 	}
 
-	return tumixagent.NewTumixAgentWithMaxRounds(candidates, judge, maxRounds)
+	judge, err := tumixagent.NewJudgeAgent(llm, genCfg)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	loader, err := tumixagent.NewTumixAgentWithConfig(tumixagent.TumixConfig{
+		Candidates: candidates,
+		Judge:      judge,
+		MaxRounds:  maxRounds,
+		MinRounds:  minRounds,
+	})
+	return loader, len(candidates), err
 }
 
 func runOnce(ctx context.Context, cfg config, loader adkagent.Loader) error {
@@ -678,6 +748,41 @@ func estimateCost(modelName string, inputTokens, outputTokens int) float64 {
 	return (float64(inputTokens)/1000.0)*p.inUSDPerKT + (float64(outputTokens)/1000.0)*p.outUSDPerKT
 }
 
+func capRoundsByBudget(cfg config, candidates int) uint {
+	if cfg.MaxCostUSD <= 0 {
+		return cfg.MaxRounds
+	}
+	if candidates <= 0 {
+		candidates = 1
+	}
+	// Rough, conservative token estimates.
+	inputTokens := cfg.BudgetTokens
+	if inputTokens == 0 {
+		if cfg.MaxPromptTokens > 0 {
+			inputTokens = cfg.MaxPromptTokens
+		} else {
+			inputTokens = estimateTokensFromChars(len(cfg.Prompt))
+		}
+	}
+	if inputTokens < 1 {
+		inputTokens = 1
+	}
+	outputTokens := cfg.MaxTokens
+	if outputTokens <= 0 {
+		outputTokens = 256
+	}
+	perCall := estimateCost(cfg.ModelName, inputTokens, outputTokens)
+	roundCost := perCall * float64(candidates+1) // candidates plus judge
+	if roundCost <= 0 {
+		return cfg.MaxRounds
+	}
+	capRounds := uint(math.Floor(cfg.MaxCostUSD / roundCost))
+	if capRounds < 1 {
+		capRounds = 1
+	}
+	return capRounds
+}
+
 func loadPricing() {
 	path := os.Getenv("TUMIX_PRICING_FILE")
 	if path == "" {
@@ -723,6 +828,7 @@ func printConfig(cfg config) {
 	out := map[string]any{
 		"model":             cfg.ModelName,
 		"max_rounds":        cfg.MaxRounds,
+		"min_rounds":        cfg.MinRounds,
 		"temperature":       cfg.Temperature,
 		"top_p":             cfg.TopP,
 		"top_k":             cfg.TopK,
@@ -734,6 +840,9 @@ func printConfig(cfg config) {
 		"otlp_endpoint":     cfg.OTLPEndpoint,
 		"batch_file":        cfg.BatchFile,
 		"concurrency":       cfg.Concurrency,
+		"max_cost_usd":      cfg.MaxCostUSD,
+		"auto_agents":       cfg.AutoAgents,
+		"budget_tokens":     cfg.BudgetTokens,
 		"metrics_addr":      cfg.MetricsAddr,
 		"max_prompt_tokens": cfg.MaxPromptTokens,
 	}
