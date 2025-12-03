@@ -24,6 +24,7 @@ import (
 	"context"
 	json "encoding/json/v2"
 	"errors"
+	"expvar"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -60,29 +61,31 @@ import (
 )
 
 type config struct {
-	AppName        string
-	ModelName      string
-	APIKey         string
-	TraceHTTP      bool
-	UserID         string
-	SessionID      string
-	SessionDir     string
-	MaxRounds      uint
-	Temperature    float64
-	TopP           float64
-	TopK           int
-	MaxTokens      int
-	Seed           int64
-	OutputJSON     bool
-	DryRun         bool
-	LogJSON        bool
-	OTLPEndpoint   string
-	CallWarn       int
-	BatchFile      string
-	Concurrency    int
-	MaxPromptChars int
-	BenchLocal     int
-	Prompt         string
+	AppName         string
+	ModelName       string
+	APIKey          string
+	TraceHTTP       bool
+	UserID          string
+	SessionID       string
+	SessionDir      string
+	MaxRounds       uint
+	Temperature     float64
+	TopP            float64
+	TopK            int
+	MaxTokens       int
+	Seed            int64
+	OutputJSON      bool
+	DryRun          bool
+	LogJSON         bool
+	OTLPEndpoint    string
+	CallWarn        int
+	BatchFile       string
+	Concurrency     int
+	MaxPromptChars  int
+	MaxPromptTokens int
+	BenchLocal      int
+	MetricsAddr     string
+	Prompt          string
 }
 
 var (
@@ -92,6 +95,7 @@ var (
 		"gemini-2.5-flash": {inUSDPerKT: 0.00015, outUSDPerKT: 0.0006},
 		"gemini-2.5-pro":   {inUSDPerKT: 0.00125, outUSDPerKT: 0.0050},
 	}
+	pricingLoaded    bool
 	meter            metric.Meter
 	requestCounter   metric.Int64Counter
 	inputTokCounter  metric.Int64Counter
@@ -105,6 +109,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "config error: %v\n", err)
 		os.Exit(2)
 	}
+	loadPricing()
 
 	var handler slog.Handler = slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})
 	if cfg.LogJSON {
@@ -120,6 +125,9 @@ func main() {
 	}
 	defer shutdownTrace()
 	initMetrics()
+	if cfg.MetricsAddr != "" {
+		go serveMetrics(cfg.MetricsAddr)
+	}
 
 	httpClient := newHTTPClient(cfg.TraceHTTP)
 	llm, err := buildModel(ctx, cfg, httpClient)
@@ -160,22 +168,23 @@ func main() {
 
 func parseConfig() (config, error) {
 	cfg := config{
-		AppName:        "tumix",
-		ModelName:      envOrDefault("TUMIX_MODEL", "gemini-2.5-flash"),
-		APIKey:         os.Getenv("GOOGLE_API_KEY"),
-		TraceHTTP:      parseBoolEnv("TUMIX_HTTP_TRACE"),
-		UserID:         envOrDefault("TUMIX_USER", "user"),
-		SessionID:      envOrDefault("TUMIX_SESSION", ""),
-		SessionDir:     envOrDefault("TUMIX_SESSION_DIR", ""),
-		MaxRounds:      parseUintEnv("TUMIX_MAX_ROUNDS", 3),
-		Temperature:    parseFloatEnv("TUMIX_TEMPERATURE", -1),
-		TopP:           parseFloatEnv("TUMIX_TOP_P", -1),
-		TopK:           int(parseUintEnv("TUMIX_TOP_K", 0)),
-		MaxTokens:      int(parseUintEnv("TUMIX_MAX_TOKENS", 0)),
-		Seed:           int64(parseUintEnv("TUMIX_SEED", 0)),
-		CallWarn:       int(parseUintEnv("TUMIX_CALL_WARN", 300)),
-		Concurrency:    int(parseUintEnv("TUMIX_CONCURRENCY", 1)),
-		MaxPromptChars: int(parseUintEnv("TUMIX_MAX_PROMPT_CHARS", 8000)),
+		AppName:         "tumix",
+		ModelName:       envOrDefault("TUMIX_MODEL", "gemini-2.5-flash"),
+		APIKey:          os.Getenv("GOOGLE_API_KEY"),
+		TraceHTTP:       parseBoolEnv("TUMIX_HTTP_TRACE"),
+		UserID:          envOrDefault("TUMIX_USER", "user"),
+		SessionID:       envOrDefault("TUMIX_SESSION", ""),
+		SessionDir:      envOrDefault("TUMIX_SESSION_DIR", ""),
+		MaxRounds:       parseUintEnv("TUMIX_MAX_ROUNDS", 3),
+		Temperature:     parseFloatEnv("TUMIX_TEMPERATURE", -1),
+		TopP:            parseFloatEnv("TUMIX_TOP_P", -1),
+		TopK:            int(parseUintEnv("TUMIX_TOP_K", 0)),
+		MaxTokens:       int(parseUintEnv("TUMIX_MAX_TOKENS", 0)),
+		Seed:            int64(parseUintEnv("TUMIX_SEED", 0)),
+		CallWarn:        int(parseUintEnv("TUMIX_CALL_WARN", 300)),
+		Concurrency:     int(parseUintEnv("TUMIX_CONCURRENCY", 1)),
+		MaxPromptChars:  int(parseUintEnv("TUMIX_MAX_PROMPT_CHARS", 8000)),
+		MaxPromptTokens: int(parseUintEnv("TUMIX_MAX_PROMPT_TOKENS", 0)),
 	}
 
 	flag.StringVar(&cfg.ModelName, "model", cfg.ModelName, "Gemini model to use (default TUMIX_MODEL or gemini-2.5-flash)")
@@ -198,7 +207,9 @@ func parseConfig() (config, error) {
 	flag.StringVar(&cfg.BatchFile, "batch_file", cfg.BatchFile, "Optional file with one prompt per line for batch processing")
 	flag.IntVar(&cfg.Concurrency, "concurrency", cfg.Concurrency, "Max concurrent prompts when using -batch_file")
 	flag.IntVar(&cfg.MaxPromptChars, "max_prompt_chars", cfg.MaxPromptChars, "Fail if user prompt exceeds this many characters")
+	flag.IntVar(&cfg.MaxPromptTokens, "max_prompt_tokens", cfg.MaxPromptTokens, "Fail if estimated prompt tokens exceed this value (heuristic)")
 	flag.IntVar(&cfg.BenchLocal, "bench_local", cfg.BenchLocal, "Run local synthetic benchmark for N iterations and exit")
+	flag.StringVar(&cfg.MetricsAddr, "metrics_addr", envOrDefault("TUMIX_METRICS_ADDR", cfg.MetricsAddr), "If set, serve /debug/vars and /healthz on this address (e.g. :9090)")
 	flag.Parse()
 
 	cfg.Prompt = strings.TrimSpace(strings.Join(flag.Args(), " "))
@@ -207,6 +218,12 @@ func parseConfig() (config, error) {
 	}
 	if cfg.MaxPromptChars > 0 && len(cfg.Prompt) > cfg.MaxPromptChars {
 		return cfg, fmt.Errorf("prompt length %d exceeds max_prompt_chars %d", len(cfg.Prompt), cfg.MaxPromptChars)
+	}
+	if cfg.MaxPromptTokens > 0 {
+		est := estimateTokensFromChars(len(cfg.Prompt))
+		if est > cfg.MaxPromptTokens {
+			return cfg, fmt.Errorf("prompt token estimate %d exceeds max_prompt_tokens %d", est, cfg.MaxPromptTokens)
+		}
 	}
 	if cfg.APIKey == "" {
 		return cfg, errors.New("GOOGLE_API_KEY must be set")
@@ -527,6 +544,25 @@ func initMetrics() {
 	costCounter, _ = meter.Float64Counter("tumix.cost_usd")
 }
 
+func serveMetrics(addr string) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
+	mux.Handle("/debug/vars", expvar.Handler())
+	go func() {
+		if err := http.ListenAndServe(addr, mux); err != nil {
+			log.FromContext(context.Background()).Warn("metrics server stopped", "error", err)
+		}
+	}()
+}
+
+func estimateTokensFromChars(n int) int {
+	// crude heuristic ~4 chars per token
+	if n <= 0 {
+		return 0
+	}
+	return (n + 3) / 4
+}
+
 func benchLocal(cfg config) {
 	start := time.Now()
 	var wg sync.WaitGroup
@@ -575,6 +611,31 @@ func estimateCost(modelName string, inputTokens, outputTokens int) float64 {
 	return (float64(inputTokens)/1000.0)*p.inUSDPerKT + (float64(outputTokens)/1000.0)*p.outUSDPerKT
 }
 
+func loadPricing() {
+	path := os.Getenv("TUMIX_PRICING_FILE")
+	if path == "" {
+		pricingLoaded = true
+		return
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		log.FromContext(context.Background()).Warn("pricing file read failed", "error", err)
+		return
+	}
+	tmp := map[string]struct {
+		In  float64 `json:"in_per_kt"`
+		Out float64 `json:"out_per_kt"`
+	}{}
+	if err := json.Unmarshal(b, &tmp); err != nil {
+		log.FromContext(context.Background()).Warn("pricing file parse failed", "error", err)
+		return
+	}
+	for k, v := range tmp {
+		prices[k] = struct{ inUSDPerKT, outUSDPerKT float64 }{inUSDPerKT: v.In, outUSDPerKT: v.Out}
+	}
+	pricingLoaded = true
+}
+
 func recordUsage(event *session.Event, modelName string) (int64, int64) {
 	if event == nil || event.UsageMetadata == nil {
 		return 0, 0
@@ -590,19 +651,21 @@ func recordUsage(event *session.Event, modelName string) (int64, int64) {
 
 func printConfig(cfg config) {
 	out := map[string]any{
-		"model":         cfg.ModelName,
-		"max_rounds":    cfg.MaxRounds,
-		"temperature":   cfg.Temperature,
-		"top_p":         cfg.TopP,
-		"top_k":         cfg.TopK,
-		"max_tokens":    cfg.MaxTokens,
-		"seed":          cfg.Seed,
-		"session_dir":   cfg.SessionDir,
-		"http_trace":    cfg.TraceHTTP,
-		"log_json":      cfg.LogJSON,
-		"otlp_endpoint": cfg.OTLPEndpoint,
-		"batch_file":    cfg.BatchFile,
-		"concurrency":   cfg.Concurrency,
+		"model":             cfg.ModelName,
+		"max_rounds":        cfg.MaxRounds,
+		"temperature":       cfg.Temperature,
+		"top_p":             cfg.TopP,
+		"top_k":             cfg.TopK,
+		"max_tokens":        cfg.MaxTokens,
+		"seed":              cfg.Seed,
+		"session_dir":       cfg.SessionDir,
+		"http_trace":        cfg.TraceHTTP,
+		"log_json":          cfg.LogJSON,
+		"otlp_endpoint":     cfg.OTLPEndpoint,
+		"batch_file":        cfg.BatchFile,
+		"concurrency":       cfg.Concurrency,
+		"metrics_addr":      cfg.MetricsAddr,
+		"max_prompt_tokens": cfg.MaxPromptTokens,
 	}
 	data, _ := json.Marshal(out)
 	fmt.Fprintln(os.Stdout, string(data))
