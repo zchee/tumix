@@ -10,6 +10,7 @@ HTTP client tracing is off by default to minimize overhead. Set `TUMIX_HTTP_TRAC
 
 - `-model` (default `gemini-2.5-flash`)
 - `-max_rounds` (default 3; higher improves quality, raises cost)
+- `-min_rounds` (default 2; judge cannot stop before this)
 - `-temperature` / `-top_p` / `-top_k` / `-max_tokens` / `-seed`
 - `-json` (emit final answer as JSON on stdout)
 - `-session_dir` (persist sessions to disk; default in-memory)
@@ -17,6 +18,9 @@ HTTP client tracing is off by default to minimize overhead. Set `TUMIX_HTTP_TRAC
 - `-batch_file` with `-concurrency` (one prompt per line)
 - `-http_trace` (enable HTTP spans)
 - `-otlp_endpoint` (export traces)
+- `-max_cost_usd` (default 0.01; per-run budget, caps rounds)
+- `-auto_agents` (add N auto-designed agents for diversity)
+- `-budget_tokens` (override per-call prompt token estimate for budgeting)
 - `-bench_local` to run synthetic local benchmark (no LLM calls)
 - `-max_prompt_chars` to fail fast on oversized prompts
 - `-max_prompt_tokens` tokenizer-backed guard (CountTokens) with heuristic fallback; pricing override via `TUMIX_PRICING_FILE`
