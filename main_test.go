@@ -120,3 +120,22 @@ func TestEnforcePromptTokensWithCounterRejects(t *testing.T) {
 		t.Fatalf("expected error when tokens exceed limit")
 	}
 }
+
+func TestCapRoundsByBudget(t *testing.T) {
+	cfg := config{
+		ModelName:       "gemini-2.5-flash",
+		MaxCostUSD:      0.01,
+		MaxRounds:       6,
+		MinRounds:       2,
+		MaxTokens:       128,
+		MaxPromptTokens: 200,
+		Prompt:          "hello",
+	}
+	cap := capRoundsByBudget(cfg, 15)
+	if cap < 1 {
+		t.Fatalf("cap must be >=1, got %d", cap)
+	}
+	if cap > cfg.MaxRounds {
+		t.Fatalf("cap should not exceed max_rounds: %d > %d", cap, cfg.MaxRounds)
+	}
+}
