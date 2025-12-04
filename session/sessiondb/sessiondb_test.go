@@ -27,7 +27,7 @@ func TestSQLiteSessionLifecycle(t *testing.T) {
 	t.Parallel()
 
 	dbPath := t.TempDir() + "/sessions.db"
-	svc, err := Service(dbPath)
+	svc, err := Service(context.Background(), dbPath)
 	if err != nil {
 		t.Fatalf("Service error: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestSQLiteSessionLifecycle(t *testing.T) {
 		t.Fatalf("AppendEvent: %v", err)
 	}
 
-	svc2, err := Service(dbPath)
+	svc2, err := Service(context.Background(), dbPath)
 	if err != nil {
 		t.Fatalf("Service reload: %v", err)
 	}

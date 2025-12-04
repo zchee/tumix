@@ -44,7 +44,7 @@ func Service(dir string) (session.Service, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("sessionfs: mkdir %s: %w", dir, err)
 	}
-	lockFile, err := os.OpenFile(filepath.Join(dir, "sessions.lock"), os.O_CREATE|os.O_RDWR, 0o644)
+	lockFile, err := os.OpenFile(filepath.Join(dir, "sessions.lock"), os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("sessionfs: lock file: %w", err)
 	}
@@ -261,9 +261,7 @@ func (f *fileService) AppendEvent(_ context.Context, sess session.Session, ev *s
 	}
 
 	trimmed := trimTemp(ev)
-	if err := applyState(ps, trimmed); err != nil {
-		return err
-	}
+	applyState(ps, trimmed)
 	ps.Events = append(ps.Events, trimmed)
 	ps.UpdatedAt = trimmed.Timestamp
 
@@ -290,7 +288,10 @@ func (f *fileService) load() error {
 	if len(data) == 0 {
 		return nil
 	}
-	return json.Unmarshal(data, &f.sessions)
+	if err := json.Unmarshal(data, &f.sessions); err != nil {
+		return fmt.Errorf("sessionfs: unmarshal sessions: %w", err)
+	}
+	return nil
 }
 
 func (f *fileService) saveLocked() error {
@@ -300,10 +301,13 @@ func (f *fileService) saveLocked() error {
 	if err != nil {
 		return fmt.Errorf("sessionfs: marshal: %w", err)
 	}
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
 		return fmt.Errorf("sessionfs: write tmp: %w", err)
 	}
-	return os.Rename(tmp, dataPath)
+	if err := os.Rename(tmp, dataPath); err != nil {
+		return fmt.Errorf("sessionfs: rename: %w", err)
+	}
+	return nil
 }
 
 func trimTemp(ev *session.Event) *session.Event {
@@ -320,9 +324,9 @@ func trimTemp(ev *session.Event) *session.Event {
 	return ev
 }
 
-func applyState(ps *persistSession, ev *session.Event) error {
+func applyState(ps *persistSession, ev *session.Event) {
 	if ev.Actions.StateDelta == nil {
-		return nil
+		return
 	}
 	if ps.State == nil {
 		ps.State = make(map[string]any)
@@ -333,7 +337,6 @@ func applyState(ps *persistSession, ev *session.Event) error {
 		}
 		ps.State[k] = v
 	}
-	return nil
 }
 
 var _ session.Service = (*fileService)(nil)

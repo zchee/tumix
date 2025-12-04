@@ -103,7 +103,7 @@ func TestEnforcePromptTokensWithCounter(t *testing.T) {
 		callCount++
 		return &genai.CountTokensResponse{TotalTokens: 5}, nil
 	}
-	if err := enforcePromptTokensWithCounter(context.Background(), cfg, counter); err != nil {
+	if err := enforcePromptTokensWithCounter(context.Background(), &cfg, counter); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if callCount != 1 {
@@ -116,7 +116,7 @@ func TestEnforcePromptTokensWithCounterRejects(t *testing.T) {
 	counter := func(ctx context.Context, model string, contents []*genai.Content, config *genai.CountTokensConfig) (*genai.CountTokensResponse, error) {
 		return &genai.CountTokensResponse{TotalTokens: 10}, nil
 	}
-	if err := enforcePromptTokensWithCounter(context.Background(), cfg, counter); err == nil {
+	if err := enforcePromptTokensWithCounter(context.Background(), &cfg, counter); err == nil {
 		t.Fatalf("expected error when tokens exceed limit")
 	}
 }
@@ -131,11 +131,11 @@ func TestCapRoundsByBudget(t *testing.T) {
 		MaxPromptTokens: 200,
 		Prompt:          "hello",
 	}
-	cap := capRoundsByBudget(cfg, 15)
-	if cap < 1 {
-		t.Fatalf("cap must be >=1, got %d", cap)
+	roundCap := capRoundsByBudget(&cfg, 15)
+	if roundCap < 1 {
+		t.Fatalf("cap must be >=1, got %d", roundCap)
 	}
-	if cap > cfg.MaxRounds {
-		t.Fatalf("cap should not exceed max_rounds: %d > %d", cap, cfg.MaxRounds)
+	if roundCap > cfg.MaxRounds {
+		t.Fatalf("cap should not exceed max_rounds: %d > %d", roundCap, cfg.MaxRounds)
 	}
 }

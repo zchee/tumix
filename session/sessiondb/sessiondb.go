@@ -35,7 +35,7 @@ import (
 )
 
 // Service returns a sqlite-backed session.Service stored at file path.
-func Service(path string) (session.Service, error) {
+func Service(ctx context.Context, path string) (session.Service, error) {
 	if path == "" {
 		return nil, errors.New("sessiondb: path required")
 	}
@@ -44,13 +44,13 @@ func Service(path string) (session.Service, error) {
 	}
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("sessiondb: open sqlite: %w", err)
 	}
-	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS sessions (
+	if _, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS sessions (
 		key TEXT PRIMARY KEY,
 		blob BLOB NOT NULL
 	)`); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("sessiondb: create table: %w", err)
 	}
 	return &store{db: db}, nil
 }
@@ -73,7 +73,7 @@ func (s *store) key(app, user, sessionID string) string {
 	return fmt.Sprintf("%s/%s/%s", app, user, sessionID)
 }
 
-func (s *store) Create(_ context.Context, req *session.CreateRequest) (*session.CreateResponse, error) {
+func (s *store) Create(ctx context.Context, req *session.CreateRequest) (*session.CreateResponse, error) {
 	if req.AppName == "" || req.UserID == "" {
 		return nil, errors.New("sessiondb: app_name and user_id required")
 	}
@@ -93,64 +93,69 @@ func (s *store) Create(_ context.Context, req *session.CreateRequest) (*session.
 	if req.State != nil {
 		ps.State = req.State
 	}
-	if err := s.put(k, ps, true); err != nil {
+	if err := s.put(ctx, k, ps, true); err != nil {
 		return nil, err
 	}
 	return &session.CreateResponse{Session: &dbSession{s: ps}}, nil
 }
 
-func (s *store) Get(_ context.Context, req *session.GetRequest) (*session.GetResponse, error) {
-	ps, err := s.load(req.AppName, req.UserID, req.SessionID)
+func (s *store) Get(ctx context.Context, req *session.GetRequest) (*session.GetResponse, error) {
+	ps, err := s.load(ctx, req.AppName, req.UserID, req.SessionID)
 	if err != nil {
 		return nil, err
 	}
 	return &session.GetResponse{Session: &dbSession{s: ps}}, nil
 }
 
-func (s *store) List(_ context.Context, req *session.ListRequest) (*session.ListResponse, error) {
+func (s *store) List(ctx context.Context, req *session.ListRequest) (*session.ListResponse, error) {
 	if req.AppName == "" {
 		return nil, errors.New("sessiondb: app_name required")
 	}
-	rows, err := s.db.Query(`SELECT blob FROM sessions WHERE key LIKE ?`, req.AppName+"/%")
+	rows, err := s.db.QueryContext(ctx, `SELECT blob FROM sessions WHERE key LIKE ?`, req.AppName+"/%")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("sessiondb: list query: %w", err)
 	}
 	defer rows.Close()
 	var sessions []session.Session
 	for rows.Next() {
 		var b []byte
 		if err := rows.Scan(&b); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("sessiondb: scan: %w", err)
 		}
 		ps := &persistSession{}
 		if err := json.Unmarshal(b, ps); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("sessiondb: unmarshal session: %w", err)
 		}
 		if req.UserID != "" && ps.UserID != req.UserID {
 			continue
 		}
 		sessions = append(sessions, &dbSession{s: ps})
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("sessiondb: iterate rows: %w", err)
+	}
 	return &session.ListResponse{Sessions: sessions}, nil
 }
 
-func (s *store) Delete(_ context.Context, req *session.DeleteRequest) error {
+func (s *store) Delete(ctx context.Context, req *session.DeleteRequest) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_, err := s.db.Exec(`DELETE FROM sessions WHERE key = ?`, s.key(req.AppName, req.UserID, req.SessionID))
-	return err
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE key = ?`, s.key(req.AppName, req.UserID, req.SessionID)); err != nil {
+		return fmt.Errorf("sessiondb: delete: %w", err)
+	}
+	return nil
 }
 
-func (s *store) AppendEvent(_ context.Context, sess session.Session, ev *session.Event) error {
+func (s *store) AppendEvent(ctx context.Context, sess session.Session, ev *session.Event) error {
 	if ev == nil || sess == nil {
 		return errors.New("sessiondb: event and session required")
 	}
 	if ev.Partial {
 		return nil
 	}
-	ps, err := s.load(sess.AppName(), sess.UserID(), sess.ID())
+	ps, err := s.load(ctx, sess.AppName(), sess.UserID(), sess.ID())
 	if err != nil {
-		return err
+		return fmt.Errorf("sessiondb: load session: %w", err)
 	}
 	if ps.State == nil {
 		ps.State = make(map[string]any)
@@ -163,36 +168,38 @@ func (s *store) AppendEvent(_ context.Context, sess session.Session, ev *session
 	}
 	ps.Events = append(ps.Events, ev)
 	ps.UpdatedAt = ev.Timestamp
-	return s.put(s.key(ps.AppName, ps.UserID, ps.SessionID), ps, false)
+	return s.put(ctx, s.key(ps.AppName, ps.UserID, ps.SessionID), ps, false)
 }
 
 // helpers
 
-func (s *store) put(key string, ps *persistSession, failIfExists bool) error {
+func (s *store) put(ctx context.Context, key string, ps *persistSession, failIfExists bool) error {
 	b, err := json.Marshal(ps)
 	if err != nil {
-		return err
+		return fmt.Errorf("sessiondb: marshal: %w", err)
 	}
 	op := "INSERT OR REPLACE"
 	if failIfExists {
 		op = "INSERT"
 	}
-	_, err = s.db.Exec(op+` INTO sessions(key, blob) VALUES(?,?)`, key, b)
-	return err
+	if _, err := s.db.ExecContext(ctx, op+` INTO sessions(key, blob) VALUES(?,?)`, key, b); err != nil {
+		return fmt.Errorf("sessiondb: upsert: %w", err)
+	}
+	return nil
 }
 
-func (s *store) load(app, user, sid string) (*persistSession, error) {
+func (s *store) load(ctx context.Context, app, user, sid string) (*persistSession, error) {
 	if app == "" || user == "" || sid == "" {
 		return nil, errors.New("sessiondb: app/user/session required")
 	}
-	row := s.db.QueryRow(`SELECT blob FROM sessions WHERE key = ?`, s.key(app, user, sid))
+	row := s.db.QueryRowContext(ctx, `SELECT blob FROM sessions WHERE key = ?`, s.key(app, user, sid))
 	var b []byte
 	if err := row.Scan(&b); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("sessiondb: scan row: %w", err)
 	}
 	ps := &persistSession{}
 	if err := json.Unmarshal(b, ps); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("sessiondb: unmarshal session: %w", err)
 	}
 	return ps, nil
 }
