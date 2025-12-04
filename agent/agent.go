@@ -107,14 +107,14 @@ func getState(ctx agent.InvocationContext, key string) (any, error) {
 	return val, nil
 }
 
-const sharedContext = `**TUMIX shared context**
+var sharedContext = `**TUMIX shared context**
 - Round: {round_num}
 - Question: {question}
 - Vote margin (0-1): {vote_margin?}; Unique answers: {unique_answers?}; Coverage: {coverage?}; Entropy: {answer_entropy?}
 - Previous answers (may be empty):
 {joined_answers?}
 
-Use the shared context to refine your reasoning. Continue producing an explicit answer enclosed in «< and »>.`
+Use the shared context to refine your reasoning. Continue producing an explicit answer enclosed in ` + code(`<<<`) + ` and ` + code(`>>>`) + `.`
 
 func applySharedContext(cfg *llmagent.Config) {
 	cfg.GlobalInstruction = sharedContext
@@ -251,7 +251,7 @@ During the thinking process, **you can generate python code** for efficient sear
 with ` + "```" + `python. **A code query must involve only a single script that uses ‘print’
 function for the output.**. Once the code script is complete, stop the generation. Then, the code
 interpreter platform will execute the code and return the execution output and error. Once you feel you are
-ready for the final answer, directly return the answer with the format <<<answer content>>> at the end
+ready for the final answer, directly return the answer with the format ` + code(`<<<answer content>>>`) + ` at the end
 of your response. Otherwise, you can continue your reasoning process and possibly generate more code
 query to solve the problem.`,
 	}
@@ -283,7 +283,7 @@ During the thinking process, **you can generate python code** for efficient sear
 with ` + "```" + `python. **A code query must involve only a single script that uses ‘print’
 function for the output.**. Once the code script is complete, stop the generation. Then, the code
 interpreter platform will execute the code and return the execution output and error. Once you feel you are
-ready for the final answer, directly return the answer with the format <<<answer content>>> at the end
+ready for the final answer, directly return the answer with the format ` + code(`<<<answer content>>>`) + ` at the end
 of your response. Otherwise, you can continue your reasoning process and possibly generate more code
 query to solve the problem.`,
 	}
@@ -326,7 +326,7 @@ generation. Then, the search platform will return the searched results.
 If you need to search the web, **do not generate code in the same response. Vice versa**. You can also solve
 the question without code and searching, just by your textual reasoning.
 
-Once you feel you are ready for the final answer, directly return the answer with the format ` + code(`«<answer content»>`) + `
+Once you feel you are ready for the final answer, directly return the answer with the format ` + code(`<<<answer content>>>`) + `
 at the end of your response. Otherwise, you can continue your reasoning process and possibly
 generate more code or search queries to solve the problem.`,
 	}
@@ -369,7 +369,7 @@ generation. Then, the search platform will return the searched results.
 If you need to search the web, **do not generate code in the same response. Vice versa**. You can also solve
 the question without code and searching, just by your textual reasoning.
 
-Once you feel you are ready for the final answer, directly return the answer with the format ` + code(`«<answer content»>`) + `
+Once you feel you are ready for the final answer, directly return the answer with the format ` + code(`<<<answer content>>>`) + `
 at the end of your response. Otherwise, you can continue your reasoning process and possibly
 generate more code or search queries to solve the problem.`,
 	}
@@ -412,7 +412,7 @@ generation. Then, the search platform will return the searched results.
 If you need to search the web, **do not generate code in the same response. Vice versa**. You can also solve
 the question without code and searching, just by your textual reasoning.
 
-Once you feel you are ready for the final answer, directly return the answer with the format ` + code(`«<answer content»>`) + `
+Once you feel you are ready for the final answer, directly return the answer with the format ` + code(`<<<answer content>>>`) + `
 at the end of your response. Otherwise, you can continue your reasoning process and possibly
 generate more code or search queries to solve the problem.`,
 	}
@@ -457,13 +457,13 @@ generation. Then, the search platform will return the searched results.
 If you need to search the web, **do not generate code in the same response. Vice versa.** You can also solve
 the question without code and searching, just by your textual reasoning.
 
-Once you feel you are ready for the final answer, directly return the answer with the format ` + code(`«<answer content»>`) + `
+Once you feel you are ready for the final answer, directly return the answer with the format ` + code(`<<<answer content>>>`) + `
 at the end of your response. Otherwise, you can continue your reasoning process and possibly
 generate more code or search queries to solve the problem.
 
 **Your goal is to determine which method will be most effective for solving the task.** Then you generate
 the guidance prompt for the TaskLLM to follow in the next round. The final returned guidance prompt
-should be included between ` + code(`«<`) + ` and ` + code(`»>`) + `, such as ` + code(`«<You need to generate more complex code to solve...»>`) + `.
+should be included between ` + code(`<<<`) + ` and ` + code(`>>>`) + `, such as ` + code(`<<<You need to generate more complex code to solve...>>>`) + `.
 Now, here is the task:`,
 	}
 
@@ -507,13 +507,13 @@ generation. Then, the search platform will return the searched results.
 If you need to search the web, **do not generate code in the same response. Vice versa.** You can also solve
 the question without code and searching, just by your textual reasoning.
 
-Once you feel you are ready for the final answer, directly return the answer with the format ` + code(`«<answer content»>`) + `
+Once you feel you are ready for the final answer, directly return the answer with the format ` + code(`<<<answer content>>>`) + `
 at the end of your response. Otherwise, you can continue your reasoning process and possibly
 generate more code or search queries to solve the problem.
 
 **Your goal is to determine which method will be most effective for solving the task.** Then you generate
 the guidance prompt for the TaskLLM to follow in the next round. The final returned guidance prompt
-should be included between ` + code(`«<`) + ` and ` + code(`»>`) + `, such as ` + code(`«<You need to generate more complex code to solve...»>`) + `.
+should be included between ` + code(`<<<`) + ` and ` + code(`>>>`) + `, such as ` + code(`<<<You need to generate more complex code to solve...>>>`) + `.
 Now, here is the task:`,
 	}
 
@@ -557,13 +557,13 @@ generation. Then, the search platform will return the searched results.
 If you need to search the web, **do not generate code in the same response. Vice versa.** You can also solve
 the question without code and searching, just by your textual reasoning.
 
-Once you feel you are ready for the final answer, directly return the answer with the format ` + code(`«<answer content»>`) + `
+Once you feel you are ready for the final answer, directly return the answer with the format ` + code(`<<<answer content>>>`) + `
 at the end of your response. Otherwise, you can continue your reasoning process and possibly
 generate more code or search queries to solve the problem.
 
 **Your goal is to determine which method will be most effective for solving the task.** Then you generate
 the guidance prompt for the TaskLLM to follow in the next round. The final returned guidance prompt
-should be included between ` + code(`«<`) + ` and ` + code(`»>`) + `, such as ` + code(`«<You need to generate more complex code to solve...»>`) + `.
+should be included between ` + code(`<<<`) + ` and ` + code(`>>>`) + `, such as ` + code(`<<<You need to generate more complex code to solve...>>>`) + `.
 Now, here is the task:`,
 	}
 
@@ -591,11 +591,11 @@ func NewGuidedPlusGSAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (a
 
 Priority rules:
 - Prefer code when arithmetic/symbolic reasoning is involved; isolate a single python block with print outputs.
-- Prefer search when facts/dates/entities are uncertain; emit exactly one <search>query</search> per turn.
+- Prefer search when facts/dates/entities are uncertain; emit exactly one ` + code(`<search>query</search>`) + ` per turn.
 - Never mix code and search in the same turn.
 - Keep guidance concise: 1–3 bullet steps plus a concrete next action.
 
-When ready, output the guidance between «< and »>, e.g., «<Run a short Python script to factor the polynomial, then verify with a quick search.>».`,
+When ready, output the guidance between ` + code(`<<<`) + ` and ` + code(`>>>`) + `, e.g.,` + code(`<<<Run a short Python script to factor the polynomial, then verify with a quick search.>>>`) + `.`,
 	}
 
 	applySharedContext(&cfg)
@@ -653,7 +653,7 @@ func NewGuidedPlusComAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (
 
 Priority rules mirror Guided+gs/llm: choose code for computation, search for facts, never mix both in one turn, keep one action per turn, and provide crisp bullets.
 
-Return guidance between «< and »>.`,
+Return guidance between ` + code(`<<<`) + ` and ` + code(`>>>`) + `.`,
 	}
 
 	applySharedContext(&cfg)
@@ -809,7 +809,7 @@ Instructions:
 2. Choose the best current answer (copy verbatim); call finalize exactly once with answer, confidence 0-1, stop=true only when conditions met.
 3. If not safe to stop, call finalize with stop=false.
 
-End with ` + code(`«<YES»>`) + ` when you set stop=true, else ` + code(`«<NO»>`) + `.`,
+End with ` + code(`<<<YES>>>`) + ` when you set stop=true, else ` + code(`<<<NO>>>`) + `.`,
 	}
 
 	applySharedContext(&cfg)
