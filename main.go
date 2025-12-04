@@ -159,10 +159,7 @@ func run() int {
 	genCfg := buildGenConfig(&cfg)
 	candidateCount := 15 + cfg.AutoAgents
 	if cfg.MaxCostUSD > 0 {
-		capRounds := capRoundsByBudget(&cfg, candidateCount)
-		if capRounds < cfg.MinRounds {
-			capRounds = cfg.MinRounds
-		}
+		capRounds := max(capRoundsByBudget(&cfg, candidateCount), cfg.MinRounds)
 		if capRounds < cfg.MaxRounds {
 			log.Info(ctx, "reducing max_rounds to respect budget", "from", cfg.MaxRounds, "to", capRounds, "max_cost_usd", cfg.MaxCostUSD)
 			cfg.MaxRounds = capRounds
@@ -744,19 +741,14 @@ func benchLocal(cfg *config) {
 	start := time.Now()
 	var wg sync.WaitGroup
 	prompts := cfg.BenchLocal
-	workers := cfg.Concurrency
-	if workers < 1 {
-		workers = 1
-	}
+	workers := max(cfg.Concurrency, 1)
 	ch := make(chan int)
 	for range workers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for range ch {
 				_ = strings.Repeat("x", 1024)
 			}
-		}()
+		})
 	}
 	for i := range prompts {
 		ch <- i
@@ -817,10 +809,7 @@ func capRoundsByBudget(cfg *config, candidates int) uint {
 	if roundCost <= 0 {
 		return cfg.MaxRounds
 	}
-	capRounds := uint(math.Floor(cfg.MaxCostUSD / roundCost))
-	if capRounds < 1 {
-		capRounds = 1
-	}
+	capRounds := max(uint(math.Floor(cfg.MaxCostUSD/roundCost)), 1)
 	return capRounds
 }
 
