@@ -24,11 +24,26 @@ package log
 import (
 	"context"
 	"log/slog"
+	"os"
 	"runtime"
 	"slices"
 	"sync/atomic"
 	"time"
 )
+
+// Options configures a logger.
+type Options struct {
+	JSON bool
+}
+
+// New returns a slog.Logger configured per options.
+func New(opts Options) *slog.Logger {
+	var handler slog.Handler = slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})
+	if opts.JSON {
+		handler = slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})
+	}
+	return slog.New(handler)
+}
 
 // loggerKey is the type used for the [context.Context] key for storing the logger.
 type loggerKey struct{}
