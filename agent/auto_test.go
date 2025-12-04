@@ -18,11 +18,11 @@ package agent
 
 import (
 	"context"
+	"iter"
 	"testing"
 
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
-	"iter"
 )
 
 type stubLLM struct{}
