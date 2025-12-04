@@ -23,6 +23,7 @@ replace github.com/invopop/jsonschema => github.com/zchee/jsonschema v0.0.0-2025
 require (
 	cloud.google.com/go/auth v0.17.0
 	cloud.google.com/go/auth/oauth2adapt v0.2.8
+	github.com/Marlliton/slogpretty v0.1.3
 	github.com/anthropics/anthropic-sdk-go v1.19.0
 	github.com/google/dotprompt/go v0.0.0-20251212201238-92f6ee4b208a
 	github.com/google/go-cmp v0.7.0
