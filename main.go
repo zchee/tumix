@@ -22,6 +22,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json/jsontext"
 	json "encoding/json/v2"
 	"errors"
 	"expvar"
@@ -530,12 +531,9 @@ func runOnce(ctx context.Context, cfg *config, loader adkagent.Loader) error {
 				"seed":        cfg.Seed,
 			},
 		}
-		data, err := json.Marshal(out)
-		if err != nil {
+		enc := jsontext.NewEncoder(os.Stdout)
+		if err := json.MarshalEncode(enc, out); err != nil {
 			return fmt.Errorf("encode json: %w", err)
-		}
-		if _, err := fmt.Fprintln(os.Stdout, string(data)); err != nil {
-			return fmt.Errorf("write json: %w", err)
 		}
 	}
 
