@@ -90,7 +90,7 @@ func TestEstimateTokensFromChars(t *testing.T) {
 }
 
 func TestLoadPricingInvalidPath(t *testing.T) {
-	loadPricing() // should not panic when env unset
+	loadPricing(context.Background()) // should not panic when env unset
 	if _, ok := prices["gemini-2.5-flash"]; !ok {
 		t.Fatalf("default pricing missing")
 	}
