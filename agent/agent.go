@@ -708,22 +708,21 @@ end of your response, directly output the answer to the question with the format
 }
 
 const (
-	defaultMaxRounds           uint    = 10
 	defaultMinRounds           uint    = 2
+	defaultMaxRounds           uint    = 10
 	defaultConfidenceThreshold float64 = 0.6
 
-	stateKeyAnswer          = "tumix_final_answer"
-	stateKeyConfidence      = "tumix_final_confidence"
-	stateKeyQuestion        = "question"
-	stateKeyJoined          = "joined_answers"
-	stateKeyRound           = "round_num"
-	stateKeyVoteMargin      = "vote_margin"
-	stateKeyUnique          = "unique_answers"
-	stateKeyCoverage        = "coverage"
-	stateKeyEntropy         = "answer_entropy"
-	stateKeyTopAnswer       = "top_answer"
-	stateKeyJudgeAnswer     = "judge_recommended_answer"
-	stateKeyJudgeConfidence = "judge_recommended_confidence"
+	stateKeyAnswer      = "tumix_final_answer"
+	stateKeyConfidence  = "tumix_final_confidence"
+	stateKeyQuestion    = "question"
+	stateKeyJoined      = "joined_answers"
+	stateKeyRound       = "round_num"
+	stateKeyVoteMargin  = "vote_margin"
+	stateKeyUnique      = "unique_answers"
+	stateKeyCoverage    = "coverage"
+	stateKeyEntropy     = "answer_entropy"
+	stateKeyTopAnswer   = "top_answer"
+	stateKeyJudgeAnswer = "judge_recommended_answer"
 )
 
 type finalizeArgs struct {
@@ -858,8 +857,8 @@ func NewTumixAgentWithMaxRounds(candidates []agent.Agent, judge agent.Agent, max
 	return NewTumixAgentWithConfig(TumixConfig{
 		Candidates: candidates,
 		Judge:      judge,
-		MaxRounds:  maxRounds,
 		MinRounds:  defaultMinRounds,
+		MaxRounds:  maxRounds,
 	})
 }
 
