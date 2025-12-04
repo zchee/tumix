@@ -41,7 +41,10 @@ type Options struct {
 // New returns a slog.Logger configured per options.
 func New(opts Options) *slog.Logger {
 	if opts.JSON {
-		return slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
+		handler := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})
+		logger := slog.New(handler)
+		slog.SetDefault(logger)
+		return logger
 	}
 
 	handler := slogpretty.New(os.Stdout, &slogpretty.Options{
@@ -51,7 +54,9 @@ func New(opts Options) *slog.Logger {
 		Multiline:  true,                         // Pretty print for complex data
 		TimeFormat: slogpretty.DefaultTimeFormat, // Custom format (e.g., time.Kitchen)
 	})
-	return slog.New(handler)
+	logger := slog.New(handler)
+	slog.SetDefault(logger)
+	return logger
 }
 
 // loggerKey is the type used for the [context.Context] key for storing the logger.

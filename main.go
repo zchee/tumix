@@ -28,6 +28,7 @@ import (
 	"expvar"
 	"flag"
 	"fmt"
+	"log/slog"
 	"math"
 	"net/http"
 	"os"
@@ -55,6 +56,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	tumixagent "github.com/zchee/tumix/agent"
+	"github.com/zchee/tumix/gollm"
 	"github.com/zchee/tumix/internal/version"
 	"github.com/zchee/tumix/log"
 	"github.com/zchee/tumix/session/sessiondb"
@@ -64,6 +66,7 @@ import (
 
 type config struct {
 	AppName         string
+	LLMBackend      string
 	ModelName       string
 	APIKey          string
 	TraceHTTP       bool
@@ -132,7 +135,9 @@ func run() int {
 	ctx, stop := signal.NotifyContext(log.WithLogger(context.Background(), logger), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	loadPricing()
+	ctx = log.WithLogger(ctx, logger)
+
+	loadPricing(ctx)
 
 	shutdownTrace, traceErr := initTracing(ctx, &cfg)
 	if traceErr != nil {
@@ -151,6 +156,7 @@ func run() int {
 		log.Error(ctx, "prompt too large", err)
 		return 1
 	}
+	log.Info(ctx, "using model", "llm backend", cfg.LLMBackend)
 	llm, err := buildModel(ctx, &cfg, httpClient)
 	if err != nil {
 		log.Error(ctx, "failed to create model", err)
@@ -206,6 +212,7 @@ func run() int {
 		return 0
 	}
 
+	log.Info(ctx, "run tumix", slog.Any("cfg", &cfg), slog.Any("loader", &loader))
 	if err := runOnce(ctx, &cfg, loader); err != nil {
 		log.Error(ctx, "run failed", err)
 		return 1
@@ -215,9 +222,10 @@ func run() int {
 
 func parseConfig() (config, error) {
 	cfg := config{
-		AppName:         "tumix",
-		ModelName:       envOrDefault("TUMIX_MODEL", "gemini-2.5-flash"),
-		APIKey:          os.Getenv("GOOGLE_API_KEY"),
+		AppName:    "tumix",
+		LLMBackend: envOrDefault("TUMIX_BACKEND", "gemini"),
+		ModelName:  envOrDefault("TUMIX_MODEL", "gemini-2.5-flash"),
+		// APIKey:          os.Getenv("GOOGLE_API_KEY"),
 		TraceHTTP:       parseBoolEnv("TUMIX_HTTP_TRACE"),
 		UserID:          envOrDefault("TUMIX_USER", "user"),
 		SessionID:       envOrDefault("TUMIX_SESSION", ""),
@@ -238,6 +246,7 @@ func parseConfig() (config, error) {
 		BudgetTokens:    int(parseUintEnv("TUMIX_BUDGET_TOKENS", 0)),
 	}
 
+	flag.StringVar(&cfg.LLMBackend, "backend", cfg.LLMBackend, "LLM backend to use (gemini, openai, anthropic, xai)")
 	flag.StringVar(&cfg.ModelName, "model", cfg.ModelName, "Gemini model to use (default TUMIX_MODEL or gemini-2.5-flash)")
 	flag.StringVar(&cfg.APIKey, "api_key", cfg.APIKey, "Gemini API key (GOOGLE_API_KEY)")
 	flag.BoolVar(&cfg.TraceHTTP, "http_trace", cfg.TraceHTTP, "Enable HTTP client OpenTelemetry spans")
@@ -280,8 +289,31 @@ func parseConfig() (config, error) {
 			return cfg, fmt.Errorf("prompt token estimate %d exceeds max_prompt_tokens %d", est, cfg.MaxPromptTokens)
 		}
 	}
+
+	// Validate backend
+	switch cfg.LLMBackend {
+	case "gemini", "openai", "anthropic", "xai":
+		// ok
+	default:
+		return cfg, fmt.Errorf("invalid backend %q; must be one of: gemini, openai, anthropic, xai", cfg.LLMBackend)
+	}
+
 	if cfg.APIKey == "" {
-		return cfg, errors.New("GOOGLE_API_KEY must be set")
+		// Try to fetch from backend specific env vars if generic GOOGLE_API_KEY is not set
+		switch cfg.LLMBackend {
+		case "gemini":
+			cfg.APIKey = os.Getenv("GOOGLE_API_KEY")
+		case "openai":
+			cfg.APIKey = os.Getenv("OPENAI_API_KEY")
+		case "anthropic":
+			cfg.APIKey = os.Getenv("ANTHROPIC_API_KEY")
+		case "xai":
+			cfg.APIKey = os.Getenv("XAI_API_KEY")
+		}
+	}
+
+	if cfg.APIKey == "" {
+		return cfg, errors.New("API key must be set (via -api_key or appropriate environment variable)")
 	}
 	if cfg.SessionID == "" {
 		cfg.SessionID = fmt.Sprintf("session-%d", time.Now().UnixNano())
@@ -366,21 +398,31 @@ func enforcePromptTokensWithCounter(ctx context.Context, cfg *config, counter co
 }
 
 func buildModel(ctx context.Context, cfg *config, httpClient *http.Client) (model.LLM, error) {
-	clientConfig := &genai.ClientConfig{
-		APIKey:     cfg.APIKey,
-		HTTPClient: httpClient,
-		HTTPOptions: genai.HTTPOptions{
-			Headers: http.Header{
-				"User-Agent": []string{version.UserAgent("genai")},
-			},
-		},
-	}
+	switch cfg.LLMBackend {
+	case "gemini":
+		clientConfig := &genai.ClientConfig{
+			APIKey:     cfg.APIKey,
+			HTTPClient: httpClient,
+		}
 
-	llm, err := gemini.NewModel(ctx, cfg.ModelName, clientConfig)
-	if err != nil {
-		return nil, fmt.Errorf("create model %s: %w", cfg.ModelName, err)
+		llm, err := gemini.NewModel(ctx, cfg.ModelName, clientConfig)
+		if err != nil {
+			return nil, fmt.Errorf("create model %s: %w", cfg.ModelName, err)
+		}
+		return llm, nil
+
+	case "openai":
+		return gollm.NewOpenAILLM(ctx, gollm.AuthMethodAPIKey(cfg.APIKey), cfg.ModelName)
+
+	case "anthropic":
+		return gollm.NewAnthropicLLM(ctx, gollm.AuthMethodAPIKey(cfg.APIKey), cfg.ModelName)
+
+	case "xai":
+		return gollm.NewXAILLM(ctx, gollm.AuthMethodAPIKey(cfg.APIKey), cfg.ModelName)
+
+	default:
+		return nil, fmt.Errorf("unsupported backend: %s", cfg.LLMBackend)
 	}
-	return llm, nil
 }
 
 func buildGenConfig(cfg *config) *genai.GenerateContentConfig {
@@ -426,9 +468,9 @@ func buildTumixLoader(llm model.LLM, genCfg *genai.GenerateContentConfig, minRou
 		tumixagent.NewGuidedGSAgent,
 		tumixagent.NewGuidedLLMAgent,
 		tumixagent.NewGuidedComAgent,
-		tumixagent.NewGuidedPlusGSAgent,
-		tumixagent.NewGuidedPlusLLMAgent,
-		tumixagent.NewGuidedPlusComAgent,
+		// tumixagent.NewGuidedPlusGSAgent,
+		// tumixagent.NewGuidedPlusLLMAgent,
+		// tumixagent.NewGuidedPlusComAgent,
 	}
 
 	candidates := make([]adkagent.Agent, 0, len(builders)+autoAgents)
@@ -811,14 +853,14 @@ func capRoundsByBudget(cfg *config, candidates int) uint {
 	return capRounds
 }
 
-func loadPricing() {
+func loadPricing(ctx context.Context) {
 	path := os.Getenv("TUMIX_PRICING_FILE")
 	if path == "" {
 		return
 	}
 	b, err := os.ReadFile(path)
 	if err != nil {
-		log.Warn(context.Background(), "pricing file read failed", "error", err)
+		log.Warn(ctx, "pricing file read failed", "error", err)
 		return
 	}
 	tmp := map[string]struct {
@@ -826,7 +868,7 @@ func loadPricing() {
 		Out float64 `json:"out_per_kt"`
 	}{}
 	if err := json.Unmarshal(b, &tmp); err != nil {
-		log.Warn(context.Background(), "pricing file parse failed", "error", err)
+		log.Warn(ctx, "pricing file parse failed", "error", err)
 		return
 	}
 	for k, v := range tmp {
