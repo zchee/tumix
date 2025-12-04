@@ -29,6 +29,8 @@ import (
 	"slices"
 	"sync/atomic"
 	"time"
+
+	"github.com/Marlliton/slogpretty"
 )
 
 // Options configures a logger.
@@ -38,10 +40,17 @@ type Options struct {
 
 // New returns a slog.Logger configured per options.
 func New(opts Options) *slog.Logger {
-	var handler slog.Handler = slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})
 	if opts.JSON {
-		handler = slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})
+		return slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	}
+
+	handler := slogpretty.New(os.Stdout, &slogpretty.Options{
+		Level:      slog.LevelDebug,
+		AddSource:  true,                         // Show file location
+		Colorful:   true,                         // Enable colors. Default is true
+		Multiline:  true,                         // Pretty print for complex data
+		TimeFormat: slogpretty.DefaultTimeFormat, // Custom format (e.g., time.Kitchen)
+	})
 	return slog.New(handler)
 }
 
