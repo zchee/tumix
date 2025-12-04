@@ -39,12 +39,6 @@ import (
 	"syscall"
 	"time"
 
-	tumixagent "github.com/zchee/tumix/agent"
-	"github.com/zchee/tumix/internal/version"
-	"github.com/zchee/tumix/log"
-	"github.com/zchee/tumix/session/sessiondb"
-	"github.com/zchee/tumix/session/sessionfs"
-	"github.com/zchee/tumix/telemetry/httptelemetry"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/metric"
@@ -59,6 +53,13 @@ import (
 	"google.golang.org/genai"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+
+	tumixagent "github.com/zchee/tumix/agent"
+	"github.com/zchee/tumix/internal/version"
+	"github.com/zchee/tumix/log"
+	"github.com/zchee/tumix/session/sessiondb"
+	"github.com/zchee/tumix/session/sessionfs"
+	"github.com/zchee/tumix/telemetry/httptelemetry"
 )
 
 type config struct {
