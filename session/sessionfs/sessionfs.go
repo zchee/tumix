@@ -81,12 +81,17 @@ type fileSession struct {
 	mu *sync.RWMutex
 }
 
-func (f *fileSession) ID() string                { return f.s.SessionID }
-func (f *fileSession) AppName() string           { return f.s.AppName }
-func (f *fileSession) UserID() string            { return f.s.UserID }
+func (f *fileSession) ID() string { return f.s.SessionID }
+
+func (f *fileSession) AppName() string { return f.s.AppName }
+
+func (f *fileSession) UserID() string { return f.s.UserID }
+
 func (f *fileSession) LastUpdateTime() time.Time { return f.s.UpdatedAt }
-func (f *fileSession) Events() session.Events    { return fileEvents{f} }
-func (f *fileSession) State() session.State      { return &fileState{mu: f.mu, state: f.s.State} }
+
+func (f *fileSession) Events() session.Events { return fileEvents{f} }
+
+func (f *fileSession) State() session.State { return &fileState{mu: f.mu, state: f.s.State} }
 
 type fileEvents struct{ fs *fileSession }
 

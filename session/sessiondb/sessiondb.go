@@ -29,9 +29,9 @@ import (
 	"sync"
 	"time"
 
-	_ "modernc.org/sqlite"
-
 	"google.golang.org/adk/session"
+
+	_ "modernc.org/sqlite"
 )
 
 // Service returns a sqlite-backed session.Service stored at file path.
@@ -200,12 +200,17 @@ func (s *store) load(app, user, sid string) (*persistSession, error) {
 // dbSession implements session.Session using in-memory struct.
 type dbSession struct{ s *persistSession }
 
-func (d *dbSession) ID() string                { return d.s.SessionID }
-func (d *dbSession) AppName() string           { return d.s.AppName }
-func (d *dbSession) UserID() string            { return d.s.UserID }
+func (d *dbSession) ID() string { return d.s.SessionID }
+
+func (d *dbSession) AppName() string { return d.s.AppName }
+
+func (d *dbSession) UserID() string { return d.s.UserID }
+
 func (d *dbSession) LastUpdateTime() time.Time { return d.s.UpdatedAt }
-func (d *dbSession) Events() session.Events    { return sessionfsEvents(d.s.Events) }
-func (d *dbSession) State() session.State      { return sessionfsState{state: d.s.State} }
+
+func (d *dbSession) Events() session.Events { return sessionfsEvents(d.s.Events) }
+
+func (d *dbSession) State() session.State { return sessionfsState{state: d.s.State} }
 
 // reuse lightweight implementations from sessionfs style.
 type sessionfsEvents []*session.Event
@@ -219,7 +224,9 @@ func (e sessionfsEvents) All() iter.Seq[*session.Event] {
 		}
 	}
 }
+
 func (e sessionfsEvents) Len() int { return len(e) }
+
 func (e sessionfsEvents) At(i int) *session.Event {
 	if i < 0 || i >= len(e) {
 		return nil
