@@ -667,8 +667,6 @@ Return guidance between ` + code(`<<<`) + ` and ` + code(`>>>`) + `.`,
 }
 
 // NewRefinementAgent creates a Refinement Agent that gathers candidate answers from sub-agents and judges the final answer.
-//
-// TODO(zchee): support [agent.InvocationContext] for `{question}` and `{joined_answers}`.
 func NewRefinementAgent(subAgents ...agent.Agent) (agent.Agent, error) {
 	parallel, err := parallelagent.New(parallelagent.Config{
 		AgentConfig: agent.Config{
@@ -774,8 +772,6 @@ func newFinalizeTool() (tool.Tool, error) {
 }
 
 // NewJudgeAgent creates a Judge Agent that evaluates candidate answers and decides whether to finalize or continue.
-//
-// TODO(zchee): support [agent.InvocationContext] for `{round_num}`, `{question}` and `{joined_answers}`.
 func NewJudgeAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
 	finalizeTool, err := newFinalizeTool()
 	if err != nil {
