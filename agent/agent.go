@@ -67,10 +67,10 @@ func Prompt() *dotprompt.Dotprompt {
 		},
 		Schemas: map[string]*jsonschema.Schema{},
 		SchemaResolver: func(schemaName string) (*jsonschema.Schema, error) {
-			return nil, nil
+			return nil, fmt.Errorf("schema %q not configured", schemaName)
 		},
 		PartialResolver: func(partialName string) (string, error) {
-			return "", nil
+			return "", fmt.Errorf("partial %q not configured", partialName)
 		},
 	}
 	dp := dotprompt.NewDotprompt(o)
@@ -85,8 +85,26 @@ func cloneGenConfig(cfg *genai.GenerateContentConfig) *genai.GenerateContentConf
 	if cfg == nil {
 		return nil
 	}
-	copy := *cfg
-	return &copy
+	copied := *cfg
+	return &copied
+}
+
+func setState(ctx agent.InvocationContext, key string, value any) error {
+	if err := ctx.Session().State().Set(key, value); err != nil {
+		return fmt.Errorf("set state %s: %w", key, err)
+	}
+	return nil
+}
+
+func getState(ctx agent.InvocationContext, key string) (any, error) {
+	val, err := ctx.Session().State().Get(key)
+	if errors.Is(err, session.ErrStateKeyNotExist) {
+		return nil, fmt.Errorf("state %s not found: %w", key, err)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get state %s: %w", key, err)
+	}
+	return val, nil
 }
 
 const sharedContext = `**TUMIX shared context**
@@ -159,6 +177,7 @@ func NewCoTCodeAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.
 		Name: "CoT code",
 		Description: `Chain-of-thought text-only reasoning and output code.
 - Short name: {CoT code}`,
+		Model:                 llm,
 		GenerateContentConfig: cloneGenConfig(genCfg),
 		Instruction: `You are a helpful AI assistant. Solve tasks using your coding skills.
 In the following cases, suggest python code (in a python coding block) for the user to execute.
@@ -724,7 +743,7 @@ func newFinalizeTool() (tool.Tool, error) {
 		Description: "Store the selected answer, confidence, and optionally stop further rounds.",
 	}
 
-	return functiontool.New(cfg, func(ctx tool.Context, args finalizeArgs) (finalizeResult, error) {
+	t, err := functiontool.New(cfg, func(ctx tool.Context, args finalizeArgs) (finalizeResult, error) {
 		answer := strings.TrimSpace(args.Answer)
 		switch {
 		case answer == "":
@@ -749,6 +768,10 @@ func newFinalizeTool() (tool.Tool, error) {
 			Stop:   args.Stop,
 		}, nil
 	})
+	if err != nil {
+		return nil, fmt.Errorf("build finalize tool: %w", err)
+	}
+	return t, nil
 }
 
 // NewJudgeAgent creates a Judge Agent that evaluates candidate answers and decides whether to finalize or continue.
@@ -907,37 +930,80 @@ type candidateAnswer struct {
 func (t *tumixOrchestrator) run(ctx agent.InvocationContext) iter.Seq2[*session.Event, error] {
 	return func(yield func(*session.Event, error) bool) {
 		question := firstContentText(ctx.UserContent())
-		_ = ctx.Session().State().Set(stateKeyQuestion, question)
+		if err := setState(ctx, stateKeyQuestion, question); err != nil {
+			yield(nil, err)
+			return
+		}
 
 		var lastAnswers []candidateAnswer
 		for round := uint(1); round <= t.maxRounds; round++ {
-			_ = ctx.Session().State().Set(stateKeyRound, round)
-			_ = ctx.Session().State().Set(stateKeyJoined, joinAnswers(lastAnswers))
+			if err := setState(ctx, stateKeyRound, round); err != nil {
+				yield(nil, err)
+				return
+			}
+			if err := setState(ctx, stateKeyJoined, joinAnswers(lastAnswers)); err != nil {
+				yield(nil, err)
+				return
+			}
 
 			answers, stop := t.runCandidates(ctx, yield)
 			if stop {
 				return
 			}
 			lastAnswers = answers
-			if len(lastAnswers) > 0 {
-				_ = ctx.Session().State().Set(stateKeyJoined, joinAnswers(lastAnswers))
-				stats := computeStats(lastAnswers, len(t.candidateAgent.SubAgents()))
-				_ = ctx.Session().State().Set(stateKeyVoteMargin, stats.voteMargin)
-				_ = ctx.Session().State().Set(stateKeyUnique, stats.unique)
-				_ = ctx.Session().State().Set(stateKeyCoverage, stats.coverage)
-				_ = ctx.Session().State().Set(stateKeyEntropy, stats.answerEntropy)
-				_ = ctx.Session().State().Set(stateKeyTopAnswer, stats.topAnswer)
-
-				if round >= t.minRounds && stats.topAnswer != "" {
-					if stats.topAnswer == t.prevTopAnswer && stats.voteMargin >= defaultConfidenceThreshold && t.prevVoteMargin >= defaultConfidenceThreshold {
-						_ = ctx.Session().State().Set(stateKeyAnswer, stats.topAnswer)
-						_ = ctx.Session().State().Set(stateKeyConfidence, stats.voteMargin)
-						t.emitFinalFromState(ctx, yield)
-						return
-					}
-					t.prevTopAnswer = stats.topAnswer
-					t.prevVoteMargin = stats.voteMargin
+			if len(lastAnswers) == 0 {
+				if round < t.minRounds {
+					continue
 				}
+				if t.runJudge(ctx, yield) {
+					t.emitFinalFromState(ctx, yield)
+					return
+				}
+				continue
+			}
+
+			if err := setState(ctx, stateKeyJoined, joinAnswers(lastAnswers)); err != nil {
+				yield(nil, err)
+				return
+			}
+			stats := computeStats(lastAnswers, len(t.candidateAgent.SubAgents()))
+			if err := setState(ctx, stateKeyVoteMargin, stats.voteMargin); err != nil {
+				yield(nil, err)
+				return
+			}
+			if err := setState(ctx, stateKeyUnique, stats.unique); err != nil {
+				yield(nil, err)
+				return
+			}
+			if err := setState(ctx, stateKeyCoverage, stats.coverage); err != nil {
+				yield(nil, err)
+				return
+			}
+			if err := setState(ctx, stateKeyEntropy, stats.answerEntropy); err != nil {
+				yield(nil, err)
+				return
+			}
+			if err := setState(ctx, stateKeyTopAnswer, stats.topAnswer); err != nil {
+				yield(nil, err)
+				return
+			}
+
+			if round >= t.minRounds && stats.topAnswer != "" && stats.topAnswer == t.prevTopAnswer && stats.voteMargin >= defaultConfidenceThreshold && t.prevVoteMargin >= defaultConfidenceThreshold {
+				if err := setState(ctx, stateKeyAnswer, stats.topAnswer); err != nil {
+					yield(nil, err)
+					return
+				}
+				if err := setState(ctx, stateKeyConfidence, stats.voteMargin); err != nil {
+					yield(nil, err)
+					return
+				}
+				t.emitFinalFromState(ctx, yield)
+				return
+			}
+
+			if round >= t.minRounds && stats.topAnswer != "" {
+				t.prevTopAnswer = stats.topAnswer
+				t.prevVoteMargin = stats.voteMargin
 			}
 
 			if round < t.minRounds {
@@ -952,23 +1018,33 @@ func (t *tumixOrchestrator) run(ctx agent.InvocationContext) iter.Seq2[*session.
 
 		if len(lastAnswers) > 0 {
 			answer, conf := majorityVote(lastAnswers)
-			_ = ctx.Session().State().Set(stateKeyAnswer, answer)
-			_ = ctx.Session().State().Set(stateKeyConfidence, conf)
+			if err := setState(ctx, stateKeyAnswer, answer); err != nil {
+				yield(nil, err)
+				return
+			}
+			if err := setState(ctx, stateKeyConfidence, conf); err != nil {
+				yield(nil, err)
+				return
+			}
+		}
+		if err := setState(ctx, stateKeyJoined, joinAnswers(lastAnswers)); err != nil {
+			yield(nil, err)
+			return
 		}
 		t.emitFinalFromState(ctx, yield)
 	}
 }
 
 func (t *tumixOrchestrator) runCandidates(ctx agent.InvocationContext, yield func(*session.Event, error) bool) ([]candidateAnswer, bool) {
-	var answers []candidateAnswer
+	answers := make([]candidateAnswer, 0, len(t.candidateAgent.SubAgents()))
 	for event, err := range t.candidateAgent.Run(ctx) {
 		if !yield(event, err) {
 			return answers, true
 		}
-		if err != nil || event == nil || event.LLMResponse.Content == nil {
+		if err != nil || event == nil || event.Content == nil {
 			continue
 		}
-		text := firstTextFromContent(event.LLMResponse.Content)
+		text := firstTextFromContent(event.Content)
 		if text == "" {
 			continue
 		}
@@ -988,8 +1064,11 @@ func (t *tumixOrchestrator) runJudge(ctx agent.InvocationContext, yield func(*se
 		}
 		if event != nil && event.Actions.Escalate {
 			stop = true
-			if text := firstTextFromContent(event.LLMResponse.Content); text != "" {
-				_ = ctx.Session().State().Set(stateKeyJudgeAnswer, normalizeAnswer(text))
+			if text := firstTextFromContent(event.Content); text != "" {
+				if err := setState(ctx, stateKeyJudgeAnswer, normalizeAnswer(text)); err != nil {
+					yield(nil, err)
+					return true
+				}
 			}
 		}
 	}
@@ -997,10 +1076,23 @@ func (t *tumixOrchestrator) runJudge(ctx agent.InvocationContext, yield func(*se
 }
 
 func (t *tumixOrchestrator) emitFinalFromState(ctx agent.InvocationContext, yield func(*session.Event, error) bool) {
-	answerVal, _ := ctx.Session().State().Get(stateKeyAnswer)
-	confVal, _ := ctx.Session().State().Get(stateKeyConfidence)
+	answerVal, err := getState(ctx, stateKeyAnswer)
+	if err != nil && !errors.Is(err, session.ErrStateKeyNotExist) {
+		yield(nil, err)
+		return
+	}
+	confVal, err := getState(ctx, stateKeyConfidence)
+	if err != nil && !errors.Is(err, session.ErrStateKeyNotExist) {
+		yield(nil, err)
+		return
+	}
 	if answerVal == nil {
-		if judgeVal, _ := ctx.Session().State().Get(stateKeyJudgeAnswer); judgeVal != nil {
+		judgeVal, jerr := getState(ctx, stateKeyJudgeAnswer)
+		if jerr != nil && !errors.Is(jerr, session.ErrStateKeyNotExist) {
+			yield(nil, jerr)
+			return
+		}
+		if judgeVal != nil {
 			answerVal = judgeVal
 		}
 	}
@@ -1013,13 +1105,21 @@ func (t *tumixOrchestrator) emitFinalFromState(ctx agent.InvocationContext, yiel
 	content := genai.NewContentFromText(fmt.Sprintf("Final answer (conf %s): %s", conf, answer), genai.RoleModel)
 	event := session.NewEvent(ctx.InvocationID())
 	event.Author = "tumix"
-	event.LLMResponse.Content = content
+	event.Content = content
 	if event.Actions.StateDelta == nil {
 		event.Actions.StateDelta = make(map[string]any)
 	}
 	event.Actions.StateDelta[stateKeyAnswer] = answerVal
 	if confVal != nil {
 		event.Actions.StateDelta[stateKeyConfidence] = confVal
+	}
+	joinedVal, jerr := getState(ctx, stateKeyJoined)
+	if jerr != nil && !errors.Is(jerr, session.ErrStateKeyNotExist) {
+		yield(nil, jerr)
+		return
+	}
+	if joinedVal != nil {
+		event.Actions.StateDelta[stateKeyJoined] = joinedVal
 	}
 	yield(event, nil)
 }
@@ -1065,18 +1165,7 @@ func firstContentText(c *genai.Content) string {
 	return ""
 }
 
-func getStateString(sess session.Session, key string) (string, error) {
-	v, err := sess.State().Get(key)
-	if err != nil {
-		return "", err
-	}
-	if v == nil {
-		return "", nil
-	}
-	return fmt.Sprintf("%v", v), nil
-}
-
-func majorityVote(ans []candidateAnswer) (string, float64) {
+func majorityVote(ans []candidateAnswer) (answer string, confidence float64) {
 	if len(ans) == 0 {
 		return "", 0
 	}
@@ -1089,7 +1178,7 @@ func majorityVote(ans []candidateAnswer) (string, float64) {
 		Answer string
 		Count  int
 	}
-	var pairs []kv
+	pairs := make([]kv, 0, len(cnts))
 	for k, v := range cnts {
 		pairs = append(pairs, kv{Answer: k, Count: v})
 	}
@@ -1100,8 +1189,8 @@ func majorityVote(ans []candidateAnswer) (string, float64) {
 		return pairs[i].Count > pairs[j].Count
 	})
 	best := pairs[0]
-	conf := float64(best.Count) / float64(len(ans))
-	return best.Answer, conf
+	confidence = float64(best.Count) / float64(len(ans))
+	return best.Answer, confidence
 }
 
 type roundStats struct {
