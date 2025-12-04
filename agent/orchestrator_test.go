@@ -18,6 +18,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"iter"
 	"testing"
@@ -72,7 +73,10 @@ func TestTumixStopsWhenJudgeEscalates(t *testing.T) {
 	if answer != "done" {
 		t.Fatalf("expected final answer 'done', got %v", answer)
 	}
-	joined, _ := res.Session.State().Get(stateKeyJoined)
+	joined, err := res.Session.State().Get(stateKeyJoined)
+	if err != nil {
+		t.Fatalf("state joined: %v", err)
+	}
 	if joined == "" {
 		t.Fatalf("expected joined answers to be recorded")
 	}
@@ -153,11 +157,17 @@ func TestTumixAutoStopOnStableMajority(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get session: %v", err)
 	}
-	answer, _ := res.Session.State().Get(stateKeyAnswer)
+	answer, err := res.Session.State().Get(stateKeyAnswer)
+	if err != nil {
+		t.Fatalf("state answer: %v", err)
+	}
 	if answer != "foo" {
 		t.Fatalf("expected final answer foo, got %v", answer)
 	}
-	roundVal, _ := res.Session.State().Get(stateKeyRound)
+	roundVal, err := res.Session.State().Get(stateKeyRound)
+	if err != nil && !errors.Is(err, session.ErrStateKeyNotExist) {
+		t.Fatalf("state round: %v", err)
+	}
 	if roundVal != nil {
 		if rv, ok := roundVal.(uint); ok && rv > 2 {
 			t.Fatalf("expected auto-stop by round 2, got round %d", rv)
@@ -171,7 +181,11 @@ func stubCandidate(name string) agent.Agent {
 		Description: "stub candidate",
 		Run: func(ctx agent.InvocationContext) iter.Seq2[*session.Event, error] {
 			return func(yield func(*session.Event, error) bool) {
-				round, _ := ctx.Session().State().Get(stateKeyRound)
+				round, err := ctx.Session().State().Get(stateKeyRound)
+				if err != nil && !errors.Is(err, session.ErrStateKeyNotExist) {
+					yield(nil, fmt.Errorf("state round: %w", err))
+					return
+				}
 				text := fmt.Sprintf("%s-round-%v", name, round)
 				ev := session.NewEvent(ctx.InvocationID())
 				ev.LLMResponse = model.LLMResponse{Content: genai.NewContentFromText(text, genai.RoleModel)}
@@ -201,8 +215,14 @@ func stubJudge(answer string) agent.Agent {
 		Description: "stub judge",
 		Run: func(ctx agent.InvocationContext) iter.Seq2[*session.Event, error] {
 			return func(yield func(*session.Event, error) bool) {
-				_ = ctx.Session().State().Set(stateKeyAnswer, answer)
-				_ = ctx.Session().State().Set(stateKeyConfidence, 0.95)
+				if err := ctx.Session().State().Set(stateKeyAnswer, answer); err != nil {
+					yield(nil, fmt.Errorf("set judge answer: %w", err))
+					return
+				}
+				if err := ctx.Session().State().Set(stateKeyConfidence, 0.95); err != nil {
+					yield(nil, fmt.Errorf("set judge confidence: %w", err))
+					return
+				}
 				ev := session.NewEvent(ctx.InvocationID())
 				ev.Author = "judge"
 				ev.Actions.Escalate = true

@@ -61,12 +61,19 @@ func TestNewAutoAgentsZero(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if agents != nil && len(agents) != 0 {
-		t.Fatalf("expected nil/empty, got %v", len(agents))
+	if len(agents) != 0 {
+		t.Fatalf("expected zero agents, got %d", len(agents))
 	}
 }
 
 // Compile-time check: auto agents accept real LLM too.
 func TestNewAutoAgentsRealConfig(t *testing.T) {
-	_, _ = NewAutoAgents(&stubLLM{}, nil, 1)
+	t.Helper()
+	agents, err := NewAutoAgents(&stubLLM{}, nil, 1)
+	if err != nil {
+		t.Fatalf("NewAutoAgents real config: %v", err)
+	}
+	if len(agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(agents))
+	}
 }

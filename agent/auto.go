@@ -31,9 +31,9 @@ func NewAutoAgents(llm model.LLM, genCfg *genai.GenerateContentConfig, n int) ([
 	if n <= 0 {
 		return nil, nil
 	}
-	var agents []agent.Agent
+	agents := make([]agent.Agent, 0, n)
 	emphases := []string{"textual reasoning", "code execution", "web search"}
-	for i := 0; i < n; i++ {
+	for i := range n {
 		name := fmt.Sprintf("Auto-%d", i+1)
 		emphasis := emphases[i%len(emphases)]
 		cfg := llmagent.Config{
