@@ -323,6 +323,11 @@ linters:
         - set-status
       ignore-check-signatures:
         - telemetry.RecordError
+    tagliatelle:
+      case:
+        use-field-name: false
+        rules:
+          json: snake
     testpackage:
       skip-regexp: .*(export)_test\.go
     unconvert:
