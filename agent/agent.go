@@ -125,7 +125,7 @@ func applySharedContext(cfg *llmagent.Config) {
 // This agent is responsible for "1. w/o TTS (Base)".
 func NewBaseAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
 	cfg := llmagent.Config{
-		Name: "Base",
+		Name: "base",
 		Description: `Direct prompt.
 - Short name: {Base}.`,
 		Model:                 llm,
@@ -147,7 +147,7 @@ func NewBaseAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Age
 // This agent is responsible for "2. CoT Agent (CoT)".
 func NewCoTAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
 	cfg := llmagent.Config{
-		Name: "CoT",
+		Name: "cot",
 		Description: `Chain-of-thought text-only reasoning.
 - Short name: {CoT}`,
 		Model:                 llm,
@@ -174,7 +174,7 @@ func NewCoTAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agen
 // This agent is responsible for "3. CoT-Code Agent (CoT code)".
 func NewCoTCodeAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
 	cfg := llmagent.Config{
-		Name: "CoT code",
+		Name: "cot-code",
 		Description: `Chain-of-thought text-only reasoning and output code.
 - Short name: {CoT code}`,
 		Model:                 llm,
@@ -208,7 +208,7 @@ Start the python block with ` + "```" + `python`,
 // This agent is responsible for "4. Search Agent (S)".
 func NewSearchAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
 	cfg := llmagent.Config{
-		Name: "Search",
+		Name: "search",
 		Description: `Uses WebSearch.
 - Short name: {S}`,
 		Model:                 llm,
@@ -239,7 +239,7 @@ generation. Then, the search platform will return the searched results.
 // This agent is responsible for "5. Code Agent (C)".
 func NewCodeAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
 	cfg := llmagent.Config{
-		Name: "Code",
+		Name: "code",
 		Description: `Code-execution strategy for precise computation.
 - Short name: {C}`,
 		Model:                 llm,
@@ -271,7 +271,7 @@ query to solve the problem.`,
 // This agent is responsible for "6. Code Agent+ (C+)".
 func NewCodePlusAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
 	cfg := llmagent.Config{
-		Name: "Code+",
+		Name: "code-plus",
 		Description: `Code-execution strategy for precise computation with a hinted version with extra human-pre-designed priors.
 - Short name: {C+}`,
 		Model:                 llm,
@@ -303,7 +303,7 @@ query to solve the problem.`,
 // This agent is responsible for "7. Dual-Tool Agent (CS gs)".
 func NewDualToolGSAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
 	cfg := llmagent.Config{
-		Name: "Dual-Tool",
+		Name: "dual-tool-google-search",
 		Description: `Dual-tool strategy combining code execution and Google Search API search.
 - Short name: {CSgs}`,
 		Model:                 llm,
@@ -346,7 +346,7 @@ generate more code or search queries to solve the problem.`,
 // This agent is responsible for "8. Dual-Tool Agent (CS llm)".
 func NewDualToolLLMAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
 	cfg := llmagent.Config{
-		Name: "Dual-Tool",
+		Name: "dual-tool-llm-search",
 		Description: `Dual-tool strategy combining code execution and LLM search function.
 - Short name: {CSllm}`,
 		Model:                 llm,
@@ -389,7 +389,7 @@ generate more code or search queries to solve the problem.`,
 // This agent is responsible for "9. Dual-Tool Agent (CS com)".
 func NewDualToolComAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
 	cfg := llmagent.Config{
-		Name: "Dual-Tool",
+		Name: "dual-tool-combine-search",
 		Description: `Dual-tool strategy combining code execution and combination of Google Search API search and LLM search function.
 - Short name: {CScom}`,
 		Model:                 llm,
@@ -432,7 +432,7 @@ generate more code or search queries to solve the problem.`,
 // This agent is responsible for "10. Guided Agent (CSGgs)".
 func NewGuidedGSAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
 	cfg := llmagent.Config{
-		Name: "Guided",
+		Name: "guided-google-search",
 		Description: `Dual-tool strategy combining code execution and Google Search API search.
 - Short name: {CSG}`,
 		Model:                 llm,
@@ -482,7 +482,7 @@ Now, here is the task:`,
 // This agent is responsible for "11. Guided Agent (CSGllm)".
 func NewGuidedLLMAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
 	cfg := llmagent.Config{
-		Name: "Guided",
+		Name: "guided-llm-search",
 		Description: `Dual-tool strategy combining code execution and LLM search function.
 - Short name: {CSGllm}`,
 		Model:                 llm,
@@ -532,7 +532,7 @@ Now, here is the task:`,
 // This agent is responsible for "12. Guided Agent (CSGcom)".
 func NewGuidedComAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
 	cfg := llmagent.Config{
-		Name: "Guided",
+		Name: "guided-combine-search",
 		Description: `Dual-tool strategy combining code execution and combination of Google Search API search and LLM search function.
 - Short name: {CSGcom}`,
 		Model:                 llm,
@@ -582,7 +582,7 @@ Now, here is the task:`,
 // This agent is responsible for "13. Guided Agent+ (CSG+gs)".
 func NewGuidedPlusGSAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
 	cfg := llmagent.Config{
-		Name: "Guided+ gs",
+		Name: "guided-plus-google-search",
 		Description: `Guided dual-tool with stronger priors combining code execution and Google Search API search.
 - Short name: {CSG+gs}`,
 		Model:                 llm,
@@ -613,7 +613,7 @@ When ready, output the guidance between «< and »>, e.g., «<Run a short Python
 // This agent is responsible for "14. Guided Agent+ (CSG+llm)".
 func NewGuidedPlusLLMAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
 	cfg := llmagent.Config{
-		Name: "Guided+ llm",
+		Name: "guided-plus-llm-search",
 		Description: `Guided dual-tool with stronger priors combining code execution and LLM search function.
 - Short name: {CSG+llm}`,
 		Model:                 llm,
@@ -644,7 +644,7 @@ Return guidance between «< and »>.`,
 // This agent is responsible for "15. Guided Agent+ (CSG+com)".
 func NewGuidedPlusComAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agent, error) {
 	cfg := llmagent.Config{
-		Name: "Guided+ com",
+		Name: "guided-plus-combine-Search",
 		Description: `Guided dual-tool with stronger priors combining code execution and mixed Google/LLM search.
 - Short name: {CSG+com}`,
 		Model:                 llm,
