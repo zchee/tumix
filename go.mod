@@ -27,7 +27,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/google/go-replayers/grpcreplay v1.3.1-0.20250327185215-2dbb62fbf480 // @main
 	github.com/google/go-replayers/httpreplay v1.2.1-0.20250327185215-2dbb62fbf480 // @main
-	github.com/openai/openai-go/v3 v3.9.0
+	github.com/openai/openai-go/v3 v3.10.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.63.0
 	go.opentelemetry.io/otel v1.38.0
 	go.opentelemetry.io/otel/sdk v1.38.0
