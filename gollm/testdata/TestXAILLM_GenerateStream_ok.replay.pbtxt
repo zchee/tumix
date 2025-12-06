@@ -18,3 +18,35 @@ message: {
   }
 }
 ref_index: 1
+562
+kind: RECV
+message: {
+  [type.googleapis.com/xai_api.GetChatCompletionChunk]: {
+    id: "chunk-id"
+    outputs: {
+      delta: {
+        content: "Paris"
+        role: ROLE_ASSISTANT
+      }
+      finish_reason: REASON_STOP
+    }
+    created: {
+      seconds: 1765016590
+      nanos: 256687402
+    }
+    model: "grok-4-1-fast-non-reasoning"
+    system_fingerprint: "fp_174298dd8e"
+    usage: {
+      completion_tokens: 1
+      prompt_tokens: 175
+      total_tokens: 176
+      prompt_text_tokens: 175
+      cached_prompt_text_tokens: 174
+    }
+  }
+}
+ref_index: 1
+39
+kind: RECV
+is_error: true
+ref_index: 1
