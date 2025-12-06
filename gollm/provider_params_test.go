@@ -39,7 +39,7 @@ func TestProviderParams_AnthropicMutate(t *testing.T) {
 	SetProviderParams(req, &ProviderParams{
 		Anthropic: &AnthropicProviderParams{
 			Mutate: []AnthropicParamMutator{
-				func(p *anthropic.MessageNewParams) {
+				func(p *anthropic.BetaMessageNewParams) {
 					p.Metadata.UserID = param.NewOpt("user-123")
 				},
 			},
