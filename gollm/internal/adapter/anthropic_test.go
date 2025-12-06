@@ -28,72 +28,128 @@ import (
 	"github.com/zchee/tumix/gollm/internal/adapter"
 )
 
-func TestAnthropicMessageToLLMResponse_TextAndToolCall(t *testing.T) {
-	raw := []byte(`{
-        "content": [
-            {"type": "text", "text": "The capital is "},
-            {"type": "tool_use", "id": "tool-1", "name": "get_weather", "input": {"city": "Paris"}}
-        ],
-        "model": "claude-3",
-        "role": "assistant",
-        "stop_reason": "end_turn",
-        "stop_sequence": null,
-        "type": "message",
-        "usage": {"input_tokens": 5, "output_tokens": 7}
-    }`)
+func TestAnthropicBetaMessageToLLMResponse(t *testing.T) {
+	t.Parallel()
 
-	var msg anthropic.Message
-	if err := json.Unmarshal(raw, &msg); err != nil {
-		t.Fatalf("unmarshal anthropic message: %v", err)
-	}
-
-	got, err := adapter.AnthropicMessageToLLMResponse(&msg)
-	if err != nil {
-		t.Fatalf("AnthropicMessageToLLMResponse() err = %v", err)
-	}
-
-	want := &model.LLMResponse{
-		Content: &genai.Content{
-			Role: genai.RoleModel,
-			Parts: []*genai.Part{
-				genai.NewPartFromText("The capital is "),
-				{FunctionCall: &genai.FunctionCall{ID: "tool-1", Name: "get_weather", Args: map[string]any{"city": "Paris"}}},
+	tests := map[string]struct {
+		raw  string
+		want *model.LLMResponse
+	}{
+		"text and tool call": {
+			raw: `{
+  "id": "msg_1",
+  "container": {
+    "id": "cont_1",
+    "expires_at": "2024-01-01T00:00:00Z",
+    "skills": [
+      {"skill_id": "sk1", "type": "anthropic", "version": "latest"}
+    ]
+  },
+  "content": [
+    {"type": "text", "text": "The capital is ", "citations": []},
+    {"type": "tool_use", "id": "tool-1", "name": "get_weather", "input": {"city": "Paris"}}
+  ],
+  "context_management": {
+    "applied_edits": [
+      {"type": "clear_tool_uses_20250919", "cleared_tool_uses": 0, "cleared_input_tokens": 0}
+    ]
+  },
+  "model": "claude-3-5-sonnet-20241022",
+  "role": "assistant",
+  "stop_reason": "end_turn",
+  "stop_sequence": "",
+  "type": "message",
+  "usage": {
+    "cache_creation": {"ephemeral_1h_input_tokens": 0, "ephemeral_5m_input_tokens": 0},
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "input_tokens": 5,
+    "output_tokens": 7,
+    "server_tool_use": {"web_fetch_requests": 0, "web_search_requests": 0},
+    "service_tier": "standard"
+  }
+}`,
+			want: &model.LLMResponse{
+				Content: &genai.Content{
+					Role: genai.RoleModel,
+					Parts: []*genai.Part{
+						genai.NewPartFromText("The capital is "),
+						{
+							FunctionCall: &genai.FunctionCall{
+								ID:   "tool-1",
+								Name: "get_weather",
+								Args: map[string]any{"city": "Paris"},
+							},
+						},
+					},
+				},
+				UsageMetadata: &genai.GenerateContentResponseUsageMetadata{
+					PromptTokenCount:     5,
+					CandidatesTokenCount: 7,
+					TotalTokenCount:      12,
+				},
+				FinishReason: genai.FinishReasonStop,
 			},
 		},
-		UsageMetadata: &genai.GenerateContentResponseUsageMetadata{
-			PromptTokenCount:     5,
-			CandidatesTokenCount: 7,
-			TotalTokenCount:      12,
-		},
-		FinishReason: genai.FinishReasonStop,
 	}
 
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Fatalf("AnthropicMessageToLLMResponse diff (-want +got):\n%s", diff)
+	for name, tt := range tests {
+		tt := tt
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var msg anthropic.BetaMessage
+			if err := json.Unmarshal([]byte(tt.raw), &msg); err != nil {
+				t.Fatalf("unmarshal anthropic beta message: %v", err)
+			}
+
+			got, err := adapter.AnthropicBetaMessageToLLMResponse(&msg)
+			if err != nil {
+				t.Fatalf("AnthropicBetaMessageToLLMResponse() err = %v", err)
+			}
+
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Fatalf("AnthropicBetaMessageToLLMResponse diff (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 
-func TestGenAIToAnthropicMessages_SystemAndUser(t *testing.T) {
-	sys := genai.NewContentFromText("system guidance", "system")
-	contents := []*genai.Content{
-		genai.NewContentFromText("hello", genai.RoleUser),
+func TestGenAIToAnthropicBetaMessages(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		system   *genai.Content
+		contents []*genai.Content
+	}{
+		"system and user message": {
+			system:   genai.NewContentFromText("system guidance", "system"),
+			contents: []*genai.Content{genai.NewContentFromText("hello", genai.RoleUser)},
+		},
 	}
 
-	systemBlocks, msgs, err := adapter.GenAIToAnthropicMessages(sys, contents)
-	if err != nil {
-		t.Fatalf("GenAIToAnthropicMessages err = %v", err)
-	}
+	for name, tc := range tests {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 
-	if len(systemBlocks) != 1 || systemBlocks[0].Text != "system guidance" {
-		t.Fatalf("system blocks got %+v", systemBlocks)
-	}
-	if len(msgs) != 1 {
-		t.Fatalf("messages len = %d, want 1", len(msgs))
-	}
-	if msgs[0].Role != anthropic.MessageParamRoleUser {
-		t.Fatalf("msg role = %s, want user", msgs[0].Role)
-	}
-	if len(msgs[0].Content) != 1 {
-		t.Fatalf("msg content len = %d, want 1", len(msgs[0].Content))
+			systemBlocks, msgs, err := adapter.GenAIToAnthropicBetaMessages(tc.system, tc.contents)
+			if err != nil {
+				t.Fatalf("GenAIToAnthropicBetaMessages() error = %v", err)
+			}
+
+			if len(systemBlocks) != 1 || systemBlocks[0].Text != "system guidance" {
+				t.Fatalf("system blocks got %+v", systemBlocks)
+			}
+			if len(msgs) != 1 {
+				t.Fatalf("messages len = %d, want 1", len(msgs))
+			}
+			if msgs[0].Role != anthropic.BetaMessageParamRoleUser {
+				t.Fatalf("msg role = %s, want user", msgs[0].Role)
+			}
+			if len(msgs[0].Content) != 1 {
+				t.Fatalf("msg content len = %d, want 1", len(msgs[0].Content))
+			}
+		})
 	}
 }
