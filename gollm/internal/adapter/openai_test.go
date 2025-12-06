@@ -122,7 +122,7 @@ func TestOpenAIResponseToLLM(t *testing.T) {
 		},
 	}
 
-	got, err := adapter.OpenAIResponseToLLM(resp)
+	got, err := adapter.OpenAIResponseToLLM(resp, nil)
 	if err != nil {
 		t.Fatalf("OpenAIResponseToLLM err = %v", err)
 	}
@@ -151,12 +151,63 @@ func TestOpenAIResponseToLLM(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(want, got); diff != "" {
-		t.Fatalf("OpenAIResponseToLLM diff (-want +got):\n%s", diff)
+		t.Fatalf("OpenAIResponseToLLM diff (-want +got):\n%s\nparts=%#v", diff, got.Content.Parts)
+	}
+}
+
+func TestOpenAIResponseToLLM_StopAndFunctionOutput(t *testing.T) {
+	resp := &responses.Response{
+		ID:     "resp-2",
+		Status: responses.ResponseStatusCompleted,
+		Output: []responses.ResponseOutputItemUnion{
+			{
+				Type: "message",
+				Role: constant.ValueOf[constant.Assistant](),
+				Content: []responses.ResponseOutputMessageContentUnion{
+					{Type: "output_text", Text: "Hello<STOP>tail"},
+				},
+			},
+			{
+				Type:            "shell_call_output",
+				ID:              "out-1",
+				CallID:          "call-1",
+				MaxOutputLength: 16,
+				Output: responses.ResponseOutputItemUnionOutput{
+					OfResponseFunctionShellToolCallOutputOutputArray: []responses.ResponseFunctionShellToolCallOutputOutput{
+						{
+							Outcome: responses.ResponseFunctionShellToolCallOutputOutputOutcomeUnion{
+								Type:     string(constant.ValueOf[constant.Exit]()),
+								ExitCode: 0,
+							},
+							Stdout: "done",
+							Stderr: "",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	got, err := adapter.OpenAIResponseToLLM(resp, []string{"<STOP>"})
+	if err != nil {
+		t.Fatalf("OpenAIResponseToLLM err = %v", err)
+	}
+	if got.FinishReason != genai.FinishReasonStop {
+		t.Fatalf("finish reason = %v, want stop", got.FinishReason)
+	}
+	if got.Content.Parts[0].Text != "Hello" {
+		t.Fatalf("trimmed text = %q, want %q", got.Content.Parts[0].Text, "Hello")
+	}
+	if len(got.Content.Parts) < 2 || got.Content.Parts[1].FunctionResponse == nil {
+		t.Fatalf("function response missing: %+v", got.Content.Parts)
+	}
+	if got.Content.Parts[1].FunctionResponse.Response["output"] == nil {
+		t.Fatalf("function response output = %+v", got.Content.Parts[1].FunctionResponse.Response)
 	}
 }
 
 func TestOpenAIStreamAggregator(t *testing.T) {
-	agg := adapter.NewOpenAIStreamAggregator()
+	agg := adapter.NewOpenAIStreamAggregator([]string{"<STOP>"})
 
 	partials := agg.Process(&responses.ResponseStreamEventUnion{
 		Type:  "response.output_text.delta",

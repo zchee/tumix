@@ -21,6 +21,7 @@ import (
 	jsonv1 "encoding/json" //nolint:depguard
 	"encoding/json/jsontext"
 	json "encoding/json/v2"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -157,6 +158,56 @@ func TestOpenAILLM_GenerateStream(t *testing.T) {
 	}
 	if diff := cmp.Diff("Paris", got.FinalText); diff != "" {
 		t.Errorf("GenerateStream() final diff (-want +got):\n%s", diff)
+	}
+}
+
+func TestOpenAILLM_Generate_MultiCandidate(t *testing.T) {
+	var calls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		enc := jsontext.NewEncoder(w, jsonv1.DefaultOptionsV1())
+		if r.URL.Path != "/responses" && r.URL.Path != "/v1/responses" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		calls++
+		text := fmt.Sprintf("answer-%d", calls)
+		resp := mockResponse(fmt.Sprintf("resp-%d", calls), text, 1, 1, "completed")
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.MarshalEncode(enc, resp); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	llm, err := NewOpenAILLM(t.Context(), AuthMethodAPIKey("test-key"), "gpt-5-mini",
+		nil,
+		option.WithHTTPClient(server.Client()),
+		option.WithBaseURL(server.URL),
+	)
+	if err != nil {
+		t.Fatalf("NewOpenAILLM() error = %v", err)
+	}
+
+	req := &model.LLMRequest{
+		Contents: genai.Text("two please"),
+		Config: &genai.GenerateContentConfig{
+			CandidateCount: 2,
+		},
+	}
+
+	var texts []string
+	for resp, err := range llm.GenerateContent(t.Context(), req, false) {
+		if err != nil {
+			t.Fatalf("GenerateContent() error = %v", err)
+		}
+		texts = append(texts, resp.Content.Parts[0].Text)
+	}
+
+	if len(texts) != 2 {
+		t.Fatalf("got %d responses, want 2", len(texts))
+	}
+	if diff := cmp.Diff([]string{"answer-1", "answer-2"}, texts); diff != "" {
+		t.Fatalf("responses mismatch (-want +got):\n%s", diff)
 	}
 }
 
