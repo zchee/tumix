@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/eino-contrib/jsonschema"
+	"github.com/invopop/jsonschema"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/proto"

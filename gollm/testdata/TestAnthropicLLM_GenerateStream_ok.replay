@@ -1,5 +1,5 @@
 {
-  "Initial": "AQAAAA7gwBk0BpDY4AIc",
+  "Initial": "AQAAAA7gxfsOJOqXkAIc",
   "Version": "0.2",
   "Converter": {
     "ScrubBody": null,
@@ -38,10 +38,10 @@
   },
   "Entries": [
     {
-      "ID": "7a9f67b4b3d119a7",
+      "ID": "6fdcea6aca70d8dd",
       "Request": {
         "Method": "POST",
-        "URL": "https://api.anthropic.com/v1/messages",
+        "URL": "https://api.anthropic.com/v1/messages?beta=true",
         "Header": {
           "Accept": [
             "application/json"
@@ -80,7 +80,7 @@
             "4000000"
           ],
           "Anthropic-Ratelimit-Input-Tokens-Reset": [
-            "2025-12-01T23:18:12Z"
+            "2025-12-06T10:23:10Z"
           ],
           "Anthropic-Ratelimit-Output-Tokens-Limit": [
             "800000"
@@ -89,7 +89,7 @@
             "800000"
           ],
           "Anthropic-Ratelimit-Output-Tokens-Reset": [
-            "2025-12-01T23:18:12Z"
+            "2025-12-06T10:23:10Z"
           ],
           "Anthropic-Ratelimit-Requests-Limit": [
             "4000"
@@ -98,7 +98,7 @@
             "3999"
           ],
           "Anthropic-Ratelimit-Requests-Reset": [
-            "2025-12-01T23:18:12Z"
+            "2025-12-06T10:23:10Z"
           ],
           "Anthropic-Ratelimit-Tokens-Limit": [
             "4800000"
@@ -107,7 +107,7 @@
             "4800000"
           ],
           "Anthropic-Ratelimit-Tokens-Reset": [
-            "2025-12-01T23:18:12Z"
+            "2025-12-06T10:23:10Z"
           ],
           "Cache-Control": [
             "no-cache"
@@ -116,19 +116,19 @@
             "DYNAMIC"
           ],
           "Cf-Ray": [
-            "9a764d668fe9d77f-NRT"
+            "9a9b10fbfc64590d-NRT"
           ],
           "Content-Type": [
             "text/event-stream; charset=utf-8"
           ],
           "Date": [
-            "Mon, 01 Dec 2025 23:18:13 GMT"
+            "Sat, 06 Dec 2025 10:23:11 GMT"
           ],
           "Request-Id": [
-            "req_011CVgpbprKg7vB5Jw8pGZ2S"
+            "req_011CVqGYaNA3yAXjF8uytYZg"
           ],
           "Retry-After": [
-            "49"
+            "53"
           ],
           "Server": [
             "cloudflare"
@@ -137,13 +137,13 @@
             "max-age=31536000; includeSubDomains; preload"
           ],
           "X-Envoy-Upstream-Service-Time": [
-            "1323"
+            "308"
           ],
           "X-Robots-Tag": [
             "none"
           ]
         },
-        "Body": "ZXZlbnQ6IG1lc3NhZ2Vfc3RhcnQKZGF0YTogeyJ0eXBlIjoibWVzc2FnZV9zdGFydCIsIm1lc3NhZ2UiOnsibW9kZWwiOiJjbGF1ZGUtaGFpa3UtNC01LTIwMjUxMDAxIiwiaWQiOiJtc2dfMDE1Ung0MVgzU2g4cnpyZHBoQjVGd2hyIiwidHlwZSI6Im1lc3NhZ2UiLCJyb2xlIjoiYXNzaXN0YW50IiwiY29udGVudCI6W10sInN0b3BfcmVhc29uIjpudWxsLCJzdG9wX3NlcXVlbmNlIjpudWxsLCJ1c2FnZSI6eyJpbnB1dF90b2tlbnMiOjE3LCJjYWNoZV9jcmVhdGlvbl9pbnB1dF90b2tlbnMiOjAsImNhY2hlX3JlYWRfaW5wdXRfdG9rZW5zIjowLCJjYWNoZV9jcmVhdGlvbiI6eyJlcGhlbWVyYWxfNW1faW5wdXRfdG9rZW5zIjowLCJlcGhlbWVyYWxfMWhfaW5wdXRfdG9rZW5zIjowfSwib3V0cHV0X3Rva2VucyI6MSwic2VydmljZV90aWVyIjoic3RhbmRhcmQifX19CgpldmVudDogY29udGVudF9ibG9ja19zdGFydApkYXRhOiB7InR5cGUiOiJjb250ZW50X2Jsb2NrX3N0YXJ0IiwiaW5kZXgiOjAsImNvbnRlbnRfYmxvY2siOnsidHlwZSI6InRleHQiLCJ0ZXh0IjoiIn0gICAgICAgICAgfQoKZXZlbnQ6IGNvbnRlbnRfYmxvY2tfZGVsdGEKZGF0YTogeyJ0eXBlIjoiY29udGVudF9ibG9ja19kZWx0YSIsImluZGV4IjowLCJkZWx0YSI6eyJ0eXBlIjoidGV4dF9kZWx0YSIsInRleHQiOiJQYXJpcyJ9IH0KCmV2ZW50OiBjb250ZW50X2Jsb2NrX3N0b3AKZGF0YTogeyJ0eXBlIjoiY29udGVudF9ibG9ja19zdG9wIiwiaW5kZXgiOjAgICAgIH0KCmV2ZW50OiBtZXNzYWdlX2RlbHRhCmRhdGE6IHsidHlwZSI6Im1lc3NhZ2VfZGVsdGEiLCJkZWx0YSI6eyJzdG9wX3JlYXNvbiI6ImVuZF90dXJuIiwic3RvcF9zZXF1ZW5jZSI6bnVsbH0sInVzYWdlIjp7ImlucHV0X3Rva2VucyI6MTcsImNhY2hlX2NyZWF0aW9uX2lucHV0X3Rva2VucyI6MCwiY2FjaGVfcmVhZF9pbnB1dF90b2tlbnMiOjAsIm91dHB1dF90b2tlbnMiOjR9ICAgICAgICAgICAgICB9CgpldmVudDogbWVzc2FnZV9zdG9wCmRhdGE6IHsidHlwZSI6Im1lc3NhZ2Vfc3RvcCIgICAgICAgICAgIH0KCg=="
+        "Body": "ZXZlbnQ6IG1lc3NhZ2Vfc3RhcnQKZGF0YTogeyJ0eXBlIjoibWVzc2FnZV9zdGFydCIsIm1lc3NhZ2UiOnsibW9kZWwiOiJjbGF1ZGUtaGFpa3UtNC01LTIwMjUxMDAxIiwiaWQiOiJtc2dfMDE4c1FUWFBIb0tqU1BRMXUydFpaVnZOIiwidHlwZSI6Im1lc3NhZ2UiLCJyb2xlIjoiYXNzaXN0YW50IiwiY29udGVudCI6W10sInN0b3BfcmVhc29uIjpudWxsLCJzdG9wX3NlcXVlbmNlIjpudWxsLCJ1c2FnZSI6eyJpbnB1dF90b2tlbnMiOjE3LCJjYWNoZV9jcmVhdGlvbl9pbnB1dF90b2tlbnMiOjAsImNhY2hlX3JlYWRfaW5wdXRfdG9rZW5zIjowLCJjYWNoZV9jcmVhdGlvbiI6eyJlcGhlbWVyYWxfNW1faW5wdXRfdG9rZW5zIjowLCJlcGhlbWVyYWxfMWhfaW5wdXRfdG9rZW5zIjowfSwib3V0cHV0X3Rva2VucyI6MSwic2VydmljZV90aWVyIjoic3RhbmRhcmQifX19CgpldmVudDogY29udGVudF9ibG9ja19zdGFydApkYXRhOiB7InR5cGUiOiJjb250ZW50X2Jsb2NrX3N0YXJ0IiwiaW5kZXgiOjAsImNvbnRlbnRfYmxvY2siOnsidHlwZSI6InRleHQiLCJ0ZXh0IjoiIn0gICAgICAgfQoKZXZlbnQ6IGNvbnRlbnRfYmxvY2tfZGVsdGEKZGF0YTogeyJ0eXBlIjoiY29udGVudF9ibG9ja19kZWx0YSIsImluZGV4IjowLCJkZWx0YSI6eyJ0eXBlIjoidGV4dF9kZWx0YSIsInRleHQiOiJQYXJpcyJ9ICAgICAgICAgICAgfQoKZXZlbnQ6IGNvbnRlbnRfYmxvY2tfc3RvcApkYXRhOiB7InR5cGUiOiJjb250ZW50X2Jsb2NrX3N0b3AiLCJpbmRleCI6MCAgICAgICAgfQoKZXZlbnQ6IG1lc3NhZ2VfZGVsdGEKZGF0YTogeyJ0eXBlIjoibWVzc2FnZV9kZWx0YSIsImRlbHRhIjp7InN0b3BfcmVhc29uIjoiZW5kX3R1cm4iLCJzdG9wX3NlcXVlbmNlIjpudWxsfSwidXNhZ2UiOnsiaW5wdXRfdG9rZW5zIjoxNywiY2FjaGVfY3JlYXRpb25faW5wdXRfdG9rZW5zIjowLCJjYWNoZV9yZWFkX2lucHV0X3Rva2VucyI6MCwib3V0cHV0X3Rva2VucyI6NH0gIH0KCmV2ZW50OiBtZXNzYWdlX3N0b3AKZGF0YTogeyJ0eXBlIjoibWVzc2FnZV9zdG9wIiAgICAgIH0KCg=="
       }
     }
   ]
