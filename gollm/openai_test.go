@@ -18,7 +18,7 @@ package gollm
 
 import (
 	"bytes"
-	jsonv1 "encoding/json"
+	jsonv1 "encoding/json" //nolint:depguard
 	"encoding/json/jsontext"
 	json "encoding/json/v2"
 	"io"
