@@ -18,6 +18,8 @@ package gollm
 
 import (
 	"bytes"
+	jsonv1 "encoding/json"
+	"encoding/json/jsontext"
 	json "encoding/json/v2"
 	"io"
 	"net/http"
@@ -43,18 +45,14 @@ func TestOpenAILLM_Generate(t *testing.T) {
 	)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		enc := jsontext.NewEncoder(w, jsonv1.DefaultOptionsV1())
 		if r.URL.Path != "/responses" && r.URL.Path != "/v1/responses" {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		raw, err := json.Marshal(syncResp)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		if _, err := w.Write(raw); err != nil {
+		if err := json.MarshalEncode(enc, syncResp); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 	}))
@@ -107,6 +105,7 @@ func TestOpenAILLM_GenerateStream(t *testing.T) {
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		enc := jsontext.NewEncoder(w, jsonv1.DefaultOptionsV1())
 		if r.URL.Path != "/responses" && r.URL.Path != "/v1/responses" {
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -129,12 +128,7 @@ func TestOpenAILLM_GenerateStream(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		raw, err := json.Marshal(streamResp)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		if _, err := w.Write(raw); err != nil {
+		if err := json.MarshalEncode(enc, streamResp); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 	}))
