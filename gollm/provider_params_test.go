@@ -17,6 +17,7 @@
 package gollm
 
 import (
+	"slices"
 	"testing"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
@@ -269,5 +270,117 @@ func TestProviderParams_DefaultsAppliedToXAI(t *testing.T) {
 	}
 	if gotReq.GetMaxTokens() != 111 {
 		t.Fatalf("MaxTokens = %v, want 111", gotReq.GetMaxTokens())
+	}
+}
+
+func TestMergeMutatorsUsesOrderAndCopies(t *testing.T) {
+	type sample struct {
+		steps *[]string
+	}
+
+	base := &ProviderMutators[sample]{
+		Mutate: []ProviderMutator[sample]{
+			func(s *sample) { *s.steps = append(*s.steps, "base-1") },
+		},
+	}
+	add := &ProviderMutators[sample]{
+		Mutate: []ProviderMutator[sample]{
+			func(s *sample) { *s.steps = append(*s.steps, "add-1") },
+		},
+	}
+
+	merged := mergeMutators(copyMutators(base), copyMutators(add))
+	if merged == nil {
+		t.Fatal("mergeMutators() = nil, want non-nil")
+	}
+
+	var seq []string
+	target := sample{steps: &seq}
+	for _, mutate := range merged.Mutate {
+		mutate(&target)
+	}
+
+	if !slices.Equal(seq, []string{"base-1", "add-1"}) {
+		t.Fatalf("mutate order = %v, want [base-1 add-1]", seq)
+	}
+
+	base.Mutate = append(base.Mutate, func(*sample) {})
+	if len(merged.Mutate) != 2 {
+		t.Fatalf("merged mutate length mutated with base slice, got %d, want 2", len(merged.Mutate))
+	}
+}
+
+func TestMergeOptionsNilSafeAndCopies(t *testing.T) {
+	if got := mergeOptions[int](nil, nil); got != nil {
+		t.Fatalf("mergeOptions(nil, nil) = %v, want nil", got)
+	}
+
+	base := &ProviderOptions[int]{Options: []int{1, 2}}
+	add := &ProviderOptions[int]{Options: []int{3}}
+
+	merged := mergeOptions(copyOptions(base), copyOptions(add))
+	if merged == nil {
+		t.Fatal("mergeOptions() = nil, want non-nil")
+	}
+
+	if !slices.Equal(merged.Options, []int{1, 2, 3}) {
+		t.Fatalf("merged options = %v, want [1 2 3]", merged.Options)
+	}
+
+	base.Options[0] = 99
+	if merged.Options[0] != 1 {
+		t.Fatalf("merged options mutated after base change, got %d, want 1", merged.Options[0])
+	}
+}
+
+func TestProviderParams_DefaultsAndRequestMergeForXAI(t *testing.T) {
+	req := &model.LLMRequest{
+		Contents: genai.Text("hi"),
+		Config:   &genai.GenerateContentConfig{},
+	}
+
+	defaults := &ProviderParams{
+		XAI: &XAIProviderParams{
+			Options: []xai.ChatOption{
+				xai.WithUser("default-user"),
+				xai.WithMaxTokens(111),
+			},
+		},
+	}
+	SetProviderParams(req, &ProviderParams{
+		XAI: &XAIProviderParams{
+			Options: []xai.ChatOption{
+				xai.WithUser("request-user"),
+				xai.WithMaxTokens(222),
+			},
+		},
+	})
+
+	opts := appendXAIProviderOptions(req, defaults, []xai.ChatOption{
+		xai.WithMessages(&xaipb.Message{Role: xaipb.MessageRole_ROLE_USER}),
+	})
+
+	gotReq := &xaipb.GetCompletionsRequest{}
+	for _, opt := range opts {
+		opt(gotReq, &xai.ChatSession{})
+	}
+
+	if gotReq.GetUser() != "request-user" {
+		t.Fatalf("User = %q, want %q (request override)", gotReq.GetUser(), "request-user")
+	}
+	if gotReq.GetMaxTokens() != 222 {
+		t.Fatalf("MaxTokens = %v, want 222 (request override)", gotReq.GetMaxTokens())
+	}
+
+	// Mutate defaults after merge to ensure merged slice was copied.
+	defaults.XAI.Options[0] = xai.WithUser("mutated-user")
+	defaults.XAI.Options[1] = xai.WithMaxTokens(999)
+
+	gotReq2 := &xaipb.GetCompletionsRequest{}
+	for _, opt := range opts {
+		opt(gotReq2, &xai.ChatSession{})
+	}
+	if gotReq2.GetUser() != "request-user" || gotReq2.GetMaxTokens() != 222 {
+		t.Fatalf("merged options mutated after defaults change, got user=%q max=%v", gotReq2.GetUser(), gotReq2.GetMaxTokens())
 	}
 }
