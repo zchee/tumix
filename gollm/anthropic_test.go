@@ -68,7 +68,7 @@ func TestAnthropicLLM_Generate(t *testing.T) {
 				apiKey = AuthMethodAPIKey("test-key")
 			}
 
-			llm, err := NewAnthropicLLM(t.Context(), apiKey, tt.modelName,
+			llm, err := NewAnthropicLLM(t.Context(), apiKey, tt.modelName, nil,
 				option.WithHTTPClient(httpClient),
 			)
 			if err != nil {
@@ -125,7 +125,7 @@ func TestAnthropicLLM_GenerateStream(t *testing.T) {
 				apiKey = AuthMethodAPIKey("test-key")
 			}
 
-			llm, err := NewAnthropicLLM(t.Context(), apiKey, tt.modelName,
+			llm, err := NewAnthropicLLM(t.Context(), apiKey, tt.modelName, nil,
 				option.WithHTTPClient(httpClient),
 			)
 			if err != nil {
