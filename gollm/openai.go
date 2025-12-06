@@ -96,28 +96,39 @@ func (m *openAILLM) GenerateContent(ctx context.Context, req *model.LLMRequest, 
 		}
 	}
 
+	stopSeq := req.Config.StopSequences
+	count := int(req.Config.CandidateCount)
+	if count <= 0 {
+		count = 1
+	}
+
 	if stream {
-		return m.stream(ctx, span, params)
+		// Responses streaming currently returns a single candidate; fall back to one even if caller asked for more.
+		return m.stream(ctx, span, params, stopSeq)
 	}
 
 	return func(yield func(*model.LLMResponse, error) bool) {
 		var spanErr error
 		defer func() { telemetry.End(span, spanErr) }()
 
-		resp, err := m.client.Responses.New(ctx, *params)
-		if err != nil {
-			spanErr = err
-			yield(nil, err)
-			return
-		}
+		for i := 0; i < count; i++ {
+			resp, err := m.client.Responses.New(ctx, *params)
+			if err != nil {
+				spanErr = err
+				yield(nil, err)
+				return
+			}
 
-		llmResp, err := adapter.OpenAIResponseToLLM(resp)
-		if err != nil {
-			spanErr = err
-			yield(nil, err)
-			return
+			llmResp, err := adapter.OpenAIResponseToLLM(resp, stopSeq)
+			if err != nil {
+				spanErr = err
+				yield(nil, err)
+				return
+			}
+			if !yield(llmResp, nil) {
+				return
+			}
 		}
-		yield(llmResp, nil)
 	}
 }
 
@@ -149,15 +160,6 @@ func (m *openAILLM) responseParams(req *model.LLMRequest) (*responses.ResponseNe
 	if cfg.MaxOutputTokens > 0 {
 		params.MaxOutputTokens = param.NewOpt(int64(cfg.MaxOutputTokens))
 	}
-	if cfg.CandidateCount > 1 {
-		return nil, fmt.Errorf("candidate_count %d not supported by Responses API", cfg.CandidateCount)
-	}
-	if len(cfg.StopSequences) > 0 {
-		return nil, fmt.Errorf("stop sequences are not supported by Responses API: %v", cfg.StopSequences)
-	}
-	if cfg.Seed != nil {
-		return nil, fmt.Errorf("seed is not supported by Responses API")
-	}
 	switch {
 	case cfg.Logprobs != nil:
 		params.TopLogprobs = param.NewOpt(int64(*cfg.Logprobs))
@@ -182,8 +184,8 @@ func (m *openAILLM) responseParams(req *model.LLMRequest) (*responses.ResponseNe
 //
 // It forwards each streamed chunk through the OpenAI aggregator and emits final output
 // after the stream ends, respecting consumer backpressure.
-func (m *openAILLM) stream(ctx context.Context, span trace.Span, params *responses.ResponseNewParams) iter.Seq2[*model.LLMResponse, error] {
-	agg := adapter.NewOpenAIStreamAggregator()
+func (m *openAILLM) stream(ctx context.Context, span trace.Span, params *responses.ResponseNewParams, stopSeq []string) iter.Seq2[*model.LLMResponse, error] {
+	agg := adapter.NewOpenAIStreamAggregator(stopSeq)
 
 	return func(yield func(*model.LLMResponse, error) bool) {
 		stream := m.client.Responses.NewStreaming(ctx, *params)

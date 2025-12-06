@@ -32,7 +32,7 @@ import (
 
 // OpenAIResponseToLLM converts an OpenAI Responses payload into an ADK LLMResponse,
 // returning an error when the payload is nil or contains no output items.
-func OpenAIResponseToLLM(resp *responses.Response) (*model.LLMResponse, error) {
+func OpenAIResponseToLLM(resp *responses.Response, stopSequences []string) (*model.LLMResponse, error) {
 	if resp == nil {
 		return nil, fmt.Errorf("nil openai response")
 	}
@@ -41,30 +41,28 @@ func OpenAIResponseToLLM(resp *responses.Response) (*model.LLMResponse, error) {
 	}
 
 	parts := make([]*genai.Part, 0, len(resp.Output))
+	var sawText bool
 
 	for i := range resp.Output {
 		item := &resp.Output[i]
 		typ := strings.ToLower(strings.TrimSpace(item.Type))
 		switch typ {
 		case "message":
-			if len(item.Content) == 0 {
-				continue
-			}
 			for ci := range item.Content {
 				c := &item.Content[ci]
-				ctype := strings.ToLower(strings.TrimSpace(c.Type))
-				switch ctype {
+				switch strings.ToLower(strings.TrimSpace(c.Type)) {
 				case "output_text":
 					if c.Text != "" {
 						parts = append(parts, genai.NewPartFromText(c.Text))
+						sawText = true
 					}
 				case "refusal":
 					if c.Refusal != "" {
 						parts = append(parts, genai.NewPartFromText(c.Refusal))
+						sawText = true
 					}
 				}
 			}
-
 		case "function_call":
 			fnID := item.CallID
 			if fnID == "" {
@@ -77,6 +75,19 @@ func OpenAIResponseToLLM(resp *responses.Response) (*model.LLMResponse, error) {
 					Args: parseArgs(item.Arguments),
 				},
 			})
+		case "shell_call_output":
+			out := responseOutputUnionToAny(item.Output)
+			name := item.CallID
+			if name == "" {
+				name = item.ID
+			}
+			parts = append(parts, &genai.Part{
+				FunctionResponse: &genai.FunctionResponse{
+					ID:       item.ID,
+					Name:     name,
+					Response: map[string]any{"output": out},
+				},
+			})
 		}
 	}
 
@@ -86,6 +97,9 @@ func OpenAIResponseToLLM(resp *responses.Response) (*model.LLMResponse, error) {
 
 	usage := openAIUsage(&resp.Usage)
 	finish := mapResponseFinishReason(resp.Status, resp.IncompleteDetails)
+	if sawText && trimPartsAtStop(parts, stopSequences) {
+		finish = genai.FinishReasonStop
+	}
 
 	return &model.LLMResponse{
 		Content: &genai.Content{
@@ -113,11 +127,12 @@ type OpenAIStreamAggregator struct {
 	status    responses.ResponseStatus
 	final     *model.LLMResponse
 	err       error
+	stopSeq   []string
 }
 
 // NewOpenAIStreamAggregator constructs a streaming aggregator for Responses events.
-func NewOpenAIStreamAggregator() *OpenAIStreamAggregator {
-	return &OpenAIStreamAggregator{}
+func NewOpenAIStreamAggregator(stopSequences []string) *OpenAIStreamAggregator {
+	return &OpenAIStreamAggregator{stopSeq: stopSequences}
 }
 
 // Process consumes a streaming event and emits any partial LLM responses produced by it.
@@ -166,7 +181,7 @@ func (a *OpenAIStreamAggregator) Process(event *responses.ResponseStreamEventUni
 	case "response.completed":
 		a.status = responses.ResponseStatusCompleted
 		a.usage = &event.Response.Usage
-		llm, err := OpenAIResponseToLLM(&event.Response)
+		llm, err := OpenAIResponseToLLM(&event.Response, a.stopSeq)
 		if err == nil {
 			a.final = llm
 			return []*model.LLMResponse{llm}
@@ -177,7 +192,7 @@ func (a *OpenAIStreamAggregator) Process(event *responses.ResponseStreamEventUni
 	case "response.incomplete":
 		a.status = responses.ResponseStatusIncomplete
 		a.usage = &event.Response.Usage
-		llm, err := OpenAIResponseToLLM(&event.Response)
+		llm, err := OpenAIResponseToLLM(&event.Response, a.stopSeq)
 		if err == nil {
 			a.final = llm
 			return []*model.LLMResponse{llm}
@@ -209,8 +224,10 @@ func (a *OpenAIStreamAggregator) Final() *model.LLMResponse {
 	}
 
 	parts := make([]*genai.Part, 0, 1+len(a.toolCalls))
-	if a.text.Len() > 0 {
-		parts = append(parts, genai.NewPartFromText(a.text.String()))
+	text := a.text.String()
+	trimmed := trimAtStop(text, a.stopSeq)
+	if trimmed.text != "" {
+		parts = append(parts, genai.NewPartFromText(trimmed.text))
 	}
 
 	if len(a.toolCalls) > 0 {
@@ -229,6 +246,9 @@ func (a *OpenAIStreamAggregator) Final() *model.LLMResponse {
 	}
 
 	finish := mapResponseFinishReason(a.status, responses.ResponseIncompleteDetails{})
+	if trimmed.hit {
+		finish = genai.FinishReasonStop
+	}
 	return &model.LLMResponse{
 		Content: &genai.Content{
 			Role:  genai.RoleModel,
@@ -259,6 +279,64 @@ func (a *OpenAIStreamAggregator) ensureToolCall(idx int64, id string) *toolCallS
 	a.toolCalls = append(a.toolCalls, tc)
 
 	return tc
+}
+
+type stopTrimResult struct {
+	text string
+	hit  bool
+}
+
+func trimAtStop(s string, stops []string) stopTrimResult {
+	if len(stops) == 0 || s == "" {
+		return stopTrimResult{text: s}
+	}
+
+	first := len(s)
+	for _, stop := range stops {
+		if stop == "" {
+			continue
+		}
+		if idx := strings.Index(s, stop); idx >= 0 && idx < first {
+			first = idx
+		}
+	}
+
+	if first == len(s) {
+		return stopTrimResult{text: s}
+	}
+	return stopTrimResult{text: s[:first], hit: true}
+}
+
+func trimPartsAtStop(parts []*genai.Part, stops []string) bool {
+	var trimmed bool
+	for i, p := range parts {
+		if p == nil || p.Text == "" {
+			continue
+		}
+		res := trimAtStop(p.Text, stops)
+		if res.hit {
+			p.Text = res.text
+			trimmed = true
+			// blank out any subsequent text parts to avoid leaking content past stop.
+			for j := i + 1; j < len(parts); j++ {
+				if parts[j] != nil {
+					parts[j].Text = ""
+				}
+			}
+			break
+		}
+	}
+	return trimmed
+}
+
+func responseOutputUnionToAny(out responses.ResponseOutputItemUnionOutput) any {
+	if len(out.OfResponseFunctionShellToolCallOutputOutputArray) > 0 {
+		return out.OfResponseFunctionShellToolCallOutputOutputArray
+	}
+	if out.OfString != "" {
+		return out.OfString
+	}
+	return nil
 }
 
 func parseArgs(raw string) map[string]any {
