@@ -94,7 +94,6 @@ func TestAnthropicBetaMessageToLLMResponse(t *testing.T) {
 	}
 
 	for name, tt := range tests {
-		tt := tt
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
@@ -129,7 +128,6 @@ func TestGenAIToAnthropicBetaMessages(t *testing.T) {
 	}
 
 	for name, tc := range tests {
-		tc := tc
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
