@@ -35,7 +35,7 @@ type ProviderParams struct {
 }
 
 // AnthropicParamMutator mutates the Anthropic message params after defaults are applied.
-type AnthropicParamMutator func(*anthropic.MessageNewParams)
+type AnthropicParamMutator func(*anthropic.BetaMessageNewParams)
 
 // AnthropicProviderParams contains Anthropic-specific overrides.
 type AnthropicProviderParams struct {
