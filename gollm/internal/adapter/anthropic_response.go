@@ -28,51 +28,6 @@ import (
 	"google.golang.org/genai"
 )
 
-// AnthropicMessageToLLMResponse converts a non-streaming Anthropic message into an ADK LLM response.
-func AnthropicMessageToLLMResponse(msg *anthropic.Message) (*model.LLMResponse, error) {
-	if msg == nil {
-		return nil, errors.New("nil anthropic message")
-	}
-
-	parts := make([]*genai.Part, 0, len(msg.Content))
-	for block := range slices.Values(msg.Content) {
-		switch v := block.AsAny().(type) {
-		case anthropic.TextBlock:
-			parts = append(parts, genai.NewPartFromText(v.Text))
-		case anthropic.ToolUseBlock:
-			args := map[string]any{}
-			if len(v.Input) > 0 {
-				if err := json.Unmarshal(v.Input, &args); err != nil {
-					return nil, fmt.Errorf("unmarshal json: %w", err)
-				}
-			}
-			parts = append(parts, &genai.Part{
-				FunctionCall: &genai.FunctionCall{
-					ID:   v.ID,
-					Name: v.Name,
-					Args: args,
-				},
-			})
-		}
-	}
-
-	usage := msg.Usage
-	llmUsage := &genai.GenerateContentResponseUsageMetadata{
-		PromptTokenCount:     int32(usage.InputTokens),
-		CandidatesTokenCount: int32(usage.OutputTokens),
-		TotalTokenCount:      int32(usage.InputTokens + usage.OutputTokens),
-	}
-
-	return &model.LLMResponse{
-		Content: &genai.Content{
-			Role:  genai.RoleModel,
-			Parts: parts,
-		},
-		UsageMetadata: llmUsage,
-		FinishReason:  mapAnthropicFinishReason(msg.StopReason),
-	}, nil
-}
-
 // AnthropicBetaMessageToLLMResponse converts a Beta Anthropic message into an ADK LLM response.
 func AnthropicBetaMessageToLLMResponse(msg *anthropic.BetaMessage) (*model.LLMResponse, error) {
 	if msg == nil {
@@ -137,33 +92,6 @@ func mapAnthropicBetaFinishReason(reason anthropic.BetaStopReason) genai.FinishR
 	default:
 		return genai.FinishReasonUnspecified
 	}
-}
-
-func mapAnthropicFinishReason(reason anthropic.StopReason) genai.FinishReason {
-	switch reason {
-	case anthropic.StopReasonStopSequence, anthropic.StopReasonEndTurn:
-		return genai.FinishReasonStop
-	case anthropic.StopReasonMaxTokens:
-		return genai.FinishReasonMaxTokens
-	case anthropic.StopReasonToolUse:
-		return genai.FinishReasonOther
-	default:
-		return genai.FinishReasonUnspecified
-	}
-}
-
-// AccText concatenates all text blocks from an Anthropic message.
-func AccText(msg *anthropic.Message) string {
-	if msg == nil {
-		return ""
-	}
-	var sb strings.Builder
-	for block := range slices.Values(msg.Content) {
-		if v, ok := block.AsAny().(anthropic.TextBlock); ok {
-			sb.WriteString(v.Text)
-		}
-	}
-	return sb.String()
 }
 
 // AccTextBeta concatenates all text blocks from an Anthropic Beta message.

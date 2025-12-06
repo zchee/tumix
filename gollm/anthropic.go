@@ -95,7 +95,7 @@ func (m *anthropicLLM) GenerateContent(ctx context.Context, req *model.LLMReques
 		}
 	}
 
-	params, err := m.buildBetaParams(req, system, msgs)
+	params, err := m.buildParams(req, system, msgs)
 	if err != nil {
 		return func(yield func(*model.LLMResponse, error) bool) {
 			defer func() { telemetry.End(span, err) }()
@@ -104,7 +104,7 @@ func (m *anthropicLLM) GenerateContent(ctx context.Context, req *model.LLMReques
 	}
 
 	if stream {
-		return m.streamBeta(ctx, span, params)
+		return m.stream(ctx, span, params)
 	}
 
 	return func(yield func(*model.LLMResponse, error) bool) {
@@ -127,11 +127,11 @@ func (m *anthropicLLM) GenerateContent(ctx context.Context, req *model.LLMReques
 	}
 }
 
-// buildBetaParams prepares Anthropic Beta message parameters from a genai request.
+// buildParams prepares Anthropic Beta message parameters from a genai request.
 //
 // It validates presence of messages, maps config knobs, and sets defaults
 // required by the Anthropic API.
-func (m *anthropicLLM) buildBetaParams(req *model.LLMRequest, system []anthropic.BetaTextBlockParam, msgs []anthropic.BetaMessageParam) (*anthropic.BetaMessageNewParams, error) {
+func (m *anthropicLLM) buildParams(req *model.LLMRequest, system []anthropic.BetaTextBlockParam, msgs []anthropic.BetaMessageParam) (*anthropic.BetaMessageNewParams, error) {
 	if len(msgs) == 0 {
 		return nil, errors.New("no messages")
 	}
@@ -174,7 +174,7 @@ func (m *anthropicLLM) buildBetaParams(req *model.LLMRequest, system []anthropic
 //
 // It accumulates incremental deltas, yielding partial text as it arrives and a final
 // response once the stream signals completion.
-func (m *anthropicLLM) streamBeta(ctx context.Context, span trace.Span, params *anthropic.BetaMessageNewParams) iter.Seq2[*model.LLMResponse, error] {
+func (m *anthropicLLM) stream(ctx context.Context, span trace.Span, params *anthropic.BetaMessageNewParams) iter.Seq2[*model.LLMResponse, error] {
 	stream := m.client.Beta.Messages.NewStreaming(ctx, *params)
 	acc := &anthropic.BetaMessage{}
 
