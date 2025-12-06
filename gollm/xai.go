@@ -31,9 +31,10 @@ import (
 
 // xaiLLM implements the adk [model.LLM] interface using xAI SDK.
 type xaiLLM struct {
-	client    *xai.Client
-	name      string
-	userAgent string
+	client         *xai.Client
+	name           string
+	userAgent      string
+	providerParams *ProviderParams
 }
 
 var _ model.LLM = (*xaiLLM)(nil)
@@ -41,7 +42,7 @@ var _ model.LLM = (*xaiLLM)(nil)
 // NewXAILLM creates a new xAI-backed LLM.
 //
 // If authKey is nil, the xAI SDK falls back to the XAI_API_KEY environment variable.
-func NewXAILLM(_ context.Context, authKey AuthMethod, modelName string, opts ...xai.ClientOption) (model.LLM, error) {
+func NewXAILLM(_ context.Context, authKey AuthMethod, modelName string, params *ProviderParams, opts ...xai.ClientOption) (model.LLM, error) {
 	var apiKey string
 	if authKey != nil {
 		apiKey = authKey.value()
@@ -56,9 +57,10 @@ func NewXAILLM(_ context.Context, authKey AuthMethod, modelName string, opts ...
 	userAgent := version.UserAgent("xai")
 
 	return &xaiLLM{
-		client:    client,
-		name:      modelName,
-		userAgent: userAgent,
+		client:         client,
+		name:           modelName,
+		userAgent:      userAgent,
+		providerParams: params,
 	}, nil
 }
 
@@ -94,7 +96,7 @@ func (m *xaiLLM) generate(ctx context.Context, req *model.LLMRequest, msgs []*xa
 	if opt := adapter.GenAI2XAIChatOptions(req.Config); opt != nil {
 		opts = append(opts, opt)
 	}
-	opts = appendXAIProviderOptions(req, opts)
+	opts = appendXAIProviderOptions(req, m.providerParams, opts)
 	sess := m.client.Chat.Create(adapter.ModelName(m.name, req), opts...)
 
 	resp, err := sess.Completion(ctx)
@@ -121,7 +123,7 @@ func (m *xaiLLM) generateStream(ctx context.Context, req *model.LLMRequest, msgs
 		if opt := adapter.GenAI2XAIChatOptions(req.Config); opt != nil {
 			opts = append(opts, opt)
 		}
-		opts = appendXAIProviderOptions(req, opts)
+		opts = appendXAIProviderOptions(req, m.providerParams, opts)
 		sess := m.client.Chat.Create(adapter.ModelName(m.name, req), opts...)
 
 		stream, err := sess.Stream(ctx)
@@ -147,8 +149,8 @@ func (m *xaiLLM) generateStream(ctx context.Context, req *model.LLMRequest, msgs
 	}
 }
 
-func appendXAIProviderOptions(req *model.LLMRequest, opts []xai.ChatOption) []xai.ChatOption {
-	pp, ok := providerParams(req)
+func appendXAIProviderOptions(req *model.LLMRequest, defaults *ProviderParams, opts []xai.ChatOption) []xai.ChatOption {
+	pp, ok := effectiveProviderParams(req, defaults)
 	if !ok || pp.XAI == nil || len(pp.XAI.Options) == 0 {
 		return opts
 	}

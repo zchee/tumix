@@ -40,9 +40,10 @@ var anthropicTracer = otel.Tracer("github.com/zchee/tumix/gollm/anthropic")
 
 // anthropicLLM implements the adk [model.LLM] interface using the Anthropic SDK.
 type anthropicLLM struct {
-	client    *anthropic.Client
-	name      string
-	userAgent string
+	client         *anthropic.Client
+	name           string
+	userAgent      string
+	providerParams *ProviderParams
 }
 
 var _ model.LLM = (*anthropicLLM)(nil)
@@ -52,7 +53,7 @@ var _ model.LLM = (*anthropicLLM)(nil)
 // If authKey is nil, the Anthropic SDK falls back to the ANTHROPIC_API_KEY environment variable.
 //
 //nolint:unparam
-func NewAnthropicLLM(_ context.Context, authKey AuthMethod, modelName string, opts ...option.RequestOption) (model.LLM, error) {
+func NewAnthropicLLM(_ context.Context, authKey AuthMethod, modelName string, params *ProviderParams, opts ...option.RequestOption) (model.LLM, error) {
 	userAgent := version.UserAgent("anthropic")
 
 	httpClient := httputil.NewClientWithTracing(3*time.Minute, httputil.DefaultTraceEnabled())
@@ -73,9 +74,10 @@ func NewAnthropicLLM(_ context.Context, authKey AuthMethod, modelName string, op
 	client := anthropic.NewClient(opts...)
 
 	return &anthropicLLM{
-		client:    &client,
-		name:      modelName,
-		userAgent: userAgent,
+		client:         &client,
+		name:           modelName,
+		userAgent:      userAgent,
+		providerParams: params,
 	}, nil
 }
 
@@ -165,7 +167,7 @@ func (m *anthropicLLM) buildParams(req *model.LLMRequest, system []anthropic.Bet
 		}
 	}
 
-	applyAnthropicProviderParams(req, params)
+	applyAnthropicProviderParams(req, m.providerParams, params)
 
 	return params, nil
 }
@@ -226,8 +228,8 @@ func (m *anthropicLLM) stream(ctx context.Context, span trace.Span, params *anth
 	}
 }
 
-func applyAnthropicProviderParams(req *model.LLMRequest, params *anthropic.BetaMessageNewParams) {
-	pp, ok := providerParams(req)
+func applyAnthropicProviderParams(req *model.LLMRequest, defaults *ProviderParams, params *anthropic.BetaMessageNewParams) {
+	pp, ok := effectiveProviderParams(req, defaults)
 	if !ok || pp.Anthropic == nil {
 		return
 	}

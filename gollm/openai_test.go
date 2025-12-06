@@ -59,6 +59,7 @@ func TestOpenAILLM_Generate(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	llm, err := NewOpenAILLM(t.Context(), AuthMethodAPIKey("test-key"), "gpt-5-mini",
+		nil,
 		option.WithHTTPClient(server.Client()),
 		option.WithBaseURL(server.URL),
 	)
@@ -135,6 +136,7 @@ func TestOpenAILLM_GenerateStream(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	llm, err := NewOpenAILLM(t.Context(), AuthMethodAPIKey("test-key"), "gpt-5-mini",
+		nil,
 		option.WithHTTPClient(server.Client()),
 		option.WithBaseURL(server.URL),
 	)

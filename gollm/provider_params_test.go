@@ -109,7 +109,7 @@ func TestProviderParams_XAIOptions(t *testing.T) {
 		},
 	})
 
-	opts := appendXAIProviderOptions(req, []xai.ChatOption{
+	opts := appendXAIProviderOptions(req, nil, []xai.ChatOption{
 		xai.WithMessages(&xaipb.Message{Role: xaipb.MessageRole_ROLE_USER}),
 	})
 
@@ -123,5 +123,151 @@ func TestProviderParams_XAIOptions(t *testing.T) {
 	}
 	if gotReq.GetMaxTokens() != 321 {
 		t.Fatalf("MaxTokens = %v, want 321", gotReq.GetMaxTokens())
+	}
+}
+
+func TestProviderParams_DefaultsAppliedToOpenAI(t *testing.T) {
+	req := &model.LLMRequest{
+		Contents: genai.Text("hello"),
+		Config:   &genai.GenerateContentConfig{},
+	}
+	req.Config = adapter.NormalizeRequest(req, "test-agent")
+
+	llm := &openAILLM{
+		name:      "gpt-4o",
+		userAgent: "test-agent",
+		providerParams: &ProviderParams{
+			OpenAI: &OpenAIProviderParams{
+				Mutate: []OpenAIParamMutator{
+					func(p *responses.ResponseNewParams) {
+						p.Store = openai.Bool(true)
+						p.TopP = openai.Float(0.33)
+					},
+				},
+			},
+		},
+	}
+
+	params, err := llm.responseParams(req)
+	if err != nil {
+		t.Fatalf("responseParams() error = %v", err)
+	}
+	if got := params.Store.Or(false); !got {
+		t.Fatalf("Store = %v, want true", got)
+	}
+	if got := params.TopP.Or(0); got != 0.33 {
+		t.Fatalf("TopP = %v, want 0.33", got)
+	}
+}
+
+func TestProviderParams_DefaultsMergedWithRequest_OpenAI(t *testing.T) {
+	req := &model.LLMRequest{
+		Contents: genai.Text("hello"),
+		Config:   &genai.GenerateContentConfig{},
+	}
+	req.Config = adapter.NormalizeRequest(req, "test-agent")
+
+	SetProviderParams(req, &ProviderParams{
+		OpenAI: &OpenAIProviderParams{
+			Mutate: []OpenAIParamMutator{
+				func(p *responses.ResponseNewParams) {
+					p.Store = openai.Bool(false)
+					p.TopP = openai.Float(0.12)
+				},
+			},
+		},
+	})
+
+	llm := &openAILLM{
+		name:      "gpt-4o",
+		userAgent: "test-agent",
+		providerParams: &ProviderParams{
+			OpenAI: &OpenAIProviderParams{
+				Mutate: []OpenAIParamMutator{
+					func(p *responses.ResponseNewParams) {
+						p.Store = openai.Bool(true)
+						p.TopP = openai.Float(0.9)
+					},
+				},
+			},
+		},
+	}
+
+	params, err := llm.responseParams(req)
+	if err != nil {
+		t.Fatalf("responseParams() error = %v", err)
+	}
+	if got := params.Store.Or(true); got {
+		t.Fatalf("Store = %v, want false (request override)", got)
+	}
+	if got := params.TopP.Or(0); got != 0.12 {
+		t.Fatalf("TopP = %v, want 0.12 (request override)", got)
+	}
+}
+
+func TestProviderParams_DefaultsAppliedToAnthropic(t *testing.T) {
+	req := &model.LLMRequest{
+		Contents: genai.Text("ping"),
+		Config:   &genai.GenerateContentConfig{},
+	}
+	cfg := adapter.NormalizeRequest(req, "test-agent")
+	system, msgs, err := adapter.GenAIToAnthropicBetaMessages(cfg.SystemInstruction, req.Contents)
+	if err != nil {
+		t.Fatalf("GenAIToAnthropicBetaMessages() error = %v", err)
+	}
+
+	llm := &anthropicLLM{
+		name:      "claude-haiku-4-5",
+		userAgent: "test-agent",
+		providerParams: &ProviderParams{
+			Anthropic: &AnthropicProviderParams{
+				Mutate: []AnthropicParamMutator{
+					func(p *anthropic.BetaMessageNewParams) {
+						p.Metadata.UserID = param.NewOpt("user-default")
+					},
+				},
+			},
+		},
+	}
+
+	params, err := llm.buildParams(req, system, msgs)
+	if err != nil {
+		t.Fatalf("buildParams() error = %v", err)
+	}
+
+	if got := params.Metadata.UserID.Or(""); got != "user-default" {
+		t.Fatalf("Metadata.UserID = %q, want %q", got, "user-default")
+	}
+}
+
+func TestProviderParams_DefaultsAppliedToXAI(t *testing.T) {
+	req := &model.LLMRequest{
+		Contents: genai.Text("hi"),
+		Config:   &genai.GenerateContentConfig{},
+	}
+
+	pp := &ProviderParams{
+		XAI: &XAIProviderParams{
+			Options: []xai.ChatOption{
+				xai.WithUser("default-user"),
+				xai.WithMaxTokens(111),
+			},
+		},
+	}
+
+	opts := appendXAIProviderOptions(req, pp, []xai.ChatOption{
+		xai.WithMessages(&xaipb.Message{Role: xaipb.MessageRole_ROLE_USER}),
+	})
+
+	gotReq := &xaipb.GetCompletionsRequest{}
+	for _, opt := range opts {
+		opt(gotReq, &xai.ChatSession{})
+	}
+
+	if gotReq.GetUser() != "default-user" {
+		t.Fatalf("User = %q, want %q", gotReq.GetUser(), "default-user")
+	}
+	if gotReq.GetMaxTokens() != 111 {
+		t.Fatalf("MaxTokens = %v, want 111", gotReq.GetMaxTokens())
 	}
 }

@@ -42,9 +42,10 @@ var openaiTracer = otel.Tracer("github.com/zchee/tumix/gollm/openai")
 
 // openAILLM implements the adk [model.LLM] interface using OpenAI SDK.
 type openAILLM struct {
-	client    openai.Client
-	name      string
-	userAgent string
+	client         openai.Client
+	name           string
+	userAgent      string
+	providerParams *ProviderParams
 }
 
 var _ model.LLM = (*openAILLM)(nil)
@@ -54,7 +55,7 @@ var _ model.LLM = (*openAILLM)(nil)
 // If authKey is nil, the OpenAI SDK falls back to the OPENAI_API_KEY environment variable.
 //
 //nolint:unparam
-func NewOpenAILLM(_ context.Context, authKey AuthMethod, modelName string, opts ...option.RequestOption) (model.LLM, error) {
+func NewOpenAILLM(_ context.Context, authKey AuthMethod, modelName string, params *ProviderParams, opts ...option.RequestOption) (model.LLM, error) {
 	userAgent := version.UserAgent("openai")
 
 	httpClient := httputil.NewClientWithTracing(3*time.Minute, httputil.DefaultTraceEnabled())
@@ -72,9 +73,10 @@ func NewOpenAILLM(_ context.Context, authKey AuthMethod, modelName string, opts 
 	client := openai.NewClient(opts...)
 
 	return &openAILLM{
-		client:    client,
-		name:      modelName,
-		userAgent: userAgent,
+		client:         client,
+		name:           modelName,
+		userAgent:      userAgent,
+		providerParams: params,
 	}, nil
 }
 
@@ -171,7 +173,7 @@ func (m *openAILLM) responseParams(req *model.LLMRequest) (*responses.ResponseNe
 		}
 	}
 
-	applyOpenAIProviderParams(req, &params)
+	applyOpenAIProviderParams(req, m.providerParams, &params)
 
 	return &params, nil
 }
@@ -218,8 +220,8 @@ func (m *openAILLM) stream(ctx context.Context, span trace.Span, params *respons
 	}
 }
 
-func applyOpenAIProviderParams(req *model.LLMRequest, params *responses.ResponseNewParams) {
-	pp, ok := providerParams(req)
+func applyOpenAIProviderParams(req *model.LLMRequest, defaults *ProviderParams, params *responses.ResponseNewParams) {
+	pp, ok := effectiveProviderParams(req, defaults)
 	if !ok || pp.OpenAI == nil {
 		return
 	}
