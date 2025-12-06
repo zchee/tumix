@@ -234,30 +234,10 @@ func applyAnthropicProviderParams(req *model.LLMRequest, defaults *ProviderParam
 		return
 	}
 
-	// Bridge mutators defined for MessageNewParams onto BetaMessageNewParams by
-	// copying the overlapping fields we support.
-	proxy := anthropic.BetaMessageNewParams{
-		MaxTokens:     params.MaxTokens,
-		StopSequences: params.StopSequences,
-		Temperature:   params.Temperature,
-		TopP:          params.TopP,
-		TopK:          params.TopK,
-		Metadata: anthropic.BetaMetadataParam{
-			UserID: params.Metadata.UserID,
-		},
-	}
-
 	for _, mutate := range pp.Anthropic.Mutate {
 		if mutate == nil {
 			continue
 		}
-		mutate(&proxy)
+		mutate(params)
 	}
-
-	params.MaxTokens = proxy.MaxTokens
-	params.StopSequences = proxy.StopSequences
-	params.Temperature = proxy.Temperature
-	params.TopP = proxy.TopP
-	params.TopK = proxy.TopK
-	params.Metadata.UserID = proxy.Metadata.UserID
 }
