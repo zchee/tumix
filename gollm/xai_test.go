@@ -44,20 +44,17 @@ func TestXAILLM_Generate(t *testing.T) {
 				Config:   &genai.GenerateContentConfig{},
 			},
 			want: &model.LLMResponse{
-				Content: genai.NewContentFromText("**Paris** is the capital of France. \n\n"+
-					"This has been the case since 987 AD under the Capetian dynasty, when Hugh Capet established it as the political center. "+
-					"Paris remains the seat of the French government, including the Élysée Palace (presidential residence), the National Assembly, and the Senate. "+
-					"It's also France's largest city, with a population of about 2.1 million in the city proper and 12.6 million in the metropolitan area (INSEE data, 2023).", genai.RoleModel),
+				Content: genai.NewContentFromText("Paris", genai.RoleModel),
 				UsageMetadata: &genai.GenerateContentResponseUsageMetadata{
-					CachedContentTokenCount: 161,
-					CandidatesTokenCount:    104,
+					CachedContentTokenCount: 174,
+					CandidatesTokenCount:    1,
 					PromptTokenCount:        175,
 					ThoughtsTokenCount:      0,
-					TotalTokenCount:         279,
+					TotalTokenCount:         176,
 				},
 				CustomMetadata: map[string]any{
 					"xai_finish_reason":      "REASON_STOP",
-					"xai_system_fingerprint": "fp_ed3b9934bf",
+					"xai_system_fingerprint": "fp_174298dd8e",
 				},
 				FinishReason: genai.FinishReasonStop,
 			},
