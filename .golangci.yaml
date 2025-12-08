@@ -1,18 +1,19 @@
 version: "2"
 
 run:
-  modules-download-mode: mod
+  relative-path-mode: gomod
   issues-exit-code: 1
   tests: true
+  # modules-download-mode: readonly
   allow-parallel-runners: true
 
 output:
   formats:
     text:
+      path: stdout
       print-linter-name: true
       print-issued-lines: true
       colors: true
-      path: stdout
 
 issues:
   max-issues-per-linter: 0
@@ -21,31 +22,47 @@ issues:
 
 formatters:
   enable:
+    # - gci
     - gofmt
     - gofumpt
     - goimports
 
+  # Formatters settings.
   settings:
+    gci:
+      # Default: ["standard", "default"]
+      sections:
+        - standard                       # Standard section: captures all standard packages.
+        - default                        # Default section: contains all imports that could not be matched to another section type.
+        - prefix(github.com/org/project) # Custom section: groups all imports with the specified Prefix.
+        - blank                          # Blank section: contains all blank imports. This section is not present unless explicitly enabled.
+        - dot                            # Dot section: contains all dot imports. This section is not present unless explicitly enabled.
+        - alias                          # Alias section: contains all alias imports. This section is not present unless explicitly enabled.
+        - localmodule                    # Local module section: contains all local packages. This section is not present unless explicitly enabled.
+      no-inline-comments: false
+      no-prefix-comments: false
+      custom-order: false
+      no-lex-order: false
+
     gofmt:
       simplify: true
+      rewrite-rules:
+        - pattern: 'interface{}'
+          replacement: 'any'
+
     gofumpt:
       module-path: github.com/zchee/tumix
       extra-rules: true
+
     goimports:
       local-prefixes:
         - github.com/zchee/tumix
         - github.com/zchee/tumix/gollm/xai
 
-  exclusions:
-    generated: lax
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
-
 linters:
   default: none
   enable:
+    - arangolint
     - asasalint
     - asciicheck
     - bidichk
@@ -60,19 +77,20 @@ linters:
     - dupl
     - dupword
     - durationcheck
+    - embeddedstructfieldcheck
     - errcheck
     - errchkjson
     - errname
     - errorlint
+    - exptostd
     - fatcontext
-    # - funlen
+    - forbidigo
     - ginkgolinter
     - gocheckcompilerdirectives
     - gochecksumtype
-    # - gocognit
     - goconst
     - gocritic
-    # - gocyclo
+    - godoclint
     - godot
     - goheader
     - gomodguard
@@ -86,16 +104,19 @@ linters:
     - ineffassign
     - interfacebloat
     - intrange
+    - iotamixing
     - lll
     - loggercheck
     - maintidx
     - makezero
     - mirror
     - misspell
+    - modernize
     - musttag
     - nakedret
     - nestif
     - nilerr
+    - nilnesserr
     - nilnil
     - noctx
     - nolintlint
@@ -105,7 +126,8 @@ linters:
     - promlinter
     - protogetter
     - reassign
-    # - revive
+    - recvcheck
+    - revive
     - rowserrcheck
     - sloglint
     - spancheck
@@ -118,8 +140,10 @@ linters:
     - tparallel
     - unconvert
     - unparam
+    - unqueryvet
     - unused
     - usestdlibvars
+    - usetesting
     - varnamelen
     - wastedassign
     - whitespace
@@ -279,16 +303,9 @@ linters:
       range-loops: true
       for-loops: false
     revive:
-      rules:
-        - name: line-length-limit
-          severity: warning
-          disabled: false
-          exclude: [""]
-          arguments: [120]
-      max-open-files: 2048
-      confidence: 0.1
-      severity: error
-      enable-all-rules: true
+      severity: warning
+      enable-all-rules: false
+      enable-default-rules: true
     sloglint:
       no-mixed-args: true
       kv-only: false
@@ -344,24 +361,33 @@ linters:
   exclusions:
     generated: lax
     presets:
-      - common-false-positives
+      - comments
       - std-error-handling
+      - common-false-positives
+      - legacy
     rules:
+      - linters:
+          - cyclop
+          - funlen
+          - gocognit
+          - goconst
+          - gocritic
+          - gocyclo
+          - gosec
+          - lll
+          - wrapcheck
+        path: _test\.go
+
+      - linters:
+          - lll
+        source: "^//go:generate "
+
       - linters:
           - decorder
           - gosec
           - revive
           - wrapcheck
         path: gollm/xai
-
-      - linters:
-          - goheader
-        path: gollm/xai/internal/grpccodec/mem
-
-      - linters:
-          - unparam
-        text: "(\\*Reader).Close" # io.Closer
-        path: gollm/xai/internal/grpccodec/mem
 
       - linters:
           - decorder
@@ -371,18 +397,10 @@ linters:
         path: gollm/xai/examples
 
       - linters:
-          - funlen
-          - gocognit
-          - goconst
-          - gocyclo
-          - gosec
-          - lll
-          - wrapcheck
-        path: _test\.go
-
-      - linters:
-          - gocritic
-        path: (.*)?_example_test.go
+          - goheader
+          - unparam
+        text: "(\\*Reader).Close" # io.Closer
+        path: gollm/xai/internal/grpccodec/mem
 
       - linters:
           - govet
@@ -392,21 +410,10 @@ linters:
           - nlreturn
         text: continue with no blank line before
 
+      # gosec(G404): Insecure random number source (rand)
+      # staticcheck(ST1003): Poorly chosen identifier: https://staticcheck.dev/docs/checks/#ST1003
       - path: (.+)\.go$
-        text: G404
-
-      - path: (.+)\.go$
-        text: ST1003
+        text: (G404|ST1003) 
 
       - path: (.+)\.go$
         text: Error return value of `.*.Add(Array|Object)` is not checked
-
-      - linters:
-          - cyclop
-          - goconst
-        path: (.+)_test\.go
-
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
