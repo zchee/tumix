@@ -53,20 +53,15 @@ var _ model.LLM = (*anthropicLLM)(nil)
 // If authKey is nil, the Anthropic SDK falls back to the ANTHROPIC_API_KEY environment variable.
 //
 //nolint:unparam
-func NewAnthropicLLM(_ context.Context, authKey AuthMethod, modelName string, params *ProviderParams, opts ...option.RequestOption) (model.LLM, error) {
+func NewAnthropicLLM(_ context.Context, apiKey, modelName string, params *ProviderParams, opts ...option.RequestOption) (model.LLM, error) {
 	userAgent := version.UserAgent("anthropic")
 
 	httpClient := httputil.NewClient(3 * time.Minute)
 	ropts := []option.RequestOption{
+		option.WithAPIKey(apiKey),
 		option.WithHTTPClient(httpClient),
 		option.WithHeader("User-Agent", userAgent),
 		option.WithMaxRetries(2),
-	}
-	switch authKey := authKey.(type) {
-	case AuthMethodAPIKey:
-		ropts = append(ropts, option.WithAPIKey(authKey.value()))
-	case AuthMethodAPIToken:
-		ropts = append(ropts, option.WithAuthToken(authKey.value()))
 	}
 
 	// opts are allowed to override by order
@@ -106,7 +101,7 @@ func (m *anthropicLLM) GenerateContent(ctx context.Context, req *model.LLMReques
 	}
 
 	if stream {
-		return m.stream(ctx, span, params)
+		return m.stream(ctx, params)
 	}
 
 	return func(yield func(*model.LLMResponse, error) bool) {
@@ -176,7 +171,9 @@ func (m *anthropicLLM) buildParams(req *model.LLMRequest, system []anthropic.Bet
 //
 // It accumulates incremental deltas, yielding partial text as it arrives and a final
 // response once the stream signals completion.
-func (m *anthropicLLM) stream(ctx context.Context, span trace.Span, params *anthropic.BetaMessageNewParams) iter.Seq2[*model.LLMResponse, error] {
+func (m *anthropicLLM) stream(ctx context.Context, params *anthropic.BetaMessageNewParams) iter.Seq2[*model.LLMResponse, error] {
+	span := trace.SpanFromContext(ctx)
+
 	stream := m.client.Beta.Messages.NewStreaming(ctx, *params)
 	acc := &anthropic.BetaMessage{}
 
@@ -198,17 +195,21 @@ func (m *anthropicLLM) stream(ctx context.Context, span trace.Span, params *anth
 			case anthropic.BetaRawContentBlockDeltaEvent:
 				if delta := ev.Delta.AsAny(); delta != nil {
 					if t, ok := delta.(anthropic.BetaTextDelta); ok && t.Text != "" {
-						if !yield(&model.LLMResponse{
+						resp := &model.LLMResponse{
 							Content: &genai.Content{
-								Role:  genai.RoleModel,
-								Parts: []*genai.Part{genai.NewPartFromText(adapter.AccText(acc))},
+								Role: genai.RoleModel,
+								Parts: []*genai.Part{
+									genai.NewPartFromText(adapter.AccText(acc)),
+								},
 							},
 							Partial: true,
-						}, nil) {
+						}
+						if !yield(resp, nil) {
 							return
 						}
 					}
 				}
+
 			case anthropic.BetaRawMessageStopEvent:
 				resp, err := adapter.AnthropicMessageToLLMResponse(acc)
 				if err != nil {

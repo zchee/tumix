@@ -42,12 +42,7 @@ var _ model.LLM = (*xaiLLM)(nil)
 // NewXAILLM creates a new xAI-backed LLM.
 //
 // If authKey is nil, the xAI SDK falls back to the XAI_API_KEY environment variable.
-func NewXAILLM(_ context.Context, authKey AuthMethod, modelName string, params *ProviderParams, opts ...xai.ClientOption) (model.LLM, error) {
-	var apiKey string
-	if authKey != nil {
-		apiKey = authKey.value()
-	}
-
+func NewXAILLM(_ context.Context, apiKey, modelName string, params *ProviderParams, opts ...xai.ClientOption) (model.LLM, error) {
 	client, err := xai.NewClient(apiKey, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("new xAI client: %w", err)

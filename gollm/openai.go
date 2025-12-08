@@ -55,7 +55,7 @@ var _ model.LLM = (*openAILLM)(nil)
 // If authKey is nil, the OpenAI SDK falls back to the OPENAI_API_KEY environment variable.
 //
 //nolint:unparam
-func NewOpenAILLM(_ context.Context, authKey AuthMethod, modelName string, params *ProviderParams, opts ...option.RequestOption) (model.LLM, error) {
+func NewOpenAILLM(_ context.Context, apiKey, modelName string, params *ProviderParams, opts ...option.RequestOption) (model.LLM, error) {
 	userAgent := version.UserAgent("openai")
 
 	httpClient := httputil.NewClient(3 * time.Minute)
@@ -64,8 +64,8 @@ func NewOpenAILLM(_ context.Context, authKey AuthMethod, modelName string, param
 		option.WithHeader("User-Agent", userAgent),
 		option.WithMaxRetries(2),
 	}
-	if authKey != nil {
-		ropts = append(ropts, option.WithAPIKey(authKey.value()))
+	if apiKey != "" {
+		ropts = append(ropts, option.WithAPIKey(apiKey))
 	}
 
 	// opts are allowed to override by order
@@ -104,7 +104,7 @@ func (m *openAILLM) GenerateContent(ctx context.Context, req *model.LLMRequest, 
 
 	if stream {
 		// Responses streaming currently returns a single candidate; fall back to one even if caller asked for more.
-		return m.stream(ctx, span, params, stopSeq)
+		return m.stream(ctx, params, stopSeq)
 	}
 
 	return func(yield func(*model.LLMResponse, error) bool) {
@@ -184,9 +184,10 @@ func (m *openAILLM) responseParams(req *model.LLMRequest) (*responses.ResponseNe
 //
 // It forwards each streamed chunk through the OpenAI aggregator and emits final output
 // after the stream ends, respecting consumer backpressure.
-func (m *openAILLM) stream(ctx context.Context, span trace.Span, params *responses.ResponseNewParams, stopSeq []string) iter.Seq2[*model.LLMResponse, error] {
-	agg := adapter.NewOpenAIStreamAggregator(stopSeq)
+func (m *openAILLM) stream(ctx context.Context, params *responses.ResponseNewParams, stopSeq []string) iter.Seq2[*model.LLMResponse, error] {
+	span := trace.SpanFromContext(ctx)
 
+	agg := adapter.NewOpenAIStreamAggregator(stopSeq)
 	return func(yield func(*model.LLMResponse, error) bool) {
 		stream := m.client.Responses.NewStreaming(ctx, *params)
 		defer stream.Close()

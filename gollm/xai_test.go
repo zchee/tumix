@@ -71,7 +71,7 @@ func TestXAILLM_Generate(t *testing.T) {
 			mgmtConn, cleanup2 := rr.NewGRPCConn(t, "xai-management", xai.ManagementAPIHost, xai.BuildDialOptions(opts, managementKey)...)
 			t.Cleanup(cleanup2)
 
-			llm, err := NewXAILLM(t.Context(), AuthMethodAPIKey(apiKey), tt.modelName, nil,
+			llm, err := NewXAILLM(t.Context(), apiKey, tt.modelName, nil,
 				xai.WithAPIConn(conn),
 				xai.WithManagementConn(mgmtConn),
 			)
@@ -124,7 +124,7 @@ func TestXAILLM_GenerateStream(t *testing.T) {
 			mgmtConn, cleanup2 := rr.NewGRPCConn(t, "xai-management", xai.ManagementAPIHost, xai.BuildDialOptions(opts, managementKey)...)
 			t.Cleanup(cleanup2)
 
-			llm, err := NewXAILLM(t.Context(), AuthMethodAPIKey(apiKey), tt.modelName, nil,
+			llm, err := NewXAILLM(t.Context(), apiKey, tt.modelName, nil,
 				xai.WithAPIConn(conn),
 				xai.WithManagementConn(mgmtConn),
 			)

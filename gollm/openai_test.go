@@ -34,6 +34,8 @@ import (
 	"github.com/openai/openai-go/v3/shared/constant"
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
+
+	"github.com/zchee/tumix/testing/rr"
 )
 
 func TestOpenAILLM_Generate(t *testing.T) {
@@ -59,8 +61,11 @@ func TestOpenAILLM_Generate(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	llm, err := NewOpenAILLM(t.Context(), AuthMethodAPIKey("test-key"), "gpt-5-mini",
-		nil,
+	apiKey := ""
+	if rr.Replaying() {
+		apiKey = "test-key"
+	}
+	llm, err := NewOpenAILLM(t.Context(), apiKey, "gpt-5-mini", nil,
 		option.WithHTTPClient(server.Client()),
 		option.WithBaseURL(server.URL),
 	)
@@ -136,8 +141,11 @@ func TestOpenAILLM_GenerateStream(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	llm, err := NewOpenAILLM(t.Context(), AuthMethodAPIKey("test-key"), "gpt-5-mini",
-		nil,
+	apiKey := ""
+	if rr.Replaying() {
+		apiKey = "test-key"
+	}
+	llm, err := NewOpenAILLM(t.Context(), apiKey, "gpt-5-mini", nil,
 		option.WithHTTPClient(server.Client()),
 		option.WithBaseURL(server.URL),
 	)
@@ -179,8 +187,11 @@ func TestOpenAILLM_Generate_MultiCandidate(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	llm, err := NewOpenAILLM(t.Context(), AuthMethodAPIKey("test-key"), "gpt-5-mini",
-		nil,
+	apiKey := ""
+	if rr.Replaying() {
+		apiKey = "test-key"
+	}
+	llm, err := NewOpenAILLM(t.Context(), apiKey, "gpt-5-mini", nil,
 		option.WithHTTPClient(server.Client()),
 		option.WithBaseURL(server.URL),
 	)
