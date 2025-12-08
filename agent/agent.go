@@ -180,17 +180,17 @@ func NewCoTCodeAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.
 		Model:                 llm,
 		GenerateContentConfig: cloneGenConfig(genCfg),
 		Instruction: `You are a helpful AI assistant. Solve tasks using your coding skills.
-In the following cases, suggest python code (in a python coding block) for the user to execute.
+In the following cases, suggest <language> code (in a <language> coding block) for the user to execute.
 
 * Don’t include multiple code blocks in one response, **only include one** in the response.
 * Do not ask users to copy and paste the result. Instead, use the ’print’ function for the output when relevant.
 
 Think the task step by step if you need to. If a plan is not provided, explain your plan first. You can first
-output your thinking steps with texts and then the final python code.
+output your thinking steps with texts and then the final <language> code.
 
 **Remember in the final code you still need to output each number or choice in the final print!**
 
-Start the python block with ` + "```" + `python`,
+Start the <language> block with ` + "```" + `<language>`,
 	}
 
 	applySharedContext(&cfg)
@@ -247,8 +247,8 @@ func NewCodeAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Age
 		Instruction: `The User asks a question, and you solve it. You first generate the reasoning and thinking process and
 then provide the User with the final answer.
 
-During the thinking process, **you can generate python code** for efficient searching, optimization, and computing with the format of starting the python block
-with ` + "```" + `python. **A code query must involve only a single script that uses ‘print’
+During the thinking process, **you can generate <language> code** for efficient searching, optimization, and computing with the format of starting the <language> block
+with ` + "```" + `<language>. **A code query must involve only a single script that uses ‘print’
 function for the output.**. Once the code script is complete, stop the generation. Then, the code
 interpreter platform will execute the code and return the execution output and error. Once you feel you are
 ready for the final answer, directly return the answer with the format ` + code(`<<<answer content>>>`) + ` at the end
@@ -279,8 +279,8 @@ func NewCodePlusAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent
 		Instruction: `The User asks a question, and you solve it. You first generate the reasoning and thinking process and
 then provide the User with the final answer.
 
-During the thinking process, **you can generate python code** for efficient searching, optimization, and computing with the format of starting the python block
-with ` + "```" + `python. **A code query must involve only a single script that uses ‘print’
+During the thinking process, **you can generate <language> code** for efficient searching, optimization, and computing with the format of starting the <language> block
+with ` + "```" + `<language>. **A code query must involve only a single script that uses ‘print’
 function for the output.**. Once the code script is complete, stop the generation. Then, the code
 interpreter platform will execute the code and return the execution output and error. Once you feel you are
 ready for the final answer, directly return the answer with the format ` + code(`<<<answer content>>>`) + ` at the end
@@ -311,8 +311,8 @@ func NewDualToolGSAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (age
 		Instruction: `The User asks a question, and you solve it. You first generate the reasoning and thinking process and then
 provide the User with the final answer.
 
-During the thinking process, _you can generate python code_ for efficient searching, optimization, and
-computing with the format of starting the python block with ` + "```" + `python. **A code query must
+During the thinking process, _you can generate <language> code_ for efficient searching, optimization, and
+computing with the format of starting the <language> block with ` + "```" + `<language>. **A code query must
 involve only a single script that uses ‘print’ function for the output.**. Once
 the code script is complete, stop the generation. Then, the code interpreter platform will execute the
 code and return the execution output and error.
@@ -354,8 +354,8 @@ func NewDualToolLLMAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (ag
 		Instruction: `The User asks a question, and you solve it. You first generate the reasoning and thinking process and then
 provide the User with the final answer.
 
-During the thinking process, _you can generate python code_ for efficient searching, optimization, and
-computing with the format of starting the python block with ` + "```" + `python. **A code query must
+During the thinking process, _you can generate <language> code_ for efficient searching, optimization, and
+computing with the format of starting the <language> block with ` + "```" + `<language>. **A code query must
 involve only a single script that uses ‘print’ function for the output.**. Once
 the code script is complete, stop the generation. Then, the code interpreter platform will execute the
 code and return the execution output and error.
@@ -397,8 +397,8 @@ func NewDualToolComAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (ag
 		Instruction: `The User asks a question, and you solve it. You first generate the reasoning and thinking process and then
 provide the User with the final answer.
 
-During the thinking process, _you can generate python code_ for efficient searching, optimization, and
-computing with the format of starting the python block with ` + "```" + `python. **A code query must
+During the thinking process, _you can generate <language> code_ for efficient searching, optimization, and
+computing with the format of starting the <language> block with ` + "```" + `<language>. **A code query must
 involve only a single script that uses ‘print’ function for the output.**. Once
 the code script is complete, stop the generation. Then, the code interpreter platform will execute the
 code and return the execution output and error.
@@ -442,8 +442,8 @@ textual reasoning, coding, and web searching. Sometimes the TaskLLM may need ext
 task, such as generating code or searching the web. Then must follow the rules below for both query and
 return answer:
 
-During the thinking process, _you can generate python code_ for efficient searching, optimization, and
-computing with the format of starting the python block with ` + "```" + `python. **A code query must involve
+During the thinking process, _you can generate <language> code_ for efficient searching, optimization, and
+computing with the format of starting the <language> block with ` + "```" + `<language>. **A code query must involve
 only a single script that uses ’print’ function for the output.** Once the code script
 is complete, stop the generation. Then, the code interpreter platform will execute the code and return the
 execution output and error.
@@ -492,8 +492,8 @@ textual reasoning, coding, and web searching. Sometimes the TaskLLM may need ext
 task, such as generating code or searching the web. Then must follow the rules below for both query and
 return answer:
 
-During the thinking process, _you can generate python code_ for efficient searching, optimization, and
-computing with the format of starting the python block with ` + "```" + `python. **A code query must involve
+During the thinking process, _you can generate <language> code_ for efficient searching, optimization, and
+computing with the format of starting the <language> block with ` + "```" + `<language>. **A code query must involve
 only a single script that uses ’print’ function for the output.** Once the code script
 is complete, stop the generation. Then, the code interpreter platform will execute the code and return the
 execution output and error.
@@ -542,8 +542,8 @@ textual reasoning, coding, and web searching. Sometimes the TaskLLM may need ext
 task, such as generating code or searching the web. Then must follow the rules below for both query and
 return answer:
 
-During the thinking process, _you can generate python code_ for efficient searching, optimization, and
-computing with the format of starting the python block with ` + "```" + `python. **A code query must involve
+During the thinking process, _you can generate <language> code_ for efficient searching, optimization, and
+computing with the format of starting the <language> block with ` + "```" + `<language>. **A code query must involve
 only a single script that uses ’print’ function for the output.** Once the code script
 is complete, stop the generation. Then, the code interpreter platform will execute the code and return the
 execution output and error.
@@ -590,7 +590,7 @@ func NewGuidedPlusGSAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (a
 		Instruction: `You steer a TaskLLM with explicit, actionable guidance. Use text, code, and Google Search.
 
 Priority rules:
-- Prefer code when arithmetic/symbolic reasoning is involved; isolate a single python block with print outputs.
+- Prefer code when arithmetic/symbolic reasoning is involved; isolate a single <language> block with print outputs.
 - Prefer search when facts/dates/entities are uncertain; emit exactly one ` + code(`<search>query</search>`) + ` per turn.
 - Never mix code and search in the same turn.
 - Keep guidance concise: 1–3 bullet steps plus a concrete next action.
@@ -621,7 +621,7 @@ func NewGuidedPlusLLMAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (
 		Instruction: `You steer a TaskLLM with explicit, actionable guidance. Use text, code, and LLM search.
 
 Priority rules:
-- Prefer code for math/logic; emit one python block with print outputs only.
+- Prefer code for math/logic; emit one <language> block with print outputs only.
 - Prefer search when factual uncertainty is high; emit one <search>query</search>.
 - Do not mix code and search in the same turn.
 - Keep guidance concise: 1–3 bullet steps plus a concrete next action.
