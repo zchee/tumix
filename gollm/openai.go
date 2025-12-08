@@ -58,7 +58,7 @@ var _ model.LLM = (*openAILLM)(nil)
 func NewOpenAILLM(_ context.Context, authKey AuthMethod, modelName string, params *ProviderParams, opts ...option.RequestOption) (model.LLM, error) {
 	userAgent := version.UserAgent("openai")
 
-	httpClient := httputil.NewClientWithTracing(3*time.Minute, httputil.DefaultTraceEnabled())
+	httpClient := httputil.NewClient(3 * time.Minute)
 	ropts := []option.RequestOption{
 		option.WithHTTPClient(httpClient),
 		option.WithHeader("User-Agent", userAgent),
