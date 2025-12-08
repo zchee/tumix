@@ -89,7 +89,7 @@ func (m *anthropicLLM) GenerateContent(ctx context.Context, req *model.LLMReques
 	ctx, span := anthropicTracer.Start(ctx, "gollm.anthropic.GenerateContent")
 	cfg := adapter.NormalizeRequest(req, m.userAgent)
 
-	system, msgs, err := adapter.GenAIToAnthropicBetaMessages(cfg.SystemInstruction, req.Contents)
+	system, msgs, err := adapter.GenAIToAnthropicMessages(cfg.SystemInstruction, req.Contents)
 	if err != nil {
 		return func(yield func(*model.LLMResponse, error) bool) {
 			defer func() { telemetry.End(span, err) }()
@@ -119,7 +119,7 @@ func (m *anthropicLLM) GenerateContent(ctx context.Context, req *model.LLMReques
 			yield(nil, err)
 			return
 		}
-		llmResp, convErr := adapter.AnthropicBetaMessageToLLMResponse(resp)
+		llmResp, convErr := adapter.AnthropicMessageToLLMResponse(resp)
 		if convErr != nil {
 			spanErr = convErr
 			yield(nil, convErr)
@@ -160,7 +160,7 @@ func (m *anthropicLLM) buildParams(req *model.LLMRequest, system []anthropic.Bet
 		params.TopK = param.NewOpt(int64(*req.Config.TopK))
 	}
 	if len(req.Config.Tools) > 0 {
-		tools, tc := adapter.GenAIToolsToAnthropicBeta(req.Config.Tools, req.Config.ToolConfig)
+		tools, tc := adapter.GenAIToolsToAnthropic(req.Config.Tools, req.Config.ToolConfig)
 		params.Tools = tools
 		if tc != nil {
 			params.ToolChoice = *tc
@@ -201,7 +201,7 @@ func (m *anthropicLLM) stream(ctx context.Context, span trace.Span, params *anth
 						if !yield(&model.LLMResponse{
 							Content: &genai.Content{
 								Role:  genai.RoleModel,
-								Parts: []*genai.Part{genai.NewPartFromText(adapter.AccTextBeta(acc))},
+								Parts: []*genai.Part{genai.NewPartFromText(adapter.AccText(acc))},
 							},
 							Partial: true,
 						}, nil) {
@@ -210,7 +210,7 @@ func (m *anthropicLLM) stream(ctx context.Context, span trace.Span, params *anth
 					}
 				}
 			case anthropic.BetaRawMessageStopEvent:
-				resp, err := adapter.AnthropicBetaMessageToLLMResponse(acc)
+				resp, err := adapter.AnthropicMessageToLLMResponse(acc)
 				if err != nil {
 					yield(nil, err)
 					return

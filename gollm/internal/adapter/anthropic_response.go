@@ -28,8 +28,8 @@ import (
 	"google.golang.org/genai"
 )
 
-// AnthropicBetaMessageToLLMResponse converts a Beta Anthropic message into an ADK LLM response.
-func AnthropicBetaMessageToLLMResponse(msg *anthropic.BetaMessage) (*model.LLMResponse, error) {
+// AnthropicMessageToLLMResponse converts an Anthropic beta message into an ADK LLM response.
+func AnthropicMessageToLLMResponse(msg *anthropic.BetaMessage) (*model.LLMResponse, error) {
 	if msg == nil {
 		return nil, errors.New("nil anthropic beta message")
 	}
@@ -77,11 +77,11 @@ func AnthropicBetaMessageToLLMResponse(msg *anthropic.BetaMessage) (*model.LLMRe
 			Parts: parts,
 		},
 		UsageMetadata: llmUsage,
-		FinishReason:  mapAnthropicBetaFinishReason(msg.StopReason),
+		FinishReason:  mapAnthropicFinishReason(msg.StopReason),
 	}, nil
 }
 
-func mapAnthropicBetaFinishReason(reason anthropic.BetaStopReason) genai.FinishReason {
+func mapAnthropicFinishReason(reason anthropic.BetaStopReason) genai.FinishReason {
 	switch reason {
 	case anthropic.BetaStopReasonStopSequence, anthropic.BetaStopReasonEndTurn:
 		return genai.FinishReasonStop
@@ -94,8 +94,8 @@ func mapAnthropicBetaFinishReason(reason anthropic.BetaStopReason) genai.FinishR
 	}
 }
 
-// AccTextBeta concatenates all text blocks from an Anthropic Beta message.
-func AccTextBeta(msg *anthropic.BetaMessage) string {
+// AccText concatenates all text blocks from an Anthropic Beta message.
+func AccText(msg *anthropic.BetaMessage) string {
 	if msg == nil {
 		return ""
 	}

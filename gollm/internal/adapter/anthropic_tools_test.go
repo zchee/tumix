@@ -25,7 +25,7 @@ import (
 	"google.golang.org/genai"
 )
 
-func TestGenAIToolsToAnthropicBeta(t *testing.T) {
+func TestGenAIToolsToAnthropic(t *testing.T) {
 	t.Parallel()
 
 	desc := "Return weather for a city"
@@ -135,7 +135,7 @@ func TestGenAIToolsToAnthropicBeta(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			got, choice := GenAIToolsToAnthropicBeta(tc.tools, tc.cfg)
+			got, choice := GenAIToolsToAnthropic(tc.tools, tc.cfg)
 			if tc.check == nil {
 				t.Fatalf("test %s missing check", name)
 			}

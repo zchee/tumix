@@ -26,8 +26,8 @@ import (
 	"google.golang.org/genai"
 )
 
-// GenAIToAnthropicBetaMessages converts GenAI contents into Anthropic Beta message parameters.
-func GenAIToAnthropicBetaMessages(system *genai.Content, contents []*genai.Content) ([]anthropic.BetaTextBlockParam, []anthropic.BetaMessageParam, error) {
+// GenAIToAnthropicMessages converts the GenAI contents into Anthropic beta message parameters.
+func GenAIToAnthropicMessages(system *genai.Content, contents []*genai.Content) ([]anthropic.BetaTextBlockParam, []anthropic.BetaMessageParam, error) {
 	var systemBlocks []anthropic.BetaTextBlockParam
 	if system != nil {
 		text := joinTextParts(system.Parts)

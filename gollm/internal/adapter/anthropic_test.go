@@ -28,7 +28,7 @@ import (
 	"github.com/zchee/tumix/gollm/internal/adapter"
 )
 
-func TestAnthropicBetaMessageToLLMResponse(t *testing.T) {
+func TestAnthropicMessageToLLMResponse(t *testing.T) {
 	t.Parallel()
 
 	tests := map[string]struct {
@@ -102,19 +102,19 @@ func TestAnthropicBetaMessageToLLMResponse(t *testing.T) {
 				t.Fatalf("unmarshal anthropic beta message: %v", err)
 			}
 
-			got, err := adapter.AnthropicBetaMessageToLLMResponse(&msg)
+			got, err := adapter.AnthropicMessageToLLMResponse(&msg)
 			if err != nil {
-				t.Fatalf("AnthropicBetaMessageToLLMResponse() err = %v", err)
+				t.Fatalf("AnthropicMessageToLLMResponse() err = %v", err)
 			}
 
 			if diff := cmp.Diff(tt.want, got); diff != "" {
-				t.Fatalf("AnthropicBetaMessageToLLMResponse diff (-want +got):\n%s", diff)
+				t.Fatalf("AnthropicMessageToLLMResponse diff (-want +got):\n%s", diff)
 			}
 		})
 	}
 }
 
-func TestGenAIToAnthropicBetaMessages(t *testing.T) {
+func TestGenAIToAnthropicMessages(t *testing.T) {
 	t.Parallel()
 
 	tests := map[string]struct {
@@ -131,9 +131,9 @@ func TestGenAIToAnthropicBetaMessages(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			systemBlocks, msgs, err := adapter.GenAIToAnthropicBetaMessages(tc.system, tc.contents)
+			systemBlocks, msgs, err := adapter.GenAIToAnthropicMessages(tc.system, tc.contents)
 			if err != nil {
-				t.Fatalf("GenAIToAnthropicBetaMessages() error = %v", err)
+				t.Fatalf("GenAIToAnthropicMessages() error = %v", err)
 			}
 
 			if len(systemBlocks) != 1 || systemBlocks[0].Text != "system guidance" {

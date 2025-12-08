@@ -25,8 +25,8 @@ import (
 	"google.golang.org/genai"
 )
 
-// GenAIToolsToAnthropicBeta converts GenAI tool declarations to Anthropic Beta tool definitions and choice hints.
-func GenAIToolsToAnthropicBeta(tools []*genai.Tool, cfg *genai.ToolConfig) ([]anthropic.BetaToolUnionParam, *anthropic.BetaToolChoiceUnionParam) {
+// GenAIToolsToAnthropic converts GenAI tool declarations to Anthropic Beta tool definitions and choice hints.
+func GenAIToolsToAnthropic(tools []*genai.Tool, cfg *genai.ToolConfig) ([]anthropic.BetaToolUnionParam, *anthropic.BetaToolChoiceUnionParam) {
 	if len(tools) == 0 {
 		return nil, nil
 	}

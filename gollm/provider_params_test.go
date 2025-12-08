@@ -48,7 +48,7 @@ func TestProviderParams_AnthropicMutate(t *testing.T) {
 	})
 
 	cfg := adapter.NormalizeRequest(req, "test-agent")
-	system, msgs, err := adapter.GenAIToAnthropicBetaMessages(cfg.SystemInstruction, req.Contents)
+	system, msgs, err := adapter.GenAIToAnthropicMessages(cfg.SystemInstruction, req.Contents)
 	if err != nil {
 		t.Fatalf("GenAIToAnthropicBetaMessages() error = %v", err)
 	}
@@ -212,7 +212,7 @@ func TestProviderParams_DefaultsAppliedToAnthropic(t *testing.T) {
 		Config:   &genai.GenerateContentConfig{},
 	}
 	cfg := adapter.NormalizeRequest(req, "test-agent")
-	system, msgs, err := adapter.GenAIToAnthropicBetaMessages(cfg.SystemInstruction, req.Contents)
+	system, msgs, err := adapter.GenAIToAnthropicMessages(cfg.SystemInstruction, req.Contents)
 	if err != nil {
 		t.Fatalf("GenAIToAnthropicBetaMessages() error = %v", err)
 	}
