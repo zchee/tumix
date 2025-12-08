@@ -51,12 +51,11 @@ formatters:
           replacement: 'any'
 
     gofumpt:
-      module-path: github.com/zchee/tumix
+      module-path: github.com/zchee/tumix/gollm/xai
       extra-rules: true
 
     goimports:
       local-prefixes:
-        - github.com/zchee/tumix
         - github.com/zchee/tumix/gollm/xai
 
 linters:
@@ -381,6 +380,29 @@ linters:
       - linters:
           - lll
         source: "^//go:generate "
+
+      - linters:
+          - decorder
+          - gosec
+          - revive
+          - wrapcheck
+        path: .
+
+      - linters:
+          - decorder
+          - revive
+          - wrapcheck
+          - cyclop
+        path: examples
+
+      - linters:
+          - goheader
+        path: internal/grpccodec/mem
+
+      - linters:
+          - unparam
+        text: "(\\*Reader).Close" # io.Closer
+        path: internal/grpccodec/mem
 
       - linters:
           - govet
