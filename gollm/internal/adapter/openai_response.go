@@ -76,7 +76,7 @@ func OpenAIResponseToLLM(resp *responses.Response, stopSequences []string) (*mod
 				},
 			})
 		case "shell_call_output":
-			out := responseOutputUnionToAny(item.Output)
+			out := responseOutputUnionToAny(&item.Output)
 			name := item.CallID
 			if name == "" {
 				name = item.ID
@@ -329,7 +329,7 @@ func trimPartsAtStop(parts []*genai.Part, stops []string) bool {
 	return trimmed
 }
 
-func responseOutputUnionToAny(out responses.ResponseOutputItemUnionOutput) any {
+func responseOutputUnionToAny(out *responses.ResponseOutputItemUnionOutput) any {
 	if len(out.OfResponseFunctionShellToolCallOutputOutputArray) > 0 {
 		return out.OfResponseFunctionShellToolCallOutputOutputArray
 	}

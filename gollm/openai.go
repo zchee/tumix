@@ -111,7 +111,7 @@ func (m *openAILLM) GenerateContent(ctx context.Context, req *model.LLMRequest, 
 		var spanErr error
 		defer func() { telemetry.End(span, spanErr) }()
 
-		for i := 0; i < count; i++ {
+		for range count {
 			resp, err := m.client.Responses.New(ctx, *params)
 			if err != nil {
 				spanErr = err

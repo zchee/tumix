@@ -195,7 +195,7 @@ func TestOpenAILLM_Generate_MultiCandidate(t *testing.T) {
 		},
 	}
 
-	var texts []string
+	texts := make([]string, 0, 2)
 	for resp, err := range llm.GenerateContent(t.Context(), req, false) {
 		if err != nil {
 			t.Fatalf("GenerateContent() error = %v", err)
