@@ -24,11 +24,10 @@ require (
 	cloud.google.com/go/auth v0.17.0
 	cloud.google.com/go/auth/oauth2adapt v0.2.8
 	github.com/anthropics/anthropic-sdk-go v1.19.0
-	github.com/google/dotprompt/go v0.0.0-20251121213842-db5416a4f7ce
 	github.com/google/go-cmp v0.7.0
 	github.com/google/go-replayers/grpcreplay v1.3.1-0.20250327185215-2dbb62fbf480 // @main
 	github.com/google/go-replayers/httpreplay v1.2.1-0.20250327185215-2dbb62fbf480 // @main
-	github.com/invopop/jsonschema v0.13.0
+	github.com/invopop/jsonschema v0.13.0 // indirect
 	github.com/openai/openai-go/v3 v3.9.0
 	github.com/zchee/tumix/gollm/xai v0.0.0-00010101000000-000000000000
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.63.0
@@ -36,7 +35,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.38.0
 	go.opentelemetry.io/otel/trace v1.38.0
 	google.golang.org/adk v0.2.1-0.20251202162810-24465d0c9d00 // @main
-	google.golang.org/genai v1.36.0
+	google.golang.org/genai v1.37.0
 	google.golang.org/grpc v1.77.0
 	google.golang.org/protobuf v1.36.10
 )
@@ -51,18 +50,14 @@ require (
 	github.com/gaudiy/vtprotobuf v0.6.1-0.20251122131602-5bc3a6fc1d03 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/goccy/go-yaml v1.18.0 // indirect
-	github.com/google/jsonschema-go v0.3.0 // indirect
 	github.com/google/martian/v3 v3.3.3 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
-	github.com/google/safehtml v0.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.6 // indirect
 	github.com/googleapis/gax-go/v2 v2.15.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.2 // indirect
 	github.com/mailru/easyjson v0.9.1 // indirect
-	github.com/mbleigh/raymond v0.0.0-20250414171441-6b3a58ab9e0a // indirect
 	github.com/puzpuzpuz/xsync/v4 v4.2.0 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
@@ -78,7 +73,6 @@ require (
 	golang.org/x/crypto v0.45.0 // indirect
 	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/oauth2 v0.33.0 // indirect
-	golang.org/x/sync v0.18.0 // indirect
 	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/text v0.31.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251022142026-3a174f9686a8 // indirect
