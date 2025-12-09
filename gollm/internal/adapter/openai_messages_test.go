@@ -128,24 +128,48 @@ func TestGenAIToResponsesInputErrors(t *testing.T) {
 		contents []*genai.Content
 	}{
 		"missing function name": {
-			contents: []*genai.Content{{
-				Parts: []*genai.Part{{FunctionCall: &genai.FunctionCall{}}},
-			}},
+			contents: []*genai.Content{
+				{
+					Parts: []*genai.Part{
+						{
+							FunctionCall: &genai.FunctionCall{},
+						},
+					},
+				},
+			},
 		},
 		"missing function response name": {
-			contents: []*genai.Content{{
-				Parts: []*genai.Part{{FunctionResponse: &genai.FunctionResponse{Response: map[string]any{}}}},
-			}},
+			contents: []*genai.Content{
+				{
+					Parts: []*genai.Part{
+						{
+							FunctionResponse: &genai.FunctionResponse{
+								Response: map[string]any{},
+							},
+						},
+					},
+				},
+			},
 		},
 		"unsupported part": {
-			contents: []*genai.Content{{
-				Parts: []*genai.Part{{InlineData: &genai.Blob{MIMEType: "text/plain"}}},
-			}},
+			contents: []*genai.Content{
+				{
+					Parts: []*genai.Part{
+						{
+							InlineData: &genai.Blob{
+								MIMEType: "text/plain",
+							},
+						},
+					},
+				},
+			},
 		},
 	}
 
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
 			if _, err := GenAIToResponsesInput(tt.contents); err == nil {
 				t.Fatalf("expected error")
 			}

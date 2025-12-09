@@ -35,19 +35,27 @@ func TestLogAddSource(t *testing.T) {
 	}{
 		{
 			name: "Log",
-			call: func(ctx context.Context) { Log(ctx, slog.LevelInfo, "hello") },
+			call: func(ctx context.Context) {
+				Log(ctx, slog.LevelInfo, "hello")
+			},
 		},
 		{
 			name: "Info",
-			call: func(ctx context.Context) { Info(ctx, "hello") },
+			call: func(ctx context.Context) {
+				Info(ctx, "hello")
+			},
 		},
 		{
 			name: "Warn",
-			call: func(ctx context.Context) { Warn(ctx, "hello") },
+			call: func(ctx context.Context) {
+				Warn(ctx, "hello")
+			},
 		},
 		{
 			name: "Error",
-			call: func(ctx context.Context) { Error(ctx, "hello", fmt.Errorf("fail")) },
+			call: func(ctx context.Context) {
+				Error(ctx, "hello", fmt.Errorf("fail"))
+			},
 		},
 	}
 
@@ -93,7 +101,7 @@ func BenchmarkLogCallerCapture(b *testing.B) {
 			b.Cleanup(func() { SetCaptureCaller(true) })
 
 			logger := slog.New(slog.DiscardHandler)
-			ctx := context.Background()
+			ctx := b.Context()
 			ctx = WithLogger(ctx, logger)
 
 			for b.Loop() {

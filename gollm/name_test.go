@@ -55,8 +55,10 @@ func TestAnthropicBuildParamsDefaults(t *testing.T) {
 	}
 	system := []anthropic.BetaTextBlockParam{}
 	msgs := []anthropic.BetaMessageParam{{
-		Role:    anthropic.BetaMessageParamRoleUser,
-		Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("hi")},
+		Role: anthropic.BetaMessageParamRoleUser,
+		Content: []anthropic.BetaContentBlockParamUnion{
+			anthropic.NewBetaTextBlock("hi"),
+		},
 	}}
 
 	params, err := llm.buildParams(req, system, msgs)
@@ -78,7 +80,10 @@ func TestAnthropicBuildParamsNoMessages(t *testing.T) {
 	t.Parallel()
 
 	llm := &anthropicLLM{name: "claude"}
-	if _, err := llm.buildParams(&model.LLMRequest{Config: &genai.GenerateContentConfig{}}, nil, nil); err == nil {
+	req := &model.LLMRequest{
+		Config: &genai.GenerateContentConfig{},
+	}
+	if _, err := llm.buildParams(req, nil, nil); err == nil {
 		t.Fatalf("expected error for empty messages")
 	}
 }
@@ -122,7 +127,10 @@ func TestOpenAIResponseParamsErrors(t *testing.T) {
 	t.Parallel()
 
 	llm := &openAILLM{name: "gpt-4o-mini"}
-	if _, err := llm.responseParams(&model.LLMRequest{Contents: nil, Config: &genai.GenerateContentConfig{}}); err == nil {
+	if _, err := llm.responseParams(&model.LLMRequest{
+		Contents: nil,
+		Config:   &genai.GenerateContentConfig{},
+	}); err == nil {
 		t.Fatalf("expected error on empty contents")
 	}
 }
@@ -136,11 +144,10 @@ func TestXAIName(t *testing.T) {
 	}
 }
 
-// helper functions reused from adapter/xai_test.go
+// helper functions reused from adapter/xai_test.go.
 func ptrFloat32(v float32) *float32 { return &v }
-func ptrInt32(v int32) *int32       { return &v }
 
-func almost(got float64, want float64) bool {
+func almost(got, want float64) bool {
 	if got > want {
 		return got-want < 1e-6
 	}

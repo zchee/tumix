@@ -17,7 +17,7 @@
 package adapter
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
 	"testing"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
@@ -31,15 +31,32 @@ func TestMapAnthropicFinishReason(t *testing.T) {
 		in   anthropic.BetaStopReason
 		want genai.FinishReason
 	}{
-		"stop":       {anthropic.BetaStopReasonStopSequence, genai.FinishReasonStop},
-		"end_turn":   {anthropic.BetaStopReasonEndTurn, genai.FinishReasonStop},
-		"max_tokens": {anthropic.BetaStopReasonMaxTokens, genai.FinishReasonMaxTokens},
-		"tool":       {anthropic.BetaStopReasonToolUse, genai.FinishReasonOther},
-		"unknown":    {anthropic.BetaStopReason("mystery"), genai.FinishReasonUnspecified},
+		"stop": {
+			in:   anthropic.BetaStopReasonStopSequence,
+			want: genai.FinishReasonStop,
+		},
+		"end_turn": {
+			in:   anthropic.BetaStopReasonEndTurn,
+			want: genai.FinishReasonStop,
+		},
+		"max_tokens": {
+			in:   anthropic.BetaStopReasonMaxTokens,
+			want: genai.FinishReasonMaxTokens,
+		},
+		"tool": {
+			in:   anthropic.BetaStopReasonToolUse,
+			want: genai.FinishReasonOther,
+		},
+		"unknown": {
+			in:   anthropic.BetaStopReason("mystery"),
+			want: genai.FinishReasonUnspecified,
+		},
 	}
 
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
 			if got := mapAnthropicFinishReason(tt.in); got != tt.want {
 				t.Fatalf("mapAnthropicFinishReason(%q) = %v, want %v", tt.in, got, tt.want)
 			}
@@ -51,12 +68,16 @@ func TestAccText(t *testing.T) {
 	t.Parallel()
 
 	t.Run("nil message", func(t *testing.T) {
+		t.Parallel()
+
 		if got := AccText(nil); got != "" {
 			t.Fatalf("AccText(nil) = %q, want empty", got)
 		}
 	})
 
 	t.Run("mixed blocks", func(t *testing.T) {
+		t.Parallel()
+
 		raw := `{"content":[{"type":"tool_use"},{"type":"text","text":"Hello"},{"type":"text","text":" world"}]}`
 		var msg anthropic.BetaMessage
 		if err := json.Unmarshal([]byte(raw), &msg); err != nil {

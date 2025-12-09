@@ -17,7 +17,6 @@
 package adapter
 
 import (
-	"context"
 	json "encoding/json/v2"
 	"fmt"
 	"reflect"
@@ -355,7 +354,13 @@ func TestXAIStreamAggregatorEmptyContent(t *testing.T) {
 	aggr := NewXAIStreamAggregator()
 
 	resp := newTestXAIResponse(t, &xaipb.GetChatCompletionResponse{
-		Outputs: []*xaipb.CompletionOutput{{Message: &xaipb.CompletionMessage{Role: xaipb.MessageRole_ROLE_ASSISTANT}}},
+		Outputs: []*xaipb.CompletionOutput{
+			{
+				Message: &xaipb.CompletionMessage{
+					Role: xaipb.MessageRole_ROLE_ASSISTANT,
+				},
+			},
+		},
 	})
 
 	for llm, err := range aggr.Process(t.Context(), resp) {
@@ -379,20 +384,26 @@ func TestAppendDelta(t *testing.T) {
 }
 
 func BenchmarkXAIStreamAggregator(b *testing.B) {
-	ctx := context.Background()
-	lengths := []int{1_024, 4_096, 10_240}
+	ctx := b.Context()
+	lengths := []int{
+		1_024,
+		4_096,
+		10_240,
+	}
 
 	for _, n := range lengths {
 		b.Run(fmt.Sprintf("len=%d", n), func(b *testing.B) {
 			b.ReportAllocs()
 			payload := strings.Repeat("a", n)
 			resp := newTestXAIResponse(b, &xaipb.GetChatCompletionResponse{
-				Outputs: []*xaipb.CompletionOutput{{
-					Message: &xaipb.CompletionMessage{
-						Role:    xaipb.MessageRole_ROLE_ASSISTANT,
-						Content: payload,
+				Outputs: []*xaipb.CompletionOutput{
+					{
+						Message: &xaipb.CompletionMessage{
+							Role:    xaipb.MessageRole_ROLE_ASSISTANT,
+							Content: payload,
+						},
 					},
-				}},
+				},
 			})
 
 			var size int
@@ -420,10 +431,22 @@ func TestMapXAIFinishReason(t *testing.T) {
 		in   string
 		want genai.FinishReason
 	}{
-		"success: stop":             {in: "REASON_STOP", want: genai.FinishReasonStop},
-		"success: max_len":          {in: "reason_max_len", want: genai.FinishReasonMaxTokens},
-		"success: invalid":          {in: "REASON_INVALID", want: genai.FinishReasonUnspecified},
-		"success: unknown fallback": {in: "REASON_OTHER", want: genai.FinishReasonOther},
+		"success: stop": {
+			in:   "REASON_STOP",
+			want: genai.FinishReasonStop,
+		},
+		"success: max_len": {
+			in:   "reason_max_len",
+			want: genai.FinishReasonMaxTokens,
+		},
+		"success: invalid": {
+			in:   "REASON_INVALID",
+			want: genai.FinishReasonUnspecified,
+		},
+		"success: unknown fallback": {
+			in:   "REASON_OTHER",
+			want: genai.FinishReasonOther,
+		},
 	}
 
 	for name, tc := range tests {

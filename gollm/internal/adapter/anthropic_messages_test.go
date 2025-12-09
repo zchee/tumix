@@ -33,13 +33,25 @@ func TestGenAIToAnthropicMessages(t *testing.T) {
 			Role: genai.RoleUser,
 			Parts: []*genai.Part{
 				genai.NewPartFromText("hi"),
-				{FunctionCall: &genai.FunctionCall{Name: "lookup", Args: map[string]any{"q": "x"}}},
+				{
+					FunctionCall: &genai.FunctionCall{
+						Name: "lookup",
+						Args: map[string]any{"q": "x"},
+					},
+				},
 			},
 		},
 		{
 			Role: genai.RoleModel,
 			Parts: []*genai.Part{
-				{FunctionResponse: &genai.FunctionResponse{Name: "lookup", Response: map[string]any{"ok": true}}},
+				{
+					FunctionResponse: &genai.FunctionResponse{
+						Name: "lookup",
+						Response: map[string]any{
+							"ok": true,
+						},
+					},
+				},
 			},
 		},
 	}
@@ -64,13 +76,31 @@ func TestGenAIToAnthropicMessagesErrors(t *testing.T) {
 
 	tests := map[string]*genai.Content{
 		"function call missing name": {
-			Parts: []*genai.Part{{FunctionCall: &genai.FunctionCall{Args: map[string]any{}}}},
+			Parts: []*genai.Part{
+				{
+					FunctionCall: &genai.FunctionCall{
+						Args: map[string]any{},
+					},
+				},
+			},
 		},
 		"function response missing name": {
-			Parts: []*genai.Part{{FunctionResponse: &genai.FunctionResponse{Response: map[string]any{}}}},
+			Parts: []*genai.Part{
+				{
+					FunctionResponse: &genai.FunctionResponse{
+						Response: map[string]any{},
+					},
+				},
+			},
 		},
 		"unsupported part": {
-			Parts: []*genai.Part{{InlineData: &genai.Blob{MIMEType: "text/plain"}}},
+			Parts: []*genai.Part{
+				{
+					InlineData: &genai.Blob{
+						MIMEType: "text/plain",
+					},
+				},
+			},
 		},
 		"empty parts": {
 			Parts: []*genai.Part{},
@@ -79,6 +109,8 @@ func TestGenAIToAnthropicMessagesErrors(t *testing.T) {
 
 	for name, content := range tests {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
 			if _, _, err := GenAIToAnthropicMessages(nil, []*genai.Content{content}); err == nil {
 				t.Fatalf("expected error")
 			}
@@ -89,12 +121,21 @@ func TestGenAIToAnthropicMessagesErrors(t *testing.T) {
 func TestGenAIToAnthropicMessagesToolUseIDs(t *testing.T) {
 	t.Parallel()
 
-	_, msgs, err := GenAIToAnthropicMessages(nil, []*genai.Content{{
-		Role: genai.RoleUser,
-		Parts: []*genai.Part{
-			{FunctionCall: &genai.FunctionCall{Name: "fn", Args: map[string]any{"a": 1}}},
+	_, msgs, err := GenAIToAnthropicMessages(nil, []*genai.Content{
+		{
+			Role: genai.RoleUser,
+			Parts: []*genai.Part{
+				{
+					FunctionCall: &genai.FunctionCall{
+						Name: "fn",
+						Args: map[string]any{
+							"a": 1,
+						},
+					},
+				},
+			},
 		},
-	}})
+	})
 	if err != nil {
 		t.Fatalf("GenAIToAnthropicMessages() error = %v", err)
 	}

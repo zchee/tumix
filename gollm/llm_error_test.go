@@ -17,7 +17,6 @@
 package gollm
 
 import (
-	"context"
 	"testing"
 
 	"google.golang.org/adk/model"
@@ -28,7 +27,9 @@ func TestAnthropicLLM_GenerateContent_NoMessages(t *testing.T) {
 	t.Parallel()
 
 	llm := &anthropicLLM{name: "claude-haiku-4-5"}
-	req := &model.LLMRequest{Config: &genai.GenerateContentConfig{}}
+	req := &model.LLMRequest{
+		Config: &genai.GenerateContentConfig{},
+	}
 
 	if _, err := llm.buildParams(req, nil, nil); err == nil {
 		t.Fatalf("expected error for empty messages")
@@ -39,10 +40,12 @@ func TestOpenAILLM_GenerateContent_NoInput(t *testing.T) {
 	t.Parallel()
 
 	llm := &openAILLM{name: "gpt-4o"}
-	req := &model.LLMRequest{Config: &genai.GenerateContentConfig{}}
+	req := &model.LLMRequest{
+		Config: &genai.GenerateContentConfig{},
+	}
 
 	var seenErr error
-	for _, err := range llm.GenerateContent(context.Background(), req, false) {
+	for _, err := range llm.GenerateContent(t.Context(), req, false) {
 		seenErr = err
 		break
 	}
@@ -56,12 +59,23 @@ func TestXAILLM_GenerateContent_InvalidMessages(t *testing.T) {
 
 	llm := &xaiLLM{name: "grok-mini"}
 	req := &model.LLMRequest{
-		Contents: []*genai.Content{{Role: genai.RoleUser, Parts: []*genai.Part{{InlineData: &genai.Blob{MIMEType: "text/plain"}}}}},
-		Config:   &genai.GenerateContentConfig{},
+		Contents: []*genai.Content{
+			{
+				Role: genai.RoleUser,
+				Parts: []*genai.Part{
+					{
+						InlineData: &genai.Blob{
+							MIMEType: "text/plain",
+						},
+					},
+				},
+			},
+		},
+		Config: &genai.GenerateContentConfig{},
 	}
 
 	var seenErr error
-	for _, err := range llm.GenerateContent(context.Background(), req, false) {
+	for _, err := range llm.GenerateContent(t.Context(), req, false) {
 		seenErr = err
 		break
 	}

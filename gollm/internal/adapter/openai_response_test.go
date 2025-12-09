@@ -84,7 +84,7 @@ func TestResponseOutputUnionToAny(t *testing.T) {
 	arr := []responses.ResponseFunctionShellToolCallOutputOutput{{}}
 	if got := responseOutputUnionToAny(&responses.ResponseOutputItemUnionOutput{
 		OfResponseFunctionShellToolCallOutputOutputArray: arr,
-	}); got == nil { //nolint:revive // nil check sufficient
+	}); got == nil {
 		t.Fatalf("array nil")
 	}
 
@@ -103,14 +103,41 @@ func TestMapResponseFinishReason(t *testing.T) {
 		details responses.ResponseIncompleteDetails
 		want    genai.FinishReason
 	}{
-		"completed": {responses.ResponseStatusCompleted, responses.ResponseIncompleteDetails{}, genai.FinishReasonStop},
-		"max":       {responses.ResponseStatusIncomplete, responses.ResponseIncompleteDetails{Reason: "max_output_tokens"}, genai.FinishReasonMaxTokens},
-		"filter":    {responses.ResponseStatusIncomplete, responses.ResponseIncompleteDetails{Reason: "content_filter"}, genai.FinishReasonSafety},
-		"failed":    {responses.ResponseStatusFailed, responses.ResponseIncompleteDetails{}, genai.FinishReasonOther},
-		"default":   {responses.ResponseStatus("unknown"), responses.ResponseIncompleteDetails{}, genai.FinishReasonUnspecified},
+		"completed": {
+			status:  responses.ResponseStatusCompleted,
+			details: responses.ResponseIncompleteDetails{},
+			want:    genai.FinishReasonStop,
+		},
+		"max": {
+			status: responses.ResponseStatusIncomplete,
+			details: responses.ResponseIncompleteDetails{
+				Reason: "max_output_tokens",
+			},
+			want: genai.FinishReasonMaxTokens,
+		},
+		"filter": {
+			status: responses.ResponseStatusIncomplete,
+			details: responses.ResponseIncompleteDetails{
+				Reason: "content_filter",
+			},
+			want: genai.FinishReasonSafety,
+		},
+		"failed": {
+			status:  responses.ResponseStatusFailed,
+			details: responses.ResponseIncompleteDetails{},
+			want:    genai.FinishReasonOther,
+		},
+		"default": {
+			status:  responses.ResponseStatus("unknown"),
+			details: responses.ResponseIncompleteDetails{},
+			want:    genai.FinishReasonUnspecified,
+		},
 	}
+
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
 			if got := mapResponseFinishReason(tt.status, tt.details); got != tt.want {
 				t.Fatalf("mapResponseFinishReason() = %v, want %v", got, tt.want)
 			}
@@ -172,12 +199,18 @@ func TestOpenAIStreamAggregator_CompletedEvent(t *testing.T) {
 		Output: []responses.ResponseOutputItemUnion{{
 			Type: "message",
 			Role: constant.ValueOf[constant.Assistant](),
-			Content: []responses.ResponseOutputMessageContentUnion{{
-				Type: "output_text",
-				Text: "done",
-			}},
+			Content: []responses.ResponseOutputMessageContentUnion{
+				{
+					Type: "output_text",
+					Text: "done",
+				},
+			},
 		}},
-		Usage: responses.ResponseUsage{InputTokens: 1, OutputTokens: 2, TotalTokens: 3},
+		Usage: responses.ResponseUsage{
+			InputTokens:  1,
+			OutputTokens: 2,
+			TotalTokens:  3,
+		},
 	}
 
 	got := agg.Process(&responses.ResponseStreamEventUnion{
