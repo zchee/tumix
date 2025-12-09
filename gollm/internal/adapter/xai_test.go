@@ -351,6 +351,20 @@ func TestXAIStreamAggregatorThought(t *testing.T) {
 	}
 }
 
+func TestXAIStreamAggregatorEmptyContent(t *testing.T) {
+	aggr := NewXAIStreamAggregator()
+
+	resp := newTestXAIResponse(t, &xaipb.GetChatCompletionResponse{
+		Outputs: []*xaipb.CompletionOutput{{Message: &xaipb.CompletionMessage{Role: xaipb.MessageRole_ROLE_ASSISTANT}}},
+	})
+
+	for llm, err := range aggr.Process(t.Context(), resp) {
+		if err == nil || llm != nil {
+			t.Fatalf("expected error for empty content, got llm=%+v err=%v", llm, err)
+		}
+	}
+}
+
 func TestAppendDelta(t *testing.T) {
 	var acc strings.Builder
 	acc.WriteString("Hello")
