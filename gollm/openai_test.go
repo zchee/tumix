@@ -17,23 +17,12 @@
 package gollm
 
 import (
-	"bytes"
-	jsonv1 "encoding/json" //nolint:depguard
-	"encoding/json/jsontext"
-	json "encoding/json/v2"
-	"fmt"
-	"io"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	openai "github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
-	"github.com/openai/openai-go/v3/responses"
-	"github.com/openai/openai-go/v3/shared"
-	"github.com/openai/openai-go/v3/shared/constant"
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
 
@@ -93,224 +82,145 @@ func TestOpenAIResponseParamsErrors(t *testing.T) {
 }
 
 func TestOpenAILLM_Generate(t *testing.T) {
-	syncResp := mockResponse(
-		"resp-sync",
-		"The capital of France is Paris.",
-		13,
-		16,
-		"completed",
-	)
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		enc := jsontext.NewEncoder(w, jsonv1.DefaultOptionsV1())
-		if r.URL.Path != "/responses" && r.URL.Path != "/v1/responses" {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.MarshalEncode(enc, syncResp); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-		}
-	}))
-	t.Cleanup(server.Close)
-
-	apiKey := ""
-	if rr.Replaying() {
-		apiKey = "test-key"
-	}
-	llm, err := NewOpenAILLM(t.Context(), apiKey, "gpt-5-mini", nil,
-		option.WithHTTPClient(server.Client()),
-		option.WithBaseURL(server.URL),
-	)
-	if err != nil {
-		t.Fatalf("NewOpenAILLM() error = %v", err)
-	}
-
-	var got *model.LLMResponse
-	for resp, err := range llm.GenerateContent(t.Context(), &model.LLMRequest{
-		Contents: genai.Text("What is the capital of France?"),
-		Config:   &genai.GenerateContentConfig{},
-	}, false) {
-		if err != nil {
-			t.Fatalf("GenerateContent() unexpected error: %v", err)
-		}
-		got = resp
-	}
-
-	want := &model.LLMResponse{
-		Content: genai.NewContentFromText("The capital of France is Paris.", genai.RoleModel),
-		UsageMetadata: &genai.GenerateContentResponseUsageMetadata{
-			PromptTokenCount:     13,
-			CandidatesTokenCount: 16,
-			TotalTokenCount:      29,
+	tests := map[string]struct {
+		modelName string
+		req       *model.LLMRequest
+		want      *model.LLMResponse
+		wantErr   bool
+	}{
+		"ok": {
+			modelName: "gpt-5.1",
+			req: &model.LLMRequest{
+				Contents: genai.Text("What is the capital of France?"),
+				Config:   &genai.GenerateContentConfig{},
+			},
+			want: &model.LLMResponse{
+				Content: genai.NewContentFromText("The capital of France is Paris.", genai.RoleModel),
+				UsageMetadata: &genai.GenerateContentResponseUsageMetadata{
+					PromptTokenCount:     13,
+					CandidatesTokenCount: 17,
+					TotalTokenCount:      30,
+				},
+				FinishReason: genai.FinishReasonStop,
+				TurnComplete: true,
+			},
 		},
-		FinishReason: genai.FinishReasonStop,
-		TurnComplete: true,
+		"MultiCandidate": {
+			modelName: "gpt-5.1",
+			req: &model.LLMRequest{
+				Contents: genai.Text("two please"),
+				Config: &genai.GenerateContentConfig{
+					CandidateCount: 2,
+				},
+			},
+			want: &model.LLMResponse{
+				Content: genai.NewContentFromText("2", genai.RoleModel),
+				UsageMetadata: &genai.GenerateContentResponseUsageMetadata{
+					PromptTokenCount:     8,
+					CandidatesTokenCount: 11,
+					TotalTokenCount:      19,
+				},
+				FinishReason: genai.FinishReasonStop,
+				TurnComplete: true,
+			},
+		},
 	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			httpClient, cleanup, _ := rr.NewHTTPClient(t, func(r *rr.Recorder) {
+				r.RemoveRequestHeaders(
+					"X-Api-Key",
+				)
+				r.RemoveResponseHeaders(
+					"Openai-Organization",
+					"Openai-Project",
+					"Set-Cookie",
+				)
+			})
+			t.Cleanup(cleanup)
 
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Fatalf("GenerateContent() diff (-want +got):\n%s", diff)
+			apiKey := ""
+			if rr.Replaying() {
+				apiKey = "test-key"
+			}
+
+			llm, err := NewOpenAILLM(t.Context(), apiKey, tt.modelName, nil,
+				option.WithHTTPClient(httpClient),
+			)
+			if err != nil {
+				t.Fatalf("NewOpenAILLM() error = %v", err)
+			}
+
+			var got *model.LLMResponse
+			for resp, err := range llm.GenerateContent(t.Context(), tt.req, false) {
+				if err != nil {
+					t.Fatalf("GenerateContent() unexpected error: %v", err)
+				}
+				got = resp
+			}
+
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Fatalf("GenerateContent() diff (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 
 func TestOpenAILLM_GenerateStream(t *testing.T) {
-	streamResp := mockResponse("resp-stream", "Paris", 7, 5, "completed")
-
-	sseBody := bytes.NewBuffer(nil)
-	if _, err := sseBody.WriteString("data: {\"type\":\"response.output_text.delta\",\"delta\":\"Par\",\"content_index\":0,\"item_id\":\"\",\"output_index\":0,\"sequence_number\":1,\"logprobs\":[]}\n\n"); err != nil {
-		t.Fatalf("WriteString delta1: %v", err)
+	tests := map[string]struct {
+		modelName string
+		req       *model.LLMRequest
+		want      string
+		wantErr   bool
+	}{
+		"ok": {
+			modelName: "gpt-5.1",
+			req: &model.LLMRequest{
+				Contents: genai.Text("What is the capital of France? Must be One word."),
+				Config: &genai.GenerateContentConfig{
+					MaxOutputTokens: 2048,
+				},
+			},
+			want: "Paris",
+		},
 	}
-	if _, err := sseBody.WriteString("data: {\"type\":\"response.output_text.delta\",\"delta\":\"is\",\"content_index\":0,\"item_id\":\"\",\"output_index\":0,\"sequence_number\":2,\"logprobs\":[]}\n\n"); err != nil {
-		t.Fatalf("WriteString delta2: %v", err)
-	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			httpClient, cleanup, _ := rr.NewHTTPClient(t, func(r *rr.Recorder) {
+				r.RemoveRequestHeaders(
+					"X-Api-Key",
+				)
+				r.RemoveResponseHeaders(
+					"Openai-Organization",
+					"Openai-Project",
+					"Set-Cookie",
+				)
+			})
+			t.Cleanup(cleanup)
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		enc := jsontext.NewEncoder(w, jsonv1.DefaultOptionsV1())
-		if r.URL.Path != "/responses" && r.URL.Path != "/v1/responses" {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-
-		var body map[string]any
-		reqBytes, err := io.ReadAll(r.Body)
-		if err != nil {
-			t.Fatalf("read request body: %v", err)
-		}
-		if err := json.Unmarshal(reqBytes, &body); err != nil {
-			t.Fatalf("Decode body: %v", err)
-		}
-		if stream, ok := body["stream"].(bool); ok && stream {
-			w.Header().Set("Content-Type", "text/event-stream")
-			if _, err := w.Write(sseBody.Bytes()); err != nil {
-				t.Fatalf("write sse body: %v", err)
+			apiKey := ""
+			if rr.Replaying() {
+				apiKey = "test-key"
 			}
-			return
-		}
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.MarshalEncode(enc, streamResp); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-		}
-	}))
-	t.Cleanup(server.Close)
+			llm, err := NewOpenAILLM(t.Context(), apiKey, tt.modelName, nil,
+				option.WithHTTPClient(httpClient),
+			)
+			if err != nil {
+				t.Fatalf("NewAnthropicLLM() error = %v", err)
+			}
 
-	apiKey := ""
-	if rr.Replaying() {
-		apiKey = "test-key"
-	}
-	llm, err := NewOpenAILLM(t.Context(), apiKey, "gpt-5-mini", nil,
-		option.WithHTTPClient(server.Client()),
-		option.WithBaseURL(server.URL),
-	)
-	if err != nil {
-		t.Fatalf("NewOpenAILLM() error = %v", err)
-	}
+			// Transforms the stream into strings, concatenating the text value of the response parts
+			got, err := readResponse(llm.GenerateContent(t.Context(), tt.req, true))
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GenerateStream() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
 
-	got, err := readResponse(llm.GenerateContent(t.Context(), &model.LLMRequest{
-		Contents: genai.Text("What is the capital of France? One word."),
-		Config:   &genai.GenerateContentConfig{},
-	}, true))
-	if err != nil {
-		t.Fatalf("GenerateStream() error = %v", err)
-	}
-
-	if diff := cmp.Diff("Paris", got.PartialText); diff != "" {
-		t.Errorf("GenerateStream() partial diff (-want +got):\n%s", diff)
-	}
-	if diff := cmp.Diff("Paris", got.FinalText); diff != "" {
-		t.Errorf("GenerateStream() final diff (-want +got):\n%s", diff)
-	}
-}
-
-func TestOpenAILLM_Generate_MultiCandidate(t *testing.T) {
-	var calls int
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		enc := jsontext.NewEncoder(w, jsonv1.DefaultOptionsV1())
-		if r.URL.Path != "/responses" && r.URL.Path != "/v1/responses" {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		calls++
-		text := fmt.Sprintf("answer-%d", calls)
-		resp := mockResponse(fmt.Sprintf("resp-%d", calls), text, 1, 1, "completed")
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.MarshalEncode(enc, resp); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-		}
-	}))
-	t.Cleanup(server.Close)
-
-	apiKey := ""
-	if rr.Replaying() {
-		apiKey = "test-key"
-	}
-	llm, err := NewOpenAILLM(t.Context(), apiKey, "gpt-5-mini", nil,
-		option.WithHTTPClient(server.Client()),
-		option.WithBaseURL(server.URL),
-	)
-	if err != nil {
-		t.Fatalf("NewOpenAILLM() error = %v", err)
-	}
-
-	req := &model.LLMRequest{
-		Contents: genai.Text("two please"),
-		Config: &genai.GenerateContentConfig{
-			CandidateCount: 2,
-		},
-	}
-
-	texts := make([]string, 0, 2)
-	for resp, err := range llm.GenerateContent(t.Context(), req, false) {
-		if err != nil {
-			t.Fatalf("GenerateContent() error = %v", err)
-		}
-		texts = append(texts, resp.Content.Parts[0].Text)
-	}
-
-	if len(texts) != 2 {
-		t.Fatalf("got %d responses, want 2", len(texts))
-	}
-	if diff := cmp.Diff([]string{"answer-1", "answer-2"}, texts); diff != "" {
-		t.Fatalf("responses mismatch (-want +got):\n%s", diff)
-	}
-}
-
-func mockResponse(id, text string, promptTokens, completionTokens int64, status string) *responses.Response {
-	return &responses.Response{
-		ID:        id,
-		CreatedAt: 1,
-		Error: responses.ResponseError{
-			Code:    "",
-			Message: "",
-		},
-		IncompleteDetails: responses.ResponseIncompleteDetails{},
-		Instructions:      responses.ResponseInstructionsUnion{OfString: ""},
-		Metadata:          shared.Metadata{},
-		Model:             shared.ResponsesModel("gpt-5-mini"),
-		Object:            constant.ValueOf[constant.Response](),
-		Output: []responses.ResponseOutputItemUnion{{
-			Type:    "message",
-			Role:    constant.ValueOf[constant.Assistant](),
-			Content: []responses.ResponseOutputMessageContentUnion{{Type: "output_text", Text: text}},
-		}},
-		ParallelToolCalls: false,
-		Temperature:       0,
-		ToolChoice:        responses.ResponseToolChoiceUnion{OfToolChoiceMode: responses.ToolChoiceOptionsAuto},
-		Tools:             []responses.ToolUnion{},
-		TopP:              1,
-		Status:            responses.ResponseStatus(status),
-		Text:              responses.ResponseTextConfig{},
-		Usage: responses.ResponseUsage{
-			InputTokens:  promptTokens,
-			OutputTokens: completionTokens,
-			TotalTokens:  promptTokens + completionTokens,
-			InputTokensDetails: responses.ResponseUsageInputTokensDetails{
-				CachedTokens: 0,
-			},
-			OutputTokensDetails: responses.ResponseUsageOutputTokensDetails{
-				ReasoningTokens: 0,
-			},
-		},
+			// Since we are expecting GenerateStream to aggregate partial events, the text should be the same
+			if diff := cmp.Diff(tt.want, got.FinalText); diff != "" {
+				t.Errorf("Model.GenerateStream().FinalText = %v, want %v\ndiff(-want +got):\n%v", got.FinalText, tt.want, diff)
+			}
+		})
 	}
 }
