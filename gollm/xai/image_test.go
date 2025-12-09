@@ -18,7 +18,6 @@ package xai
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
 	"testing"
 
@@ -61,7 +60,7 @@ func TestImageResponseHelpers(t *testing.T) {
 		t.Fatalf("prompt mismatch: %s", got)
 	}
 
-	data, err := resp.Data(context.Background())
+	data, err := resp.Data(t.Context())
 	if err != nil {
 		t.Fatalf("data decode error: %v", err)
 	}
