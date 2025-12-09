@@ -58,10 +58,12 @@ func NewAnthropicLLM(_ context.Context, apiKey, modelName string, params *Provid
 
 	httpClient := httputil.NewClient(3 * time.Minute)
 	ropts := []option.RequestOption{
-		option.WithAPIKey(apiKey),
 		option.WithHTTPClient(httpClient),
 		option.WithHeader("User-Agent", userAgent),
 		option.WithMaxRetries(2),
+	}
+	if apiKey != "" {
+		ropts = append(ropts, option.WithAPIKey(apiKey))
 	}
 
 	// opts are allowed to override by order
