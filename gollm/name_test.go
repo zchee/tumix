@@ -20,6 +20,8 @@ import (
 	"testing"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
 )
@@ -42,6 +44,8 @@ func TestLLMNames(t *testing.T) {
 
 func TestAnthropicBuildParamsDefaults(t *testing.T) {
 	t.Parallel()
+
+	approx := cmpopts.EquateApprox(0, 1e-6)
 
 	llm := &anthropicLLM{name: "claude-3-haiku"}
 	req := &model.LLMRequest{
@@ -71,8 +75,14 @@ func TestAnthropicBuildParamsDefaults(t *testing.T) {
 	if params.StopSequences[0] != "END" {
 		t.Fatalf("StopSequences = %v", params.StopSequences)
 	}
-	if !almost(params.Temperature.Or(0), 0.5) || !almost(params.TopP.Or(0), 0.9) || params.TopK.Or(0) != 3 {
-		t.Fatalf("temp/top: %v %v %v", params.Temperature.Or(0), params.TopP.Or(0), params.TopK.Or(0))
+	if diff := cmp.Diff(params.Temperature.Or(0), 0.5, approx); diff != "" {
+		t.Fatalf("Temperature mismatch (-got +want):\n%s", diff)
+	}
+	if diff := cmp.Diff(params.TopP.Or(0), 0.9, approx); diff != "" {
+		t.Fatalf("TopP mismatch (-got +want):\n%s", diff)
+	}
+	if params.TopK.Or(0) != 3 {
+		t.Fatalf("TopK = %v, want 3", params.TopK.Or(0))
 	}
 }
 
@@ -90,6 +100,8 @@ func TestAnthropicBuildParamsNoMessages(t *testing.T) {
 
 func TestOpenAIResponseParamsLogprobs(t *testing.T) {
 	t.Parallel()
+
+	approx := cmpopts.EquateApprox(0, 1e-6)
 
 	llm := &openAILLM{name: "gpt-4o"}
 	logprobs := int32(3)
@@ -109,8 +121,11 @@ func TestOpenAIResponseParamsLogprobs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("responseParams() error = %v", err)
 	}
-	if !almost(params.Temperature.Or(0), 0.2) || !almost(params.TopP.Or(0), 0.7) {
-		t.Fatalf("temp/topP mismatch")
+	if diff := cmp.Diff(params.Temperature.Or(0), 0.2, approx); diff != "" {
+		t.Fatalf("Temperature mismatch (-got +want):\n%s", diff)
+	}
+	if diff := cmp.Diff(params.TopP.Or(0), 0.7, approx); diff != "" {
+		t.Fatalf("TopP mismatch (-got +want):\n%s", diff)
 	}
 	if params.MaxOutputTokens.Or(0) != 12 {
 		t.Fatalf("MaxOutputTokens = %d, want 12", params.MaxOutputTokens.Or(0))
@@ -146,10 +161,3 @@ func TestXAIName(t *testing.T) {
 
 // helper functions reused from adapter/xai_test.go.
 func ptrFloat32(v float32) *float32 { return &v }
-
-func almost(got, want float64) bool {
-	if got > want {
-		return got-want < 1e-6
-	}
-	return want-got < 1e-6
-}
