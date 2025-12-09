@@ -28,6 +28,8 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	openai "github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/openai/openai-go/v3/shared"
@@ -37,6 +39,58 @@ import (
 
 	"github.com/zchee/tumix/testing/rr"
 )
+
+func TestOpenAIResponseParamsLogprobs(t *testing.T) {
+	t.Parallel()
+
+	llm := &openAILLM{name: "gpt-4o"}
+	logprobs := int32(3)
+	cfg := &genai.GenerateContentConfig{
+		Temperature:      openai.Ptr(float32(0.2)),
+		TopP:             openai.Ptr(float32(0.7)),
+		MaxOutputTokens:  12,
+		Logprobs:         &logprobs,
+		ResponseLogprobs: true,
+	}
+	req := &model.LLMRequest{
+		Contents: genai.Text("ping"),
+		Config:   cfg,
+	}
+
+	params, err := llm.responseParams(req)
+	if err != nil {
+		t.Fatalf("responseParams() error = %v", err)
+	}
+
+	approxOpts := cmpopts.EquateApprox(0, 1e-6)
+	if diff := cmp.Diff(params.Temperature.Or(0), 0.2, approxOpts); diff != "" {
+		t.Fatalf("Temperature mismatch (-got +want):\n%s", diff)
+	}
+	if diff := cmp.Diff(params.TopP.Or(0), 0.7, approxOpts); diff != "" {
+		t.Fatalf("TopP mismatch (-got +want):\n%s", diff)
+	}
+	if params.MaxOutputTokens.Or(0) != 12 {
+		t.Fatalf("MaxOutputTokens = %d, want 12", params.MaxOutputTokens.Or(0))
+	}
+	if params.TopLogprobs.Or(0) != int64(logprobs) {
+		t.Fatalf("TopLogprobs = %d, want %d", params.TopLogprobs.Or(0), logprobs)
+	}
+	if len(params.Include) == 0 {
+		t.Fatalf("Include empty, want logprobs included")
+	}
+}
+
+func TestOpenAIResponseParamsErrors(t *testing.T) {
+	t.Parallel()
+
+	llm := &openAILLM{name: "gpt-4o-mini"}
+	if _, err := llm.responseParams(&model.LLMRequest{
+		Contents: nil,
+		Config:   &genai.GenerateContentConfig{},
+	}); err == nil {
+		t.Fatalf("expected error on empty contents")
+	}
+}
 
 func TestOpenAILLM_Generate(t *testing.T) {
 	syncResp := mockResponse(
