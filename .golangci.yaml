@@ -346,6 +346,14 @@ linters:
       crypto-hash: true
       tls-signature-scheme: false
       constant-kind: false
+    usetesting:
+      os-create-temp: true
+      os-mkdir-temp: true
+      os-setenv: true
+      os-temp-dir: true
+      os-chdir: true
+      context-background: true
+      context-todo: true
     varnamelen:
       max-distance: 5
       min-name-length: 1
