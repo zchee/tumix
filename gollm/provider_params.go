@@ -66,6 +66,8 @@ type OpenAIProviderParams = ProviderMutators[responses.ResponseNewParams]
 type XAIProviderParams = ProviderOptions[xai.ChatOption]
 
 // SetProviderParams attaches provider params to a request using the reserved tools slot.
+//
+// TODO(zchee): fix to not using [model.LLMRequest.Tools] field.
 func SetProviderParams(req *model.LLMRequest, params *ProviderParams) {
 	if req == nil || params == nil {
 		return
@@ -76,6 +78,7 @@ func SetProviderParams(req *model.LLMRequest, params *ProviderParams) {
 	req.Tools[providerParamsKey] = params
 }
 
+// TODO(zchee): fix to not using [model.LLMRequest.Tools] field.
 func providerParams(req *model.LLMRequest) (*ProviderParams, bool) {
 	if req == nil || req.Tools == nil {
 		return nil, false
