@@ -1,5 +1,5 @@
 {
-  "Initial": "AQAAAA7gxfsNBo1C6AIc",
+  "Initial": "AQAAAA7gyqo6FGbimAIc",
   "Version": "0.2",
   "Converter": {
     "ScrubBody": null,
@@ -38,7 +38,7 @@
   },
   "Entries": [
     {
-      "ID": "0d2c4e2375b416bb",
+      "ID": "795182768934d158",
       "Request": {
         "Method": "POST",
         "URL": "https://api.anthropic.com/v1/messages?beta=true",
@@ -83,7 +83,7 @@
             "4000000"
           ],
           "Anthropic-Ratelimit-Input-Tokens-Reset": [
-            "2025-12-06T10:23:09Z"
+            "2025-12-09T23:39:38Z"
           ],
           "Anthropic-Ratelimit-Output-Tokens-Limit": [
             "800000"
@@ -92,7 +92,7 @@
             "800000"
           ],
           "Anthropic-Ratelimit-Output-Tokens-Reset": [
-            "2025-12-06T10:23:09Z"
+            "2025-12-09T23:39:38Z"
           ],
           "Anthropic-Ratelimit-Requests-Limit": [
             "4000"
@@ -101,7 +101,7 @@
             "3999"
           ],
           "Anthropic-Ratelimit-Requests-Reset": [
-            "2025-12-06T10:23:09Z"
+            "2025-12-09T23:39:38Z"
           ],
           "Anthropic-Ratelimit-Tokens-Limit": [
             "4800000"
@@ -110,13 +110,13 @@
             "4800000"
           ],
           "Anthropic-Ratelimit-Tokens-Reset": [
-            "2025-12-06T10:23:09Z"
+            "2025-12-09T23:39:38Z"
           ],
           "Cf-Cache-Status": [
             "DYNAMIC"
           ],
           "Cf-Ray": [
-            "9a9b10f36975c63d-NRT"
+            "9ab857cd6fae80c3-NRT"
           ],
           "Content-Encoding": [
             "gzip"
@@ -125,13 +125,10 @@
             "application/json"
           ],
           "Date": [
-            "Sat, 06 Dec 2025 10:23:09 GMT"
+            "Tue, 09 Dec 2025 23:39:38 GMT"
           ],
           "Request-Id": [
-            "req_011CVqGYUUhGRHMWN5LobX5q"
-          ],
-          "Retry-After": [
-            "53"
+            "req_011CVwzhxqgXM7VvSFGBwYJK"
           ],
           "Server": [
             "cloudflare"
@@ -140,13 +137,13 @@
             "max-age=31536000; includeSubDomains; preload"
           ],
           "X-Envoy-Upstream-Service-Time": [
-            "407"
+            "340"
           ],
           "X-Robots-Tag": [
             "none"
           ]
         },
-        "Body": "H4sIAAAAAAAAA3SQ60rDQBCFXyWc3xtJQiu6D1DEgigIFkSWcXdslia76168UPLukmKRKv4amO+b4XD2GL3hARJ6oGK47snuSr2ol3XXdMu2aVoIWAOJMW1V01482M36/M68h/XzyoWby+tFt7mCQP4MPFucEm0ZAtEP84JSsimTyxDQ3mV2GfJxf/Qzf8zkMCTue640BZtpqPxLtYrkNFc2VbcUbTrD9CSQsg8qMiXvIMHOqFyiwzdI/FrYaYZ0ZRgEyiGN3MO6ULLKfscuQbYLAU26Z6UjU7beqVOhOfLIZP5jx9v5P4eeR440qOX41/+hbf+bTgK+5JN0jUDi+GY1q2w5QmKu0FA0mKYvAAAA//8DABbNjju0AQAA"
+        "Body": "H4sIAAAAAAAAA3SQwUoDMRCGX2X5z1nZre3BPIAHpaUHLyISxmTshu4mazIplrLvLlssUsXTwHzfP/zMCUN03EPD9lQc1x35famX9apeNItV2zQtFLyDxpB3pmkfN3693Lwd02HYu9vtQ4x362eBghxHni3OmXYMhRT7eUE5+ywUZsfGIBwE+uV08YU/z+l5aDx1XFkavVBfxffqPlGwXPlcbSn5fIPpVSFLHE1iyjFAg4MzUlLAN8j8UThYhg6l7xXKuY0+wYexiJG455Ch26WCJduxsYlJfAzmWmguPDG5/9glO9/nseOBE/VmNfz1f2jb/aaTQixy1a5RyJwO3rIRzwka8wsdJYdp+gIAAP//AwBPpn98tAEAAA=="
       }
     }
   ]
