@@ -221,7 +221,7 @@ func (a *OpenAIStreamAggregator) Final() *model.LLMResponse {
 		return nil
 	}
 
-	parts := make([]*genai.Part, 0, 1+len(a.toolCalls))
+	parts := make([]*genai.Part, 0, len(a.toolCalls)+1)
 	text := a.text.String()
 	trimmed := trimAtStop(text, a.stopSeq)
 	if trimmed.text != "" {
