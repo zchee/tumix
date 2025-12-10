@@ -97,10 +97,7 @@ func (m *openAILLM) GenerateContent(ctx context.Context, req *model.LLMRequest, 
 	}
 
 	stopSeq := req.Config.StopSequences
-	count := int(req.Config.CandidateCount)
-	if count <= 0 {
-		count = 1
-	}
+	count := max(req.Config.CandidateCount, 1)
 
 	if stream {
 		// Responses streaming currently returns a single candidate; fall back to one even if caller asked for more.
@@ -147,7 +144,9 @@ func (m *openAILLM) responseParams(req *model.LLMRequest) (*responses.ResponseNe
 
 	params := responses.ResponseNewParams{
 		Model: adapter.ModelName(m.name, req),
-		Input: responses.ResponseNewParamsInputUnion{OfInputItemList: responses.ResponseInputParam(items)},
+		Input: responses.ResponseNewParamsInputUnion{
+			OfInputItemList: responses.ResponseInputParam(items),
+		},
 	}
 
 	cfg := req.Config
