@@ -184,7 +184,6 @@ func (a *OpenAIStreamAggregator) Process(event *responses.ResponseStreamEventUni
 		llm, err := OpenAIResponseToLLM(&event.Response, a.stopSeq)
 		if err == nil {
 			a.final = llm
-			return []*model.LLMResponse{llm}
 		}
 		// fall through to fallback aggregation if conversion failed.
 		return nil
@@ -195,7 +194,6 @@ func (a *OpenAIStreamAggregator) Process(event *responses.ResponseStreamEventUni
 		llm, err := OpenAIResponseToLLM(&event.Response, a.stopSeq)
 		if err == nil {
 			a.final = llm
-			return []*model.LLMResponse{llm}
 		}
 		return nil
 
