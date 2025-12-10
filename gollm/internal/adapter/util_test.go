@@ -14,29 +14,17 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package gollm
+package adapter
 
-import (
-	"testing"
-)
+import "testing"
 
-func TestAuthMethodValues(t *testing.T) {
+func TestToolID(t *testing.T) {
 	t.Parallel()
 
-	tests := map[string]struct {
-		method AuthMethod
-		want   string
-	}{
-		"api key":   {method: AuthMethodAPIKey("k1"), want: "k1"},
-		"api token": {method: AuthMethodAPIToken("t1"), want: "t1"},
+	if got := toolID("id", 1, 2); got != "id" {
+		t.Fatalf("toolID with explicit id = %q, want id", got)
 	}
-
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-			if got := tt.method.value(); got != tt.want {
-				t.Fatalf("value() = %q, want %q", got, tt.want)
-			}
-		})
+	if got := toolID("", 1, 2); got != "tool_1_2" {
+		t.Fatalf("toolID generated = %q, want tool_1_2", got)
 	}
 }

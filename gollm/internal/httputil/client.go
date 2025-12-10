@@ -58,14 +58,29 @@ func defaultTransports() {
 	})
 }
 
-// NewClient creates a new HTTP client with a specified timeout and tracing controlled by environment defaults.
-func NewClient(timeout time.Duration) *http.Client {
-	return NewClientWithTracing(timeout, DefaultTraceEnabled())
+var (
+	traceOnce    sync.Once
+	traceEnabled bool
+)
+
+// defaultTraceEnabled reads TUMIX_HTTP_TRACE environment variable ("1", "true") to decide tracing default.
+// Falls back to false when unset or invalid.
+func defaultTraceEnabled() {
+	traceOnce.Do(func() {
+		raw := os.Getenv("TUMIX_HTTP_TRACE")
+		if raw == "" {
+			traceEnabled = false
+			return
+		}
+		val, err := strconv.ParseBool(raw)
+		traceEnabled = err == nil && val
+	})
 }
 
-// NewClientWithTracing creates a new HTTP client with optional OpenTelemetry tracing.
-func NewClientWithTracing(timeout time.Duration, traceEnabled bool) *http.Client {
+// NewClient creates a new HTTP client with the specified timeout.
+func NewClient(timeout time.Duration) *http.Client {
 	defaultTransports()
+	defaultTraceEnabled()
 
 	transport := tracedTransport
 	if !traceEnabled {
@@ -76,24 +91,4 @@ func NewClientWithTracing(timeout time.Duration, traceEnabled bool) *http.Client
 		Timeout:   timeout,
 		Transport: transport,
 	}
-}
-
-var (
-	traceOnce sync.Once
-	traceEnv  bool
-)
-
-// DefaultTraceEnabled reads TUMIX_HTTP_TRACE environment variable ("1", "true") to decide tracing default.
-// Falls back to false when unset or invalid.
-func DefaultTraceEnabled() bool {
-	traceOnce.Do(func() {
-		raw := os.Getenv("TUMIX_HTTP_TRACE")
-		if raw == "" {
-			traceEnv = false
-			return
-		}
-		val, err := strconv.ParseBool(raw)
-		traceEnv = err == nil && val
-	})
-	return traceEnv
 }

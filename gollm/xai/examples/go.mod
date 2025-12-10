@@ -6,6 +6,8 @@ replace github.com/zchee/tumix/gollm/xai => ../
 
 require github.com/zchee/tumix/gollm/xai v0.0.0-00010101000000-000000000000
 
+replace github.com/invopop/jsonschema => github.com/zchee/jsonschema v0.0.0-20251203015650-8b7315d2a8d1
+
 require (
 	cloud.google.com/go v0.116.0 // indirect
 	cloud.google.com/go/auth v0.9.3 // indirect
@@ -13,7 +15,6 @@ require (
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
-	github.com/eino-contrib/jsonschema v1.0.2 // indirect
 	github.com/gaudiy/vtprotobuf v0.6.1-0.20251122131602-5bc3a6fc1d03 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -24,7 +25,9 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.3.4 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.2 // indirect
+	github.com/invopop/jsonschema v0.0.0-00010101000000-000000000000 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
+	github.com/puzpuzpuz/xsync/v4 v4.2.0 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect

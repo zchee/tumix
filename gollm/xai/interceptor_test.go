@@ -28,7 +28,7 @@ import (
 func TestTimeoutStreamInterceptor_NoImplicitCancel(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	interceptor := TimeoutStreamInterceptor(10 * time.Millisecond)
 
 	streamDesc := &grpc.StreamDesc{ServerStreams: true}
@@ -47,7 +47,8 @@ func TestTimeoutStreamInterceptor_NoImplicitCancel(t *testing.T) {
 				t.Fatalf("context already canceled: %v", err)
 			}
 			return &noopClientStream{ctx: ctx}, nil
-		})
+		},
+	)
 	if err != nil {
 		t.Fatalf("interceptor returned error: %v", err)
 	}

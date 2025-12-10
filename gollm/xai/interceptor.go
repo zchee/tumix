@@ -77,6 +77,7 @@ func TimeoutStreamInterceptor(timeout time.Duration) grpc.StreamClientIntercepto
 
 type cancelOnCloseClientStream struct {
 	grpc.ClientStream
+
 	cancel func()
 	once   sync.Once
 }

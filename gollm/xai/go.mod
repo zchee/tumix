@@ -15,7 +15,7 @@ replace (
 	go.opentelemetry.io/proto/otlp => go.opentelemetry.io/proto/otlp v1.7.1
 )
 
-replace github.com/invopop/jsonschema => github.com/zchee/jsonschema v0.0.0-20251203212453-664582a47f4a
+replace github.com/invopop/jsonschema => github.com/zchee/jsonschema v0.0.0-20251208203204-d580d8ab15cc
 
 require (
 	github.com/bytedance/gopkg v0.1.3

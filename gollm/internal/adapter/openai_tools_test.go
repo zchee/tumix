@@ -20,13 +20,13 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	openai "github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/responses"
 	"github.com/openai/openai-go/v3/shared"
 	"github.com/openai/openai-go/v3/shared/constant"
 	"google.golang.org/genai"
 )
 
-func TestGenAIToolsToOpenAI(t *testing.T) {
+func TestGenAIToolsToResponses(t *testing.T) {
 	t.Parallel()
 
 	schema := shared.FunctionParameters{
@@ -39,11 +39,11 @@ func TestGenAIToolsToOpenAI(t *testing.T) {
 	tests := map[string]struct {
 		tools []*genai.Tool
 		cfg   *genai.ToolConfig
-		check func(t *testing.T, params []openai.ChatCompletionToolUnionParam, choice *openai.ChatCompletionToolChoiceOptionUnionParam)
+		check func(t *testing.T, params []responses.ToolUnionParam, choice *responses.ResponseNewParamsToolChoiceUnion)
 	}{
 		"empty tools returns nil": {
 			tools: nil,
-			check: func(t *testing.T, params []openai.ChatCompletionToolUnionParam, choice *openai.ChatCompletionToolChoiceOptionUnionParam) {
+			check: func(t *testing.T, params []responses.ToolUnionParam, choice *responses.ResponseNewParamsToolChoiceUnion) {
 				t.Helper()
 				if params != nil {
 					t.Fatalf("params = %+v, want nil", params)
@@ -66,7 +66,7 @@ func TestGenAIToolsToOpenAI(t *testing.T) {
 				},
 			},
 			cfg: nil,
-			check: func(t *testing.T, params []openai.ChatCompletionToolUnionParam, choice *openai.ChatCompletionToolChoiceOptionUnionParam) {
+			check: func(t *testing.T, params []responses.ToolUnionParam, choice *responses.ResponseNewParamsToolChoiceUnion) {
 				t.Helper()
 				if len(params) != 1 {
 					t.Fatalf("len(params) = %d, want 1", len(params))
@@ -75,13 +75,19 @@ func TestGenAIToolsToOpenAI(t *testing.T) {
 				if fn == nil {
 					t.Fatal("function tool nil")
 				}
-				if fn.Function.Name != "lookup_weather" {
-					t.Fatalf("name = %q", fn.Function.Name)
+				if fn.Name != "lookup_weather" {
+					t.Fatalf("name = %q", fn.Name)
 				}
-				if !fn.Function.Description.Valid() || fn.Function.Description.Value != "get weather" {
-					t.Fatalf("description = %+v, want trimmed", fn.Function.Description)
+				if !fn.Description.Valid() || fn.Description.Value != "get weather" {
+					t.Fatalf("description = %+v, want trimmed", fn.Description)
 				}
-				if diff := cmp.Diff(schema, fn.Function.Parameters); diff != "" {
+				wantParams := map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"city": map[string]any{"type": "string"},
+					},
+				}
+				if diff := cmp.Diff(wantParams, fn.Parameters); diff != "" {
 					t.Fatalf("parameters diff (-want +got):\n%s", diff)
 				}
 				if choice != nil {
@@ -109,7 +115,7 @@ func TestGenAIToolsToOpenAI(t *testing.T) {
 			cfg: &genai.ToolConfig{
 				FunctionCallingConfig: &genai.FunctionCallingConfig{Mode: genai.FunctionCallingConfigModeNone},
 			},
-			check: func(t *testing.T, params []openai.ChatCompletionToolUnionParam, choice *openai.ChatCompletionToolChoiceOptionUnionParam) {
+			check: func(t *testing.T, params []responses.ToolUnionParam, choice *responses.ResponseNewParamsToolChoiceUnion) {
 				t.Helper()
 				if len(params) != 1 {
 					t.Fatalf("len(params) = %d, want 1", len(params))
@@ -118,11 +124,11 @@ func TestGenAIToolsToOpenAI(t *testing.T) {
 				if fn == nil {
 					t.Fatal("function tool nil")
 				}
-				if fn.Function.Parameters == nil {
+				if fn.Parameters == nil {
 					t.Fatalf("parameters nil")
 				}
-				if choice == nil || !choice.OfAuto.Valid() || choice.OfAuto.Value != "none" {
-					t.Fatalf("choice = %+v, want auto none", choice)
+				if choice == nil || !choice.OfToolChoiceMode.Valid() || choice.OfToolChoiceMode.Value != responses.ToolChoiceOptionsNone {
+					t.Fatalf("choice = %+v, want none", choice)
 				}
 			},
 		},
@@ -138,17 +144,16 @@ func TestGenAIToolsToOpenAI(t *testing.T) {
 					AllowedFunctionNames: []string{"f1"},
 				},
 			},
-			check: func(t *testing.T, _ []openai.ChatCompletionToolUnionParam, choice *openai.ChatCompletionToolChoiceOptionUnionParam) {
+			check: func(t *testing.T, _ []responses.ToolUnionParam, choice *responses.ResponseNewParamsToolChoiceUnion) {
 				t.Helper()
-				if choice == nil || choice.OfFunctionToolChoice == nil {
+				if choice == nil || choice.OfFunctionTool == nil {
 					t.Fatalf("choice missing function: %+v", choice)
 				}
-				if choice.OfFunctionToolChoice.Function.Name != "f1" {
-					t.Fatalf("function choice name = %q", choice.OfFunctionToolChoice.Function.Name)
+				if choice.OfFunctionTool.Name != "f1" {
+					t.Fatalf("function choice name = %q", choice.OfFunctionTool.Name)
 				}
-				want := constant.ValueOf[constant.Function]()
-				if choice.OfFunctionToolChoice.Type != want {
-					t.Fatalf("choice type = %q, want %q", choice.OfFunctionToolChoice.Type, want)
+				if choice.OfFunctionTool.Type != constant.ValueOf[constant.Function]() {
+					t.Fatalf("choice type = %q", choice.OfFunctionTool.Type)
 				}
 			},
 		},
@@ -162,7 +167,7 @@ func TestGenAIToolsToOpenAI(t *testing.T) {
 					AllowedFunctionNames: []string{"f1", "f2"},
 				},
 			},
-			check: func(t *testing.T, _ []openai.ChatCompletionToolUnionParam, choice *openai.ChatCompletionToolChoiceOptionUnionParam) {
+			check: func(t *testing.T, _ []responses.ToolUnionParam, choice *responses.ResponseNewParamsToolChoiceUnion) {
 				t.Helper()
 				if choice != nil {
 					t.Fatalf("choice = %+v, want nil", choice)
@@ -174,7 +179,7 @@ func TestGenAIToolsToOpenAI(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			params, choice := GenAIToolsToOpenAI(tc.tools, tc.cfg)
+			params, choice := GenAIToolsToResponses(tc.tools, tc.cfg)
 			if tc.check == nil {
 				t.Fatalf("missing check function")
 			}

@@ -15,30 +15,30 @@ message: {
     n: 1
   }
 }
-1106
+1019
 kind: RESPONSE
 message: {
   [type.googleapis.com/xai_api.GetChatCompletionResponse]: {
-    id: "67fd1696-813c-bef5-9a8e-44e6644a2351"
+    id: "f0ee1609-109b-9028-fc48-45a29571b9d0"
     outputs: {
       finish_reason: REASON_STOP
       message: {
-        content: "**Paris** is the capital of France. \n\nThis has been the case since 987 AD under the Capetian dynasty, when Hugh Capet established it as the political center. Paris remains the seat of the French government, including the Élysée Palace (presidential residence), the National Assembly, and the Senate. It's also France's largest city, with a population of about 2.1 million in the city proper and 12.6 million in the metropolitan area (INSEE data, 2023)."
+        content: "**Paris** is the capital of France. \n\nThis has been the case since 987 AD, when Hugh Capet established the Capetian dynasty there, and it's confirmed by official sources like the French government's website and the CIA World Factbook. Paris serves as the political, cultural, and economic center, housing the Eiffel Tower, Louvre, and national government institutions."
         role: ROLE_ASSISTANT
       }
     }
     created: {
-      seconds: 1764653354
-      nanos: 357860939
+      seconds: 1765323580
+      nanos: 435061657
     }
     model: "grok-4-1-fast-non-reasoning"
-    system_fingerprint: "fp_ed3b9934bf"
+    system_fingerprint: "fp_2daa9bdef5"
     usage: {
-      completion_tokens: 104
+      completion_tokens: 73
       prompt_tokens: 175
-      total_tokens: 279
+      total_tokens: 248
       prompt_text_tokens: 175
-      cached_prompt_text_tokens: 161
+      cached_prompt_text_tokens: 174
     }
     settings: {
       parallel_tool_calls: true

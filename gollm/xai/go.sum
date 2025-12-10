@@ -90,8 +90,8 @@ github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 github.com/wk8/go-ordered-map/v2 v2.1.8 h1:5h/BUHu93oj4gIdvHHHGsScSTMijfx5PeYkE/fJgbpc=
 github.com/wk8/go-ordered-map/v2 v2.1.8/go.mod h1:5nJHM5DyteebpVlHnWMV0rPz6Zp7+xBAnxjb1X5vnTw=
-github.com/zchee/jsonschema v0.0.0-20251203212453-664582a47f4a h1:tVRKGvGWMVoRUpDEXe8q08AUwr9QTuXb5QEeITKlv5w=
-github.com/zchee/jsonschema v0.0.0-20251203212453-664582a47f4a/go.mod h1:xzDLYa1XRj0AvBgRunvxAdHijDctk4LUKGOM+UeURzk=
+github.com/zchee/jsonschema v0.0.0-20251208203204-d580d8ab15cc h1:RXrK+2ahbn/WteFo3c+V4HVBV09eGqhZlEUQ9OEJ02A=
+github.com/zchee/jsonschema v0.0.0-20251208203204-d580d8ab15cc/go.mod h1:xzDLYa1XRj0AvBgRunvxAdHijDctk4LUKGOM+UeURzk=
 go.opencensus.io v0.24.0 h1:y73uSU6J157QMP2kn2r30vwW1A2W2WFwSCGnAVxeaD0=
 go.opencensus.io v0.24.0/go.mod h1:vNK8G9p7aAivkbmorf4v+7Hgx+Zs0yY+0fOtgBfjQKo=
 go.opentelemetry.io/auto/sdk v1.2.1 h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=
