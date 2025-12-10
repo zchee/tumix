@@ -217,14 +217,21 @@ func TestOpenAIStreamAggregator_CompletedEvent(t *testing.T) {
 		Type:     "response.completed",
 		Response: resp,
 	})
-	if len(got) != 1 || got[0].Content.Parts[0].Text != "done" || !got[0].TurnComplete {
-		t.Fatalf("completed conversion failed: %+v", got)
+	if len(got) != 0 {
+		t.Fatalf("expected aggregator to retain final until Final(), got %d immediate responses", len(got))
 	}
 	if agg.Err() != nil {
 		t.Fatalf("unexpected err: %v", agg.Err())
 	}
-	if agg.Final() == nil || agg.Final().TurnComplete != true {
+	final := agg.Final()
+	if final == nil {
 		t.Fatalf("Final not set from completed")
+	}
+	if final.Content == nil || len(final.Content.Parts) == 0 || final.Content.Parts[0].Text != "done" {
+		t.Fatalf("final content mismatch: %+v", final)
+	}
+	if !final.TurnComplete {
+		t.Fatalf("final TurnComplete false: %+v", final)
 	}
 }
 

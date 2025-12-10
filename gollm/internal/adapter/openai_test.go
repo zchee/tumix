@@ -259,10 +259,11 @@ func TestOpenAIStreamAggregator(t *testing.T) {
 		Type:     "response.completed",
 		Response: finalResp,
 	})
-	if len(finals) != 1 {
-		t.Fatalf("expected final response, got %d", len(finals))
+	if len(finals) != 0 {
+		t.Fatalf("expected aggregator to hold final until Final(), got %d immediate responses", len(finals))
 	}
-	final := finals[0]
+
+	final := agg.Final()
 	if final.Partial {
 		t.Fatalf("final should not be partial: %+v", final)
 	}
