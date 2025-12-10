@@ -30,7 +30,7 @@ import (
 	"google.golang.org/genai"
 )
 
-// OpenAIResponseToLLM converts an OpenAI Responses payload into an ADK LLMResponse,
+// OpenAIResponseToLLM converts an OpenAI Responses payload into a [*model.LLMResponse],
 // returning an error when the payload is nil or contains no output items.
 func OpenAIResponseToLLM(resp *responses.Response, stopSequences []string) (*model.LLMResponse, error) {
 	if resp == nil {
