@@ -15,28 +15,28 @@ message: {
     n: 1
   }
 }
-653
+1019
 kind: RESPONSE
 message: {
   [type.googleapis.com/xai_api.GetChatCompletionResponse]: {
-    id: "2bdd19cb-3a42-177a-5461-38ef1e1f52d1"
+    id: "f0ee1609-109b-9028-fc48-45a29571b9d0"
     outputs: {
       finish_reason: REASON_STOP
       message: {
-        content: "Paris"
+        content: "**Paris** is the capital of France. \n\nThis has been the case since 987 AD, when Hugh Capet established the Capetian dynasty there, and it's confirmed by official sources like the French government's website and the CIA World Factbook. Paris serves as the political, cultural, and economic center, housing the Eiffel Tower, Louvre, and national government institutions."
         role: ROLE_ASSISTANT
       }
     }
     created: {
-      seconds: 1765016590
-      nanos: 256687402
+      seconds: 1765323580
+      nanos: 435061657
     }
     model: "grok-4-1-fast-non-reasoning"
-    system_fingerprint: "fp_174298dd8e"
+    system_fingerprint: "fp_2daa9bdef5"
     usage: {
-      completion_tokens: 1
+      completion_tokens: 73
       prompt_tokens: 175
-      total_tokens: 176
+      total_tokens: 248
       prompt_text_tokens: 175
       cached_prompt_text_tokens: 174
     }

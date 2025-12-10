@@ -44,17 +44,22 @@ func TestXAILLM_Generate(t *testing.T) {
 				Config:   &genai.GenerateContentConfig{},
 			},
 			want: &model.LLMResponse{
-				Content: genai.NewContentFromText("Paris", genai.RoleModel),
+				Content: genai.NewContentFromText(
+					"**Paris** is the capital of France. \n\n"+
+						"This has been the case since 987 AD, when Hugh Capet established the Capetian dynasty there, and it's confirmed by official sources like the French government's website and the CIA World Factbook. "+
+						"Paris serves as the political, cultural, and economic center, housing the Eiffel Tower, Louvre, and national government institutions.",
+					genai.RoleModel,
+				),
 				UsageMetadata: &genai.GenerateContentResponseUsageMetadata{
 					CachedContentTokenCount: 174,
-					CandidatesTokenCount:    1,
+					CandidatesTokenCount:    73,
 					PromptTokenCount:        175,
 					ThoughtsTokenCount:      0,
-					TotalTokenCount:         176,
+					TotalTokenCount:         248,
 				},
 				CustomMetadata: map[string]any{
 					"xai_finish_reason":      "REASON_STOP",
-					"xai_system_fingerprint": "fp_174298dd8e",
+					"xai_system_fingerprint": "fp_2daa9bdef5",
 				},
 				FinishReason: genai.FinishReasonStop,
 			},
@@ -107,7 +112,7 @@ func TestXAILLM_GenerateStream(t *testing.T) {
 		"ok": {
 			modelName: "grok-4-1-fast-non-reasoning",
 			req: &model.LLMRequest{
-				Contents: genai.Text("What is the capital of France? One word."),
+				Contents: genai.Text("What is the capital of France? Answer is should be one word."),
 				Config:   &genai.GenerateContentConfig{},
 			},
 			want: "Paris",
