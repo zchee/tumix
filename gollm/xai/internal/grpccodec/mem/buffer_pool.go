@@ -51,10 +51,14 @@ type BufferPool interface {
 
 var defaultBufferPoolSizes = []int{
 	256,
-	4 << 10,  // 4KB (go page size)
-	16 << 10, // 16KB (max HTTP/2 frame size used by gRPC)
-	32 << 10, // 32KB (default buffer size for io.Copy)
-	1 << 20,  // 1MB
+	4 << 10,   // 4KB (go page size)
+	16 << 10,  // 16KB (max HTTP/2 frame size used by gRPC)
+	32 << 10,  // 32KB (default buffer size for io.Copy)
+	64 << 10,  // 64KB
+	128 << 10, // 128KB
+	256 << 10, // 256KB
+	512 << 10, // 512KB
+	1 << 20,   // 1MB
 }
 
 var defaultBufferPool BufferPool
@@ -144,8 +148,9 @@ func (p *sizedBufferPool) Get(size int) *[]byte {
 		return &buf
 	}
 	b := *buf
-	clear(b[:cap(b)])
-	*buf = b[:size]
+	b = b[:size]
+	clear(b)
+	*buf = b
 	return buf
 }
 
@@ -178,8 +183,9 @@ type simpleBufferPool struct {
 func (p *simpleBufferPool) Get(size int) *[]byte {
 	bs, ok := p.pool.Get().(*[]byte)
 	if ok && cap(*bs) >= size {
-		clear((*bs)[:cap(*bs)])
-		*bs = (*bs)[:size]
+		b := (*bs)[:size]
+		clear(b)
+		*bs = b
 		return bs
 	}
 
