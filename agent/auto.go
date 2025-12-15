@@ -48,27 +48,32 @@ func NewAutoAgents(llm model.LLM, genCfg *genai.GenerateContentConfig, n int) ([
 		emphasis := emphases[i%len(emphases)]
 
 		genConfig := cloneGenConfig(genCfg)
-		switch emphasis {
-		case "textual reasoning":
-			thinkingBudget := math.Ceil(float64(genConfig.MaxOutputTokens) * 0.6)
-			genConfig.ThinkingConfig = &genai.ThinkingConfig{
-				IncludeThoughts: true,
-				ThinkingBudget:  genai.Ptr(int32(thinkingBudget)),
-				ThinkingLevel:   genai.ThinkingLevelHigh,
-			}
+		if genConfig != nil {
+			switch emphasis {
+			case "textual reasoning":
+				thinkingBudget := float64(0)
+				if genConfig.MaxOutputTokens > 0 {
+					thinkingBudget = math.Ceil(float64(genConfig.MaxOutputTokens) * 0.6)
+				}
+				genConfig.ThinkingConfig = &genai.ThinkingConfig{
+					IncludeThoughts: true,
+					ThinkingBudget:  genai.Ptr(int32(thinkingBudget)),
+					ThinkingLevel:   genai.ThinkingLevelHigh,
+				}
 
-		case "code execution":
-			genConfig.Tools = []*genai.Tool{
-				{
-					CodeExecution: &genai.ToolCodeExecution{},
-				},
-			}
+			case "code execution":
+				genConfig.Tools = []*genai.Tool{
+					{
+						CodeExecution: &genai.ToolCodeExecution{},
+					},
+				}
 
-		case "web search":
-			genConfig.Tools = []*genai.Tool{
-				{
-					GoogleSearch: &genai.GoogleSearch{},
-				},
+			case "web search":
+				genConfig.Tools = []*genai.Tool{
+					{
+						GoogleSearch: &genai.GoogleSearch{},
+					},
+				}
 			}
 		}
 
