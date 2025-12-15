@@ -708,7 +708,9 @@ func initTracing(ctx context.Context, cfg *config) (func(), error) {
 	if err != nil {
 		return func() {}, fmt.Errorf("otlp exporter: %w", err)
 	}
-	res, err := resource.Merge(resource.Default(), resource.NewSchemaless(semconv.ServiceNameKey.String("tumix")))
+	res, err := resource.Merge(resource.Default(), resource.NewSchemaless(
+		semconv.ServiceName("tumix"),
+	))
 	if err != nil {
 		return func() {}, fmt.Errorf("resource: %w", err)
 	}
