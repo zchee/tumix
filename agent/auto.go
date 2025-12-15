@@ -18,6 +18,7 @@ package agent
 
 import (
 	"fmt"
+	"math"
 
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
@@ -26,31 +27,70 @@ import (
 )
 
 // NewAutoAgents creates n lightweight auto-designed agents.
+//
 // They emulate the paper's LLM-designed variants by varying tool emphasis.
+//
+// Each agent is given a specific focus: textual reasoning, code execution, or web search.
 func NewAutoAgents(llm model.LLM, genCfg *genai.GenerateContentConfig, n int) ([]agent.Agent, error) {
 	if n <= 0 {
 		return nil, nil
 	}
+
 	agents := make([]agent.Agent, 0, n)
-	emphases := []string{"textual reasoning", "code execution", "web search"}
+	emphases := []string{
+		"textual reasoning",
+		"code execution",
+		"web search",
+	}
+
 	for i := range n {
 		name := fmt.Sprintf("Auto-%d", i+1)
 		emphasis := emphases[i%len(emphases)]
+
+		genConfig := cloneGenConfig(genCfg)
+		switch emphasis {
+		case "textual reasoning":
+			thinkingBudget := math.Ceil(float64(genConfig.MaxOutputTokens) * 0.6)
+			genConfig.ThinkingConfig = &genai.ThinkingConfig{
+				IncludeThoughts: true,
+				ThinkingBudget:  genai.Ptr(int32(thinkingBudget)),
+				ThinkingLevel:   genai.ThinkingLevelHigh,
+			}
+
+		case "code execution":
+			genConfig.Tools = []*genai.Tool{
+				{
+					CodeExecution: &genai.ToolCodeExecution{},
+				},
+			}
+
+		case "web search":
+			genConfig.Tools = []*genai.Tool{
+				{
+					GoogleSearch: &genai.GoogleSearch{},
+				},
+			}
+		}
+
 		cfg := llmagent.Config{
 			Name:                  name,
-			Description:           fmt.Sprintf("Auto-designed agent focusing on %s.", emphasis),
+			Description:           "Auto-designed agent focusing on " + emphasis + ".",
 			Model:                 llm,
-			GenerateContentConfig: cloneGenConfig(genCfg),
+			GenerateContentConfig: genConfig,
 			Instruction: fmt.Sprintf(`You are an auto-designed agent. Primary focus: %s.
-Use chain-of-thought, then pick a single best action: plain answer, one python block, or one <search>…</search> query.
+Use chain-of-thought, then pick a single best action: plain answer, one <language> block, or one `+code(`<search>…</search>`)+` query.
 Do not mix code and search in the same turn. Respond with final answer inside `+code(`<<<`)+` and `+code(`>>>`)+`.`, emphasis),
 		}
+
 		applySharedContext(&cfg)
+
 		a, err := llmagent.New(cfg)
 		if err != nil {
 			return nil, fmt.Errorf("build %s: %w", name, err)
 		}
+
 		agents = append(agents, a)
 	}
+
 	return agents, nil
 }

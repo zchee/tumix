@@ -495,11 +495,11 @@ func buildTumixLoader(llm model.LLM, genCfg *genai.GenerateContentConfig, minRou
 	}
 
 	if autoAgents > 0 {
-		auto, err := tumixagent.NewAutoAgents(llm, genCfg, autoAgents)
+		autoAgents, err := tumixagent.NewAutoAgents(llm, genCfg, autoAgents)
 		if err != nil {
 			return nil, 0, fmt.Errorf("build auto agents: %w", err)
 		}
-		candidates = append(candidates, auto...)
+		candidates = append(candidates, autoAgents...)
 	}
 
 	judge, err := tumixagent.NewJudgeAgent(llm, genCfg)
