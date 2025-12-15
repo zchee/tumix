@@ -181,6 +181,79 @@ func TestMapResponseFinishReason(t *testing.T) {
 	}
 }
 
+func TestOpenAIStreamEventVariant(t *testing.T) {
+	t.Parallel()
+
+	if _, ok := openAIStreamEventVariant("response.output_text.delta").(responses.ResponseTextDeltaEvent); !ok {
+		t.Fatalf("output_text.delta did not map to responses.ResponseTextDeltaEvent")
+	}
+
+	if _, ok := openAIStreamEventVariant("response.function_call_arguments.delta").(responses.ResponseFunctionCallArgumentsDeltaEvent); !ok {
+		t.Fatalf("function_call_arguments.delta did not map to responses.ResponseFunctionCallArgumentsDeltaEvent")
+	}
+
+	if _, ok := openAIStreamEventVariant("response.function_call_arguments.done").(responses.ResponseFunctionCallArgumentsDoneEvent); !ok {
+		t.Fatalf("function_call_arguments.done did not map to responses.ResponseFunctionCallArgumentsDoneEvent")
+	}
+
+	if _, ok := openAIStreamEventVariant("response.completed").(responses.ResponseCompletedEvent); !ok {
+		t.Fatalf("response.completed did not map to responses.ResponseCompletedEvent")
+	}
+
+	if _, ok := openAIStreamEventVariant("response.incomplete").(responses.ResponseIncompleteEvent); !ok {
+		t.Fatalf("response.incomplete did not map to responses.ResponseIncompleteEvent")
+	}
+
+	if _, ok := openAIStreamEventVariant("response.failed").(responses.ResponseFailedEvent); !ok {
+		t.Fatalf("response.failed did not map to responses.ResponseFailedEvent")
+	}
+
+	if _, ok := openAIStreamEventVariant("error").(responses.ResponseErrorEvent); !ok {
+		t.Fatalf("error did not map to responses.ResponseErrorEvent")
+	}
+
+	if got := openAIStreamEventVariant("unknown"); got != nil {
+		t.Fatalf("unknown should not map to a variant, got %T", got)
+	}
+}
+
+func TestOpenAIResponseOutputItemVariant(t *testing.T) {
+	t.Parallel()
+
+	if _, ok := openAIResponseOutputItemVariant("message").(responses.ResponseOutputMessage); !ok {
+		t.Fatalf("message did not map to responses.ResponseOutputMessage")
+	}
+	if _, ok := openAIResponseOutputItemVariant("function_call").(responses.ResponseFunctionToolCall); !ok {
+		t.Fatalf("function_call did not map to responses.ResponseFunctionToolCall")
+	}
+	if _, ok := openAIResponseOutputItemVariant("shell_call_output").(responses.ResponseFunctionShellToolCallOutput); !ok {
+		t.Fatalf("shell_call_output did not map to responses.ResponseFunctionShellToolCallOutput")
+	}
+	if _, ok := openAIResponseOutputItemVariant("  MESSAGE ").(responses.ResponseOutputMessage); !ok {
+		t.Fatalf("trim/case did not map to responses.ResponseOutputMessage")
+	}
+	if got := openAIResponseOutputItemVariant("unknown"); got != nil {
+		t.Fatalf("unknown should not map to a variant, got %T", got)
+	}
+}
+
+func TestOpenAIResponseMessageContentVariant(t *testing.T) {
+	t.Parallel()
+
+	if _, ok := openAIResponseMessageContentVariant("output_text").(responses.ResponseOutputText); !ok {
+		t.Fatalf("output_text did not map to responses.ResponseOutputText")
+	}
+	if _, ok := openAIResponseMessageContentVariant("refusal").(responses.ResponseOutputRefusal); !ok {
+		t.Fatalf("refusal did not map to responses.ResponseOutputRefusal")
+	}
+	if _, ok := openAIResponseMessageContentVariant("  REFUSAL ").(responses.ResponseOutputRefusal); !ok {
+		t.Fatalf("trim/case did not map to responses.ResponseOutputRefusal")
+	}
+	if got := openAIResponseMessageContentVariant("unknown"); got != nil {
+		t.Fatalf("unknown should not map to a variant, got %T", got)
+	}
+}
+
 func TestOpenAIStreamAggregator_FinalFromAccumulated(t *testing.T) {
 	t.Parallel()
 
@@ -374,7 +447,58 @@ func TestOpenAIStreamAggregator_CompletedEvent(t *testing.T) {
 	}
 }
 
-func TestOpenAIStreamAggregator_ErrorEvent(t *testing.T) {
+func TestOpenAIStreamAggregator_IncompleteEvent(t *testing.T) {
+	t.Parallel()
+
+	agg := NewOpenAIStreamAggregator(nil)
+	resp := responses.Response{
+		Status: responses.ResponseStatusIncomplete,
+		IncompleteDetails: responses.ResponseIncompleteDetails{
+			Reason: "max_output_tokens",
+		},
+		Output: []responses.ResponseOutputItemUnion{{
+			Type: "message",
+			Role: constant.ValueOf[constant.Assistant](),
+			Content: []responses.ResponseOutputMessageContentUnion{
+				{
+					Type: "output_text",
+					Text: "done",
+				},
+			},
+		}},
+		Usage: responses.ResponseUsage{
+			InputTokens:  1,
+			OutputTokens: 2,
+			TotalTokens:  3,
+		},
+	}
+
+	got := agg.Process(&responses.ResponseStreamEventUnion{
+		Type:     "response.incomplete",
+		Response: resp,
+	})
+	if len(got) != 0 {
+		t.Fatalf("expected aggregator to retain final until Final(), got %d immediate responses", len(got))
+	}
+	if agg.Err() != nil {
+		t.Fatalf("unexpected err: %v", agg.Err())
+	}
+	final := agg.Final()
+	if final == nil {
+		t.Fatalf("Final not set from incomplete")
+	}
+	if final.Content == nil || len(final.Content.Parts) == 0 || final.Content.Parts[0].Text != "done" {
+		t.Fatalf("final content mismatch: %+v", final)
+	}
+	if final.FinishReason != genai.FinishReasonMaxTokens {
+		t.Fatalf("final FinishReason=%v, want %v", final.FinishReason, genai.FinishReasonMaxTokens)
+	}
+	if !final.TurnComplete {
+		t.Fatalf("final TurnComplete false: %+v", final)
+	}
+}
+
+func TestOpenAIStreamAggregator_FailedEvent(t *testing.T) {
 	t.Parallel()
 
 	agg := NewOpenAIStreamAggregator(nil)
@@ -390,6 +514,22 @@ func TestOpenAIStreamAggregator_ErrorEvent(t *testing.T) {
 	}
 }
 
+func TestOpenAIStreamAggregator_ErrorEvent(t *testing.T) {
+	t.Parallel()
+
+	agg := NewOpenAIStreamAggregator(nil)
+	agg.Process(&responses.ResponseStreamEventUnion{
+		Type:    "error",
+		Message: "boom",
+	})
+	if agg.Err() == nil {
+		t.Fatalf("expected error recorded")
+	}
+	if final := agg.Final(); final != nil {
+		t.Fatalf("expected nil final when error, got %+v", final)
+	}
+}
+
 func TestOpenAIResponseToLLMError(t *testing.T) {
 	t.Parallel()
 
@@ -399,5 +539,50 @@ func TestOpenAIResponseToLLMError(t *testing.T) {
 
 	if _, err := OpenAIResponseToLLM(&responses.Response{}, nil); err == nil || !strings.Contains(err.Error(), "empty output") {
 		t.Fatalf("expected empty output error, got %v", err)
+	}
+}
+
+func TestOpenAIResponseToLLM_Refusal(t *testing.T) {
+	t.Parallel()
+
+	resp := &responses.Response{
+		Status: responses.ResponseStatusCompleted,
+		Output: []responses.ResponseOutputItemUnion{
+			{
+				Type: "message",
+				Role: constant.ValueOf[constant.Assistant](),
+				Content: []responses.ResponseOutputMessageContentUnion{
+					{
+						Type:    "refusal",
+						Refusal: "no",
+					},
+				},
+			},
+		},
+	}
+
+	got, err := OpenAIResponseToLLM(resp, nil)
+	if err != nil {
+		t.Fatalf("OpenAIResponseToLLM err = %v", err)
+	}
+	if got == nil || got.Content == nil || len(got.Content.Parts) != 1 || got.Content.Parts[0].Text != "no" {
+		t.Fatalf("unexpected response: %+v", got)
+	}
+}
+
+func TestOpenAIResponseToLLM_NoConvertibleOutputItems(t *testing.T) {
+	t.Parallel()
+
+	resp := &responses.Response{
+		Status: responses.ResponseStatusCompleted,
+		Output: []responses.ResponseOutputItemUnion{
+			{
+				Type: "unknown",
+			},
+		},
+	}
+
+	if _, err := OpenAIResponseToLLM(resp, nil); err == nil || !strings.Contains(err.Error(), "no convertible output items") {
+		t.Fatalf("expected no convertible output items error, got %v", err)
 	}
 }

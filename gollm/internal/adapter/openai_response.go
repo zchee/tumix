@@ -26,9 +26,43 @@ import (
 	"sync"
 
 	"github.com/openai/openai-go/v3/responses"
+	"github.com/openai/openai-go/v3/shared/constant"
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
 )
+
+var (
+	openAIResponseOutputItemTypeMessage         = string(constant.ValueOf[constant.Message]())
+	openAIResponseOutputItemTypeFunctionCall    = string(constant.ValueOf[constant.FunctionCall]())
+	openAIResponseOutputItemTypeShellCallOutput = string(constant.ValueOf[constant.ShellCallOutput]())
+
+	openAIResponseMessageContentTypeOutputText = string(constant.ValueOf[constant.OutputText]())
+	openAIResponseMessageContentTypeRefusal    = string(constant.ValueOf[constant.Refusal]())
+)
+
+func openAIResponseOutputItemVariant(itemType string) any {
+	switch strings.ToLower(strings.TrimSpace(itemType)) {
+	case openAIResponseOutputItemTypeMessage:
+		return responses.ResponseOutputMessage{}
+	case openAIResponseOutputItemTypeFunctionCall:
+		return responses.ResponseFunctionToolCall{}
+	case openAIResponseOutputItemTypeShellCallOutput:
+		return responses.ResponseFunctionShellToolCallOutput{}
+	default:
+		return nil
+	}
+}
+
+func openAIResponseMessageContentVariant(contentType string) any {
+	switch strings.ToLower(strings.TrimSpace(contentType)) {
+	case openAIResponseMessageContentTypeOutputText:
+		return responses.ResponseOutputText{}
+	case openAIResponseMessageContentTypeRefusal:
+		return responses.ResponseOutputRefusal{}
+	default:
+		return nil
+	}
+}
 
 // OpenAIResponseToLLM converts an OpenAI Responses payload into a [*model.LLMResponse],
 // returning an error when the payload is nil or contains no output items.
@@ -45,26 +79,24 @@ func OpenAIResponseToLLM(resp *responses.Response, stopSequences []string) (*mod
 
 	for i := range resp.Output {
 		item := &resp.Output[i]
-		typ := strings.TrimSpace(item.Type)
-		switch {
-		case strings.EqualFold(typ, "message"):
+		switch openAIResponseOutputItemVariant(item.Type).(type) {
+		case responses.ResponseOutputMessage:
 			for ci := range item.Content {
 				c := &item.Content[ci]
-				ctype := strings.TrimSpace(c.Type)
-				switch {
-				case strings.EqualFold(ctype, "output_text"):
+				switch openAIResponseMessageContentVariant(c.Type).(type) {
+				case responses.ResponseOutputText:
 					if c.Text != "" {
 						parts = append(parts, genai.NewPartFromText(c.Text))
 						sawText = true
 					}
-				case strings.EqualFold(ctype, "refusal"):
+				case responses.ResponseOutputRefusal:
 					if c.Refusal != "" {
 						parts = append(parts, genai.NewPartFromText(c.Refusal))
 						sawText = true
 					}
 				}
 			}
-		case strings.EqualFold(typ, "function_call"):
+		case responses.ResponseFunctionToolCall:
 			fnID := item.CallID
 			if fnID == "" {
 				fnID = item.ID
@@ -76,7 +108,7 @@ func OpenAIResponseToLLM(resp *responses.Response, stopSequences []string) (*mod
 					Args: parseArgs(item.Arguments),
 				},
 			})
-		case strings.EqualFold(typ, "shell_call_output"):
+		case responses.ResponseFunctionShellToolCallOutput:
 			out := responseOutputUnionToAny(&item.Output)
 			name := item.CallID
 			if name == "" {
@@ -138,14 +170,54 @@ func NewOpenAIStreamAggregator(stopSequences []string) *OpenAIStreamAggregator {
 	return &OpenAIStreamAggregator{stopSeq: stopSequences}
 }
 
+// We intentionally avoid [responses.ResponseStreamEventUnion.AsAny] in the hot path
+// because it re-unmarshals the raw JSON payload for every event. Process already
+// has the fully decoded union fields, so we only need the variant *type*.
+var (
+	openAIStreamEventTypeOutputTextDelta = string(constant.ValueOf[constant.ResponseOutputTextDelta]())
+
+	openAIStreamEventTypeFunctionCallArgumentsDelta = string(constant.ValueOf[constant.ResponseFunctionCallArgumentsDelta]())
+	openAIStreamEventTypeFunctionCallArgumentsDone  = string(constant.ValueOf[constant.ResponseFunctionCallArgumentsDone]())
+
+	openAIStreamEventTypeResponseCompleted  = string(constant.ValueOf[constant.ResponseCompleted]())
+	openAIStreamEventTypeResponseIncomplete = string(constant.ValueOf[constant.ResponseIncomplete]())
+	openAIStreamEventTypeResponseFailed     = string(constant.ValueOf[constant.ResponseFailed]())
+	openAIStreamEventTypeError              = string(constant.ValueOf[constant.Error]())
+)
+
+func openAIStreamEventVariant(eventType string) any {
+	switch eventType {
+	case openAIStreamEventTypeOutputTextDelta:
+		return responses.ResponseTextDeltaEvent{}
+
+	case openAIStreamEventTypeFunctionCallArgumentsDelta:
+		return responses.ResponseFunctionCallArgumentsDeltaEvent{}
+	case openAIStreamEventTypeFunctionCallArgumentsDone:
+		return responses.ResponseFunctionCallArgumentsDoneEvent{}
+
+	case openAIStreamEventTypeResponseCompleted:
+		return responses.ResponseCompletedEvent{}
+	case openAIStreamEventTypeResponseIncomplete:
+		return responses.ResponseIncompleteEvent{}
+
+	case openAIStreamEventTypeResponseFailed:
+		return responses.ResponseFailedEvent{}
+	case openAIStreamEventTypeError:
+		return responses.ResponseErrorEvent{}
+
+	default:
+		return nil
+	}
+}
+
 // Process consumes a streaming event and emits any partial LLM responses produced by it.
 func (a *OpenAIStreamAggregator) Process(event *responses.ResponseStreamEventUnion) []*model.LLMResponse {
 	if event == nil {
 		return nil
 	}
 
-	switch event.Type {
-	case "response.output_text.delta":
+	switch openAIStreamEventVariant(event.Type).(type) {
+	case responses.ResponseTextDeltaEvent:
 		if event.Delta == "" {
 			return nil
 		}
@@ -160,14 +232,14 @@ func (a *OpenAIStreamAggregator) Process(event *responses.ResponseStreamEventUni
 			},
 		}
 
-	case "response.function_call_arguments.delta":
+	case responses.ResponseFunctionCallArgumentsDeltaEvent:
 		state := a.ensureToolCall(event.OutputIndex, event.ItemID)
 		if event.Delta != "" {
 			state.args.WriteString(event.Delta)
 		}
 		return nil
 
-	case "response.function_call_arguments.done":
+	case responses.ResponseFunctionCallArgumentsDoneEvent:
 		state := a.ensureToolCall(event.OutputIndex, event.ItemID)
 		if event.Name != "" {
 			state.name = event.Name
@@ -190,17 +262,17 @@ func (a *OpenAIStreamAggregator) Process(event *responses.ResponseStreamEventUni
 		}
 		return nil
 
-	case "response.completed":
+	case responses.ResponseCompletedEvent:
 		a.status = responses.ResponseStatusCompleted
 		a.usage = &event.Response.Usage
 		llm, err := OpenAIResponseToLLM(&event.Response, a.stopSeq)
 		if err == nil {
 			a.final = llm
 		}
-		// fall through to fallback aggregation if conversion failed.
+		// If conversion failed, Final() falls back to accumulated deltas.
 		return nil
 
-	case "response.incomplete":
+	case responses.ResponseIncompleteEvent:
 		a.status = responses.ResponseStatusIncomplete
 		a.usage = &event.Response.Usage
 		llm, err := OpenAIResponseToLLM(&event.Response, a.stopSeq)
@@ -209,7 +281,18 @@ func (a *OpenAIStreamAggregator) Process(event *responses.ResponseStreamEventUni
 		}
 		return nil
 
-	case "response.failed", "error":
+	case responses.ResponseFailedEvent:
+		msg := strings.TrimSpace(event.Message)
+		if msg == "" {
+			msg = strings.TrimSpace(event.Response.Error.Message)
+		}
+		if msg == "" {
+			msg = "openai response failed"
+		}
+		a.err = fmt.Errorf("%s", msg)
+		return nil
+
+	case responses.ResponseErrorEvent:
 		msg := strings.TrimSpace(event.Message)
 		if msg == "" {
 			msg = "openai response failed"
