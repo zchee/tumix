@@ -17,7 +17,6 @@
 package sessiondb
 
 import (
-	"context"
 	"testing"
 
 	"google.golang.org/adk/session"
@@ -27,12 +26,12 @@ func TestSQLiteSessionLifecycle(t *testing.T) {
 	t.Parallel()
 
 	dbPath := t.TempDir() + "/sessions.db"
-	svc, err := Service(context.Background(), dbPath)
+	svc, err := Service(t.Context(), dbPath)
 	if err != nil {
 		t.Fatalf("Service error: %v", err)
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	if _, err := svc.Create(ctx, &session.CreateRequest{AppName: "app", UserID: "u", SessionID: "s1"}); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -49,7 +48,7 @@ func TestSQLiteSessionLifecycle(t *testing.T) {
 		t.Fatalf("AppendEvent: %v", err)
 	}
 
-	svc2, err := Service(context.Background(), dbPath)
+	svc2, err := Service(t.Context(), dbPath)
 	if err != nil {
 		t.Fatalf("Service reload: %v", err)
 	}

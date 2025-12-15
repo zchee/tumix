@@ -17,7 +17,6 @@
 package sessionfs
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -59,7 +58,7 @@ func TestFileServiceCreateGetAppend(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Service reload error = %v", err)
 	}
-	got, err := svc2.Get(context.Background(), &session.GetRequest{AppName: app, UserID: user, SessionID: sid})
+	got, err := svc2.Get(t.Context(), &session.GetRequest{AppName: app, UserID: user, SessionID: sid})
 	if err != nil {
 		t.Fatalf("Get reload error = %v", err)
 	}

@@ -90,7 +90,7 @@ func TestEstimateTokensFromChars(t *testing.T) {
 }
 
 func TestLoadPricingInvalidPath(t *testing.T) {
-	loadPricing(context.Background()) // should not panic when env unset
+	loadPricing(t.Context()) // should not panic when env unset
 	if _, ok := prices["gemini-2.5-flash"]; !ok {
 		t.Fatalf("default pricing missing")
 	}
@@ -103,7 +103,7 @@ func TestEnforcePromptTokensWithCounter(t *testing.T) {
 		callCount++
 		return &genai.CountTokensResponse{TotalTokens: 5}, nil
 	}
-	if err := enforcePromptTokensWithCounter(context.Background(), &cfg, counter); err != nil {
+	if err := enforcePromptTokensWithCounter(t.Context(), &cfg, counter); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if callCount != 1 {
@@ -116,7 +116,7 @@ func TestEnforcePromptTokensWithCounterRejects(t *testing.T) {
 	counter := func(ctx context.Context, model string, contents []*genai.Content, config *genai.CountTokensConfig) (*genai.CountTokensResponse, error) {
 		return &genai.CountTokensResponse{TotalTokens: 10}, nil
 	}
-	if err := enforcePromptTokensWithCounter(context.Background(), &cfg, counter); err == nil {
+	if err := enforcePromptTokensWithCounter(t.Context(), &cfg, counter); err == nil {
 		t.Fatalf("expected error when tokens exceed limit")
 	}
 }

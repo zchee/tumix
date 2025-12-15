@@ -17,7 +17,6 @@
 package agent
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"iter"
@@ -43,7 +42,7 @@ func TestTumixStopsWhenJudgeEscalates(t *testing.T) {
 		t.Fatalf("loader: %v", err)
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	svc := session.InMemoryService()
 	if _, err := svc.Create(ctx, &session.CreateRequest{AppName: "app", UserID: "u", SessionID: "s"}); err != nil {
 		t.Fatalf("create session: %v", err)
@@ -95,7 +94,7 @@ func TestTumixMajorityFallback(t *testing.T) {
 		t.Fatalf("loader: %v", err)
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	svc := session.InMemoryService()
 	if _, err := svc.Create(ctx, &session.CreateRequest{AppName: "app", UserID: "u", SessionID: "s2"}); err != nil {
 		t.Fatalf("create session: %v", err)
@@ -139,7 +138,7 @@ func TestTumixAutoStopOnStableMajority(t *testing.T) {
 		t.Fatalf("loader: %v", err)
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	svc := session.InMemoryService()
 	if _, err := svc.Create(ctx, &session.CreateRequest{AppName: "app", UserID: "u", SessionID: "s3"}); err != nil {
 		t.Fatalf("create session: %v", err)
