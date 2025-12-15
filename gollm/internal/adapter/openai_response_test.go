@@ -235,7 +235,7 @@ func TestOpenAIStreamAggregator_ManyToolCalls(t *testing.T) {
 	for i := toolCalls - 1; i >= 0; i-- {
 		id := fmt.Sprintf("tool-%d", i)
 		// Deliberately send multiple events per tool call to exercise the lookup path.
-		for j := 0; j < 3; j++ {
+		for range 3 {
 			agg.Process(&responses.ResponseStreamEventUnion{
 				Type:        "response.function_call_arguments.delta",
 				OutputIndex: int64(i),
@@ -286,7 +286,7 @@ func TestOpenAIStreamAggregator_ToolCallIDArrivesLate(t *testing.T) {
 
 	agg := NewOpenAIStreamAggregator(nil)
 
-	for i := 0; i < toolCallLookupThreshold; i++ {
+	for i := range toolCallLookupThreshold {
 		agg.Process(&responses.ResponseStreamEventUnion{
 			Type:        "response.function_call_arguments.delta",
 			OutputIndex: int64(i),
