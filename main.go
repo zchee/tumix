@@ -412,13 +412,25 @@ func buildModel(ctx context.Context, cfg *config, httpClient *http.Client) (mode
 		return llm, nil
 
 	case "openai":
-		return gollm.NewOpenAILLM(ctx, cfg.APIKey, cfg.ModelName, nil)
+		llm, err := gollm.NewOpenAILLM(ctx, cfg.APIKey, cfg.ModelName, nil)
+		if err != nil {
+			return nil, fmt.Errorf("create model %s: %w", cfg.ModelName, err)
+		}
+		return llm, nil
 
 	case "anthropic":
-		return gollm.NewAnthropicLLM(ctx, cfg.APIKey, cfg.ModelName, nil)
+		llm, err := gollm.NewAnthropicLLM(ctx, cfg.APIKey, cfg.ModelName, nil)
+		if err != nil {
+			return nil, fmt.Errorf("create model %s: %w", cfg.ModelName, err)
+		}
+		return llm, nil
 
 	case "xai":
-		return gollm.NewXAILLM(ctx, cfg.APIKey, cfg.ModelName, nil)
+		llm, err := gollm.NewXAILLM(ctx, cfg.APIKey, cfg.ModelName, nil)
+		if err != nil {
+			return nil, fmt.Errorf("create model %s: %w", cfg.ModelName, err)
+		}
+		return llm, nil
 
 	default:
 		return nil, fmt.Errorf("unsupported backend: %s", cfg.LLMBackend)
