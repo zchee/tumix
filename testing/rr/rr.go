@@ -46,6 +46,7 @@ var ignoreHTTPHeaders = []string{
 	"User-Agent",
 	"X-Stainless-Arch",
 	"X-Stainless-Os",
+	"X-Stainless-Package-Version",
 	"X-Stainless-Retry-Count",
 	"X-Stainless-Runtime-Version",
 }
