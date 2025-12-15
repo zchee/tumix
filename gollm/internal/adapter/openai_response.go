@@ -534,9 +534,9 @@ func openAIUsage(u *responses.ResponseUsage) *genai.GenerateContentResponseUsage
 	}
 
 	return &genai.GenerateContentResponseUsageMetadata{
-		PromptTokenCount:     int32(u.InputTokens),
-		CandidatesTokenCount: int32(u.OutputTokens),
-		TotalTokenCount:      int32(u.TotalTokens),
+		PromptTokenCount:     int32(u.InputTokens),  //nolint:gosec // TODO(zchee): fix nolint
+		CandidatesTokenCount: int32(u.OutputTokens), //nolint:gosec // TODO(zchee): fix nolint
+		TotalTokenCount:      int32(u.TotalTokens),  //nolint:gosec // TODO(zchee): fix nolint
 	}
 }
 

@@ -67,9 +67,9 @@ func AnthropicMessageToLLMResponse(msg *anthropic.BetaMessage) (*model.LLMRespon
 
 	usage := msg.Usage
 	llmUsage := &genai.GenerateContentResponseUsageMetadata{
-		PromptTokenCount:     int32(usage.InputTokens),
-		CandidatesTokenCount: int32(usage.OutputTokens),
-		TotalTokenCount:      int32(usage.InputTokens + usage.OutputTokens),
+		PromptTokenCount:     int32(usage.InputTokens),                      //nolint:gosec // TODO(zchee): fix nolint
+		CandidatesTokenCount: int32(usage.OutputTokens),                     //nolint:gosec // TODO(zchee): fix nolint
+		TotalTokenCount:      int32(usage.InputTokens + usage.OutputTokens), //nolint:gosec // TODO(zchee): fix nolint
 	}
 
 	return &model.LLMResponse{
