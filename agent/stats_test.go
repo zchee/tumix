@@ -20,9 +20,18 @@ import "testing"
 
 func TestComputeStats(t *testing.T) {
 	answers := []candidateAnswer{
-		{Agent: "a", Text: "foo"},
-		{Agent: "b", Text: "foo"},
-		{Agent: "c", Text: "bar"},
+		{
+			Agent: "a",
+			Text:  "foo",
+		},
+		{
+			Agent: "b",
+			Text:  "foo",
+		},
+		{
+			Agent: "c",
+			Text:  "bar",
+		},
 	}
 	stats := computeStats(answers, 5)
 	if stats.voteMargin <= 0.0 {
@@ -41,9 +50,18 @@ func TestComputeStats(t *testing.T) {
 
 func TestMajorityVoteNormalizesDelimiters(t *testing.T) {
 	ans := []candidateAnswer{
-		{Agent: "a", Text: "«<foo»> "},
-		{Agent: "b", Text: "foo"},
-		{Agent: "c", Text: "«<foo »>"},
+		{
+			Agent: "a",
+			Text:  "<<<foo>>> ",
+		},
+		{
+			Agent: "b",
+			Text:  "foo",
+		},
+		{
+			Agent: "c",
+			Text:  "<<<foo >>>",
+		},
 	}
 	answer, conf := majorityVote(ans)
 	if answer != "foo" {

@@ -626,7 +626,7 @@ Priority rules:
 - Do not mix code and search in the same turn.
 - Keep guidance concise: 1–3 bullet steps plus a concrete next action.
 
-Return guidance between «< and »>.`,
+Return guidance between ` + code(`<<<`) + ` and ` + code(`>>>`) + `.`,
 	}
 
 	applySharedContext(&cfg)
@@ -1233,7 +1233,7 @@ func computeStats(ans []candidateAnswer, candidateCount int) roundStats {
 
 func normalizeAnswer(text string) string {
 	trimmed := strings.TrimSpace(text)
-	trimmed = strings.TrimPrefix(trimmed, "«<")
-	trimmed = strings.TrimSuffix(trimmed, "»>")
+	trimmed = strings.TrimPrefix(trimmed, `<<<`)
+	trimmed = strings.TrimSuffix(trimmed, `>>>`)
 	return strings.TrimSpace(trimmed)
 }
