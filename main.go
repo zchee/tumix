@@ -412,13 +412,13 @@ func buildModel(ctx context.Context, cfg *config, httpClient *http.Client) (mode
 		return llm, nil
 
 	case "openai":
-		return gollm.NewOpenAILLM(ctx, gollm.AuthMethodAPIKey(cfg.APIKey), cfg.ModelName)
+		return gollm.NewOpenAILLM(ctx, cfg.APIKey, cfg.ModelName, nil)
 
 	case "anthropic":
-		return gollm.NewAnthropicLLM(ctx, gollm.AuthMethodAPIKey(cfg.APIKey), cfg.ModelName)
+		return gollm.NewAnthropicLLM(ctx, cfg.APIKey, cfg.ModelName, nil)
 
 	case "xai":
-		return gollm.NewXAILLM(ctx, gollm.AuthMethodAPIKey(cfg.APIKey), cfg.ModelName)
+		return gollm.NewXAILLM(ctx, cfg.APIKey, cfg.ModelName, nil)
 
 	default:
 		return nil, fmt.Errorf("unsupported backend: %s", cfg.LLMBackend)
