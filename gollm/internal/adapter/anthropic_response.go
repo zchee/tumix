@@ -39,6 +39,7 @@ func AnthropicMessageToLLMResponse(msg *anthropic.BetaMessage) (*model.LLMRespon
 		switch v := block.AsAny().(type) {
 		case anthropic.BetaTextBlock:
 			parts = append(parts, genai.NewPartFromText(v.Text))
+
 		case anthropic.BetaToolUseBlock:
 			args := map[string]any{}
 			switch inp := v.Input.(type) {

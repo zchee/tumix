@@ -93,7 +93,12 @@ func GenAIToAnthropicMessages(system *genai.Content, contents []*genai.Content) 
 					OfToolResult: &anthropic.BetaToolResultBlockParam{
 						ToolUseID: toolID(fr.ID, idx, pi),
 						Content: []anthropic.BetaToolResultBlockParamContentUnion{
-							{OfText: &anthropic.BetaTextBlockParam{Type: constant.ValueOf[constant.Text](), Text: string(contentJSON)}},
+							{
+								OfText: &anthropic.BetaTextBlockParam{
+									Type: constant.ValueOf[constant.Text](),
+									Text: string(contentJSON),
+								},
+							},
 						},
 						Type: constant.ValueOf[constant.ToolResult](),
 					},

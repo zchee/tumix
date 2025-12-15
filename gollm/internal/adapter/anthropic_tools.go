@@ -56,9 +56,16 @@ func GenAIToolsToAnthropic(tools []*genai.Tool, cfg *genai.ToolConfig) ([]anthro
 		switch cfg.FunctionCallingConfig.Mode {
 		case genai.FunctionCallingConfigModeNone:
 			none := anthropic.NewBetaToolChoiceNoneParam()
-			tc = &anthropic.BetaToolChoiceUnionParam{OfNone: &none}
+			tc = &anthropic.BetaToolChoiceUnionParam{
+				OfNone: &none,
+			}
+
 		case genai.FunctionCallingConfigModeAny, genai.FunctionCallingConfigModeAuto:
-			tc = &anthropic.BetaToolChoiceUnionParam{OfAuto: &anthropic.BetaToolChoiceAutoParam{Type: constant.ValueOf[constant.Auto]()}}
+			tc = &anthropic.BetaToolChoiceUnionParam{
+				OfAuto: &anthropic.BetaToolChoiceAutoParam{
+					Type: constant.ValueOf[constant.Auto](),
+				},
+			}
 		}
 	}
 

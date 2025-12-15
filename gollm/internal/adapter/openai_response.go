@@ -167,7 +167,9 @@ type OpenAIStreamAggregator struct {
 
 // NewOpenAIStreamAggregator constructs a streaming aggregator for Responses events.
 func NewOpenAIStreamAggregator(stopSequences []string) *OpenAIStreamAggregator {
-	return &OpenAIStreamAggregator{stopSeq: stopSequences}
+	return &OpenAIStreamAggregator{
+		stopSeq: stopSequences,
+	}
 }
 
 // We intentionally avoid [responses.ResponseStreamEventUnion.AsAny] in the hot path

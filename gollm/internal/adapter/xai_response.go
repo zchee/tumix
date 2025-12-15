@@ -52,7 +52,10 @@ func XAIResponseToLLM(resp *xai.Response) *model.LLMResponse {
 	parts := make([]*genai.Part, 0, 3)
 
 	if reasoning := resp.ReasoningContent(); reasoning != "" {
-		parts = append(parts, &genai.Part{Text: reasoning, Thought: true})
+		parts = append(parts, &genai.Part{
+			Text:    reasoning,
+			Thought: true,
+		})
 	}
 
 	if content := resp.Content(); content != "" {
