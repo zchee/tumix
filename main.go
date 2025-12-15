@@ -21,6 +21,7 @@ package main
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"encoding/json/jsontext"
 	json "encoding/json/v2"
@@ -34,6 +35,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -222,28 +224,27 @@ func run() int {
 
 func parseConfig() (config, error) {
 	cfg := config{
-		AppName:    "tumix",
-		LLMBackend: envOrDefault("TUMIX_BACKEND", "gemini"),
-		ModelName:  envOrDefault("TUMIX_MODEL", "gemini-2.5-flash"),
-		// APIKey:          os.Getenv("GOOGLE_API_KEY"),
-		TraceHTTP:       parseBoolEnv("TUMIX_HTTP_TRACE"),
-		UserID:          envOrDefault("TUMIX_USER", "user"),
-		SessionID:       envOrDefault("TUMIX_SESSION", ""),
-		SessionDir:      envOrDefault("TUMIX_SESSION_DIR", ""),
-		MaxRounds:       parseUintEnv("TUMIX_MAX_ROUNDS", 3),
-		MinRounds:       parseUintEnv("TUMIX_MIN_ROUNDS", 2),
-		Temperature:     parseFloatEnv("TUMIX_TEMPERATURE", -1),
-		TopP:            parseFloatEnv("TUMIX_TOP_P", -1),
-		TopK:            int(parseUintEnv("TUMIX_TOP_K", 0)),               //nolint:gosec // TODO(zchee): fix nolint
-		MaxTokens:       int(parseUintEnv("TUMIX_MAX_TOKENS", 0)),          //nolint:gosec // TODO(zchee): fix nolint
-		Seed:            int64(parseUintEnv("TUMIX_SEED", 0)),              //nolint:gosec // TODO(zchee): fix nolint
-		CallWarn:        int(parseUintEnv("TUMIX_CALL_WARN", 300)),         //nolint:gosec // TODO(zchee): fix nolint
-		Concurrency:     int(parseUintEnv("TUMIX_CONCURRENCY", 1)),         //nolint:gosec // TODO(zchee): fix nolint
-		MaxPromptChars:  int(parseUintEnv("TUMIX_MAX_PROMPT_CHARS", 8000)), //nolint:gosec // TODO(zchee): fix nolint
-		MaxPromptTokens: int(parseUintEnv("TUMIX_MAX_PROMPT_TOKENS", 0)),   //nolint:gosec // TODO(zchee): fix nolint
-		MaxCostUSD:      parseFloatEnv("TUMIX_MAX_COST_USD", 0.01),
-		AutoAgents:      int(parseUintEnv("TUMIX_AUTO_AGENTS", 0)),   //nolint:gosec // TODO(zchee): fix nolint
-		BudgetTokens:    int(parseUintEnv("TUMIX_BUDGET_TOKENS", 0)), //nolint:gosec // TODO(zchee): fix nolint
+		AppName:         "tumix",
+		LLMBackend:      cmp.Or(os.Getenv("TUMIX_BACKEND"), "gemini"),
+		ModelName:       cmp.Or(os.Getenv("TUMIX_MODEL"), "gemini-2.5-flash"),
+		TraceHTTP:       parseEnv("TUMIX_HTTP_TRACE", false),
+		UserID:          cmp.Or(os.Getenv("TUMIX_USER"), "user"),
+		SessionID:       cmp.Or(os.Getenv("TUMIX_SESSION"), ""),
+		SessionDir:      cmp.Or(os.Getenv("TUMIX_SESSION_DIR"), ""),
+		MaxRounds:       parseEnv("TUMIX_MAX_ROUNDS", uint(3)),
+		MinRounds:       parseEnv("TUMIX_MIN_ROUNDS", uint(2)),
+		Temperature:     parseEnv("TUMIX_TEMPERATURE", float64(-1)),
+		TopP:            parseEnv("TUMIX_TOP_P", float64(-1)),
+		TopK:            parseEnv("TUMIX_TOP_K", int(0)),
+		MaxTokens:       parseEnv("TUMIX_MAX_TOKENS", int(0)),
+		Seed:            parseEnv("TUMIX_SEED", int64(0)),
+		CallWarn:        parseEnv("TUMIX_CALL_WARN", int(300)),
+		Concurrency:     parseEnv("TUMIX_CONCURRENCY", int(1)),
+		MaxPromptChars:  parseEnv("TUMIX_MAX_PROMPT_CHARS", int(8000)),
+		MaxPromptTokens: parseEnv("TUMIX_MAX_PROMPT_TOKENS", int(0)),
+		MaxCostUSD:      parseEnv("TUMIX_MAX_COST_USD", float64(0.01)),
+		AutoAgents:      parseEnv("TUMIX_AUTO_AGENTS", int(0)),
+		BudgetTokens:    parseEnv("TUMIX_BUDGET_TOKENS", int(0)),
 	}
 
 	flag.StringVar(&cfg.LLMBackend, "backend", cfg.LLMBackend, "LLM backend to use (gemini, openai, anthropic, xai)")
@@ -273,7 +274,7 @@ func parseConfig() (config, error) {
 	flag.IntVar(&cfg.AutoAgents, "auto_agents", cfg.AutoAgents, "Number of auto-designed agents to add (0 disables; TUMIX_AUTO_AGENTS)")
 	flag.IntVar(&cfg.BudgetTokens, "budget_tokens", cfg.BudgetTokens, "Optional per-round input token budget override (0 uses estimate)")
 	flag.IntVar(&cfg.BenchLocal, "bench_local", cfg.BenchLocal, "Run local synthetic benchmark for N iterations and exit")
-	flag.StringVar(&cfg.MetricsAddr, "metrics_addr", envOrDefault("TUMIX_METRICS_ADDR", cfg.MetricsAddr), "If set, serve /debug/vars and /healthz on this address (e.g. :9090)")
+	flag.StringVar(&cfg.MetricsAddr, "metrics_addr", cmp.Or(os.Getenv("TUMIX_METRICS_ADDR"), cfg.MetricsAddr), "If set, serve /debug/vars and /healthz on this address (e.g. :9090)")
 	flag.Parse()
 
 	cfg.Prompt = strings.TrimSpace(strings.Join(flag.Args(), " "))
@@ -935,42 +936,40 @@ func printConfig(cfg *config) error {
 	return nil
 }
 
-func envOrDefault(key, fallback string) string {
-	if v, ok := os.LookupEnv(key); ok && v != "" {
-		return v
-	}
-	return fallback
-}
-
-func parseUintEnv(key string, fallback uint) uint {
+func parseEnv[T any](key string, fallback T) T {
 	raw := os.Getenv(key)
 	if raw == "" {
 		return fallback
 	}
-	v, err := strconv.ParseUint(raw, 10, 0)
-	if err != nil {
-		return fallback
-	}
-	return uint(v)
-}
 
-func parseFloatEnv(key string, fallback float64) float64 {
-	raw := os.Getenv(key)
-	if raw == "" {
-		return fallback
-	}
-	v, err := strconv.ParseFloat(raw, 64)
-	if err != nil {
-		return fallback
-	}
-	return v
-}
+	typ := reflect.TypeFor[T]()
+	kind := typ.Kind()
 
-func parseBoolEnv(key string) bool {
-	v := os.Getenv(key)
-	b, err := strconv.ParseBool(v)
-	if err != nil {
-		return false
+	var (
+		v   any
+		err error
+	)
+	switch kind {
+	case reflect.String:
+		v = raw
+	case reflect.Bool:
+		v, err = strconv.ParseBool(raw)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		v, err = strconv.ParseInt(raw, 10, typ.Bits())
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		v, err = strconv.ParseUint(raw, 10, typ.Bits())
+	case reflect.Float32, reflect.Float64:
+		v, err = strconv.ParseFloat(raw, typ.Bits())
+	default:
+		return fallback
 	}
-	return b
+	if err != nil {
+		return fallback
+	}
+
+	rv := reflect.ValueOf(v)
+	if !rv.Type().ConvertibleTo(typ) {
+		return fallback
+	}
+	return rv.Convert(typ).Interface().(T)
 }

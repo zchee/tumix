@@ -23,58 +23,94 @@ import (
 	"google.golang.org/genai"
 )
 
-func TestEnvOrDefault(t *testing.T) {
-	const key = "TUMIX_ENV_OR_DEFAULT"
-	t.Setenv(key, "value")
-	if got := envOrDefault(key, "fallback"); got != "value" {
-		t.Fatalf("envOrDefault() = %q, want %q", got, "value")
-	}
-
-	t.Setenv(key, "")
-	if got := envOrDefault(key, "fallback"); got != "fallback" {
-		t.Fatalf("envOrDefault() = %q, want %q", got, "fallback")
+func assertParseEnv[T comparable](t *testing.T, key, raw string, fallback, want T) {
+	t.Helper()
+	t.Setenv(key, raw)
+	got := parseEnv(key, fallback)
+	if got != want {
+		t.Fatalf("parseEnv[%T](%q, %v) with env %q=%q = %v; want %v", fallback, key, fallback, key, raw, got, want)
 	}
 }
 
-func TestParseUintEnv(t *testing.T) {
-	const key = "TUMIX_UINT"
-	if got := parseUintEnv(key, 7); got != 7 {
-		t.Fatalf("parseUintEnv() fallback = %d, want 7", got)
-	}
-
-	t.Setenv(key, "9")
-	if got := parseUintEnv(key, 7); got != 9 {
-		t.Fatalf("parseUintEnv() = %d, want 9", got)
-	}
+func TestParseEnvSuccess(t *testing.T) {
+	t.Run("bool", func(t *testing.T) {
+		assertParseEnv(t, "TUMIX_TEST_PARSEENV_BOOL", "true", false, true)
+	})
+	t.Run("int", func(t *testing.T) {
+		assertParseEnv(t, "TUMIX_TEST_PARSEENV_INT", "42", int(7), int(42))
+	})
+	t.Run("int64", func(t *testing.T) {
+		assertParseEnv(t, "TUMIX_TEST_PARSEENV_INT64", "42", int64(7), int64(42))
+	})
+	t.Run("uint", func(t *testing.T) {
+		assertParseEnv(t, "TUMIX_TEST_PARSEENV_UINT", "42", uint(7), uint(42))
+	})
+	t.Run("float64", func(t *testing.T) {
+		assertParseEnv(t, "TUMIX_TEST_PARSEENV_FLOAT64", "1.5", float64(0), float64(1.5))
+	})
+	t.Run("string", func(t *testing.T) {
+		assertParseEnv(t, "TUMIX_TEST_PARSEENV_STRING", "hello", "fallback", "hello")
+	})
+	t.Run("aliases", func(t *testing.T) {
+		type (
+			myBool    bool
+			myFloat32 float32
+			myInt     int
+			myString  string
+			myUint    uint
+		)
+		assertParseEnv(t, "TUMIX_TEST_PARSEENV_MYBOOL", "true", myBool(false), myBool(true))
+		assertParseEnv(t, "TUMIX_TEST_PARSEENV_MYFLOAT32", "1.5", myFloat32(0), myFloat32(1.5))
+		assertParseEnv(t, "TUMIX_TEST_PARSEENV_MYINT", "9", myInt(1), myInt(9))
+		assertParseEnv(t, "TUMIX_TEST_PARSEENV_MYSTRING", "v", myString("fallback"), myString("v"))
+		assertParseEnv(t, "TUMIX_TEST_PARSEENV_MYUINT", "9", myUint(1), myUint(9))
+	})
 }
 
-func TestParseFloatEnv(t *testing.T) {
-	const key = "TUMIX_FLOAT"
-	if got := parseFloatEnv(key, 0.25); got != 0.25 {
-		t.Fatalf("parseFloatEnv() fallback = %f, want 0.25", got)
-	}
-
-	t.Setenv(key, "0.75")
-	if got := parseFloatEnv(key, 0.25); got != 0.75 {
-		t.Fatalf("parseFloatEnv() = %f, want 0.75", got)
-	}
+func TestParseEnvReturnsFallbackOnEmptyValue(t *testing.T) {
+	t.Run("empty-string treated as unset", func(t *testing.T) {
+		assertParseEnv(t, "TUMIX_TEST_PARSEENV_EMPTY", "", int(7), int(7))
+	})
 }
 
-func TestParseBoolEnv(t *testing.T) {
-	const key = "TUMIX_BOOL"
-	if got := parseBoolEnv(key); got {
-		t.Fatalf("parseBoolEnv() default = %v, want false", got)
-	}
+func TestParseEnvReturnsFallbackOnInvalidValue(t *testing.T) {
+	t.Run("invalid int", func(t *testing.T) {
+		assertParseEnv(t, "TUMIX_TEST_PARSEENV_INVALID_INT", "not-an-int", int(7), int(7))
+	})
+	t.Run("invalid uint", func(t *testing.T) {
+		assertParseEnv(t, "TUMIX_TEST_PARSEENV_INVALID_UINT", "-1", uint(7), uint(7))
+	})
+	t.Run("invalid float64", func(t *testing.T) {
+		assertParseEnv(t, "TUMIX_TEST_PARSEENV_INVALID_FLOAT64", "nope", float64(1.5), float64(1.5))
+	})
+	t.Run("invalid bool", func(t *testing.T) {
+		assertParseEnv(t, "TUMIX_TEST_PARSEENV_INVALID_BOOL", "notabool", true, true)
+	})
+}
 
-	t.Setenv(key, "true")
-	if got := parseBoolEnv(key); !got {
-		t.Fatalf("parseBoolEnv() = %v, want true", got)
-	}
+func TestParseEnvReturnsFallbackOnOutOfRangeValue(t *testing.T) {
+	t.Run("int overflow", func(t *testing.T) {
+		assertParseEnv(t, "TUMIX_TEST_PARSEENV_OVERFLOW_INT", "9223372036854775808", int(7), int(7))
+	})
+	t.Run("uint overflow", func(t *testing.T) {
+		assertParseEnv(t, "TUMIX_TEST_PARSEENV_OVERFLOW_UINT", "18446744073709551616", uint(7), uint(7))
+	})
+	t.Run("int8 overflow", func(t *testing.T) {
+		assertParseEnv(t, "TUMIX_TEST_PARSEENV_OVERFLOW_INT8", "128", int8(7), int8(7))
+	})
+	t.Run("uint8 overflow", func(t *testing.T) {
+		assertParseEnv(t, "TUMIX_TEST_PARSEENV_OVERFLOW_UINT8", "256", uint8(7), uint8(7))
+	})
+	t.Run("float64 overflow", func(t *testing.T) {
+		assertParseEnv(t, "TUMIX_TEST_PARSEENV_OVERFLOW_FLOAT64", "1e309", float64(1.5), float64(1.5))
+	})
+}
 
-	t.Setenv(key, "0")
-	if got := parseBoolEnv(key); got {
-		t.Fatalf("parseBoolEnv() = %v, want false", got)
+func TestParseEnvReturnsFallbackOnUnsupportedType(t *testing.T) {
+	type sample struct {
+		A int
 	}
+	assertParseEnv(t, "TUMIX_TEST_PARSEENV_UNSUPPORTED", "anything", sample{A: 1}, sample{A: 1})
 }
 
 func TestEstimateTokensFromChars(t *testing.T) {
