@@ -56,9 +56,9 @@ func BenchmarkOpenAIStreamAggregatorToolCalls(b *testing.B) {
 	for _, tt := range tests {
 		b.Run(tt.name, func(b *testing.B) {
 			events := make([]responses.ResponseStreamEventUnion, 0, tt.toolCalls*(tt.deltasPerCall+1))
-			for i := 0; i < tt.toolCalls; i++ {
+			for i := range tt.toolCalls {
 				id := "tool-" + strconv.Itoa(i)
-				for j := 0; j < tt.deltasPerCall; j++ {
+				for range tt.deltasPerCall {
 					events = append(events, responses.ResponseStreamEventUnion{
 						Type:        "response.function_call_arguments.delta",
 						OutputIndex: int64(i),

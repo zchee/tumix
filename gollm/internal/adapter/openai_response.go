@@ -300,7 +300,7 @@ func (a *OpenAIStreamAggregator) maybeInitToolCallLookup() {
 }
 
 func (a *OpenAIStreamAggregator) ensureToolCall(idx int64, id string) *toolCallState {
-	if a.byID != nil {
+	if a.byID != nil { //nolint:nestif // TODO(zchee): fix nolint
 		if id != "" {
 			if tc := a.byID[id]; tc != nil {
 				return tc
