@@ -52,7 +52,7 @@ type Codec struct {
 var _ encoding.CodecV2 = (*Codec)(nil)
 
 // Name implements [encoding.CodecV2].
-func (Codec) Name() string { return Name }
+func (*Codec) Name() string { return Name }
 
 // Marshal implements [encoding.CodecV2].
 func (c *Codec) Marshal(v any) (grpcmem.BufferSlice, error) {

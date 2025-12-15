@@ -39,12 +39,12 @@ func TestGenAIToolsToAnthropic(t *testing.T) {
 	tests := map[string]struct {
 		tools []*genai.Tool
 		cfg   *genai.ToolConfig
-		check func(t *testing.T, got []anthropic.ToolUnionParam, tc *anthropic.ToolChoiceUnionParam)
+		check func(t *testing.T, got []anthropic.BetaToolUnionParam, tc *anthropic.BetaToolChoiceUnionParam)
 	}{
 		"empty tools returns nil": {
 			tools: nil,
 			cfg:   nil,
-			check: func(t *testing.T, got []anthropic.ToolUnionParam, tc *anthropic.ToolChoiceUnionParam) {
+			check: func(t *testing.T, got []anthropic.BetaToolUnionParam, tc *anthropic.BetaToolChoiceUnionParam) {
 				t.Helper()
 				if got != nil {
 					t.Fatalf("tools = %+v, want nil", got)
@@ -58,7 +58,7 @@ func TestGenAIToolsToAnthropic(t *testing.T) {
 			tools: []*genai.Tool{
 				{FunctionDeclarations: []*genai.FunctionDeclaration{{}, {Name: ""}, nil}},
 			},
-			check: func(t *testing.T, got []anthropic.ToolUnionParam, _ *anthropic.ToolChoiceUnionParam) {
+			check: func(t *testing.T, got []anthropic.BetaToolUnionParam, _ *anthropic.BetaToolChoiceUnionParam) {
 				t.Helper()
 				if len(got) != 0 {
 					t.Fatalf("len(tools) = %d, want 0", len(got))
@@ -76,7 +76,7 @@ func TestGenAIToolsToAnthropic(t *testing.T) {
 			cfg: &genai.ToolConfig{
 				FunctionCallingConfig: &genai.FunctionCallingConfig{Mode: genai.FunctionCallingConfigModeNone},
 			},
-			check: func(t *testing.T, got []anthropic.ToolUnionParam, tc *anthropic.ToolChoiceUnionParam) {
+			check: func(t *testing.T, got []anthropic.BetaToolUnionParam, tc *anthropic.BetaToolChoiceUnionParam) {
 				t.Helper()
 
 				if len(got) != 1 {
@@ -89,8 +89,8 @@ func TestGenAIToolsToAnthropic(t *testing.T) {
 				if tool.Name != "lookup_weather" {
 					t.Fatalf("tool.Name = %q, want lookup_weather", tool.Name)
 				}
-				if tool.Type != anthropic.ToolTypeCustom {
-					t.Fatalf("tool.Type = %q, want %q", tool.Type, anthropic.ToolTypeCustom)
+				if tool.Type != anthropic.BetaToolTypeCustom {
+					t.Fatalf("tool.Type = %q, want %q", tool.Type, anthropic.BetaToolTypeCustom)
 				}
 				if tool.InputSchema.Type != constant.ValueOf[constant.Object]() {
 					t.Fatalf("schema type = %q, want object", tool.InputSchema.Type)
@@ -118,7 +118,7 @@ func TestGenAIToolsToAnthropic(t *testing.T) {
 			cfg: &genai.ToolConfig{
 				FunctionCallingConfig: &genai.FunctionCallingConfig{Mode: genai.FunctionCallingConfigModeAny},
 			},
-			check: func(t *testing.T, _ []anthropic.ToolUnionParam, tc *anthropic.ToolChoiceUnionParam) {
+			check: func(t *testing.T, _ []anthropic.BetaToolUnionParam, tc *anthropic.BetaToolChoiceUnionParam) {
 				t.Helper()
 				if tc == nil || tc.OfAuto == nil {
 					t.Fatalf("tool choice auto not set: %+v", tc)

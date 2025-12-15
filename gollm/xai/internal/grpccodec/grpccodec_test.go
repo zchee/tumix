@@ -32,7 +32,7 @@ import (
 func TestCodecName(t *testing.T) {
 	t.Helper()
 
-	if got := (Codec{}).Name(); got != Name {
+	if got := (&Codec{}).Name(); got != Name {
 		t.Fatalf("Name() = %q, want %q", got, Name)
 	}
 }

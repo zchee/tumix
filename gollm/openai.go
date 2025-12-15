@@ -26,6 +26,8 @@ import (
 
 	openai "github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
+	"github.com/openai/openai-go/v3/packages/param"
+	"github.com/openai/openai-go/v3/responses"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/adk/model"
@@ -40,9 +42,10 @@ var openaiTracer = otel.Tracer("github.com/zchee/tumix/gollm/openai")
 
 // openAILLM implements the adk [model.LLM] interface using OpenAI SDK.
 type openAILLM struct {
-	client    openai.Client
-	name      string
-	userAgent string
+	client         openai.Client
+	name           string
+	userAgent      string
+	providerParams *ProviderParams
 }
 
 var _ model.LLM = (*openAILLM)(nil)
@@ -52,17 +55,17 @@ var _ model.LLM = (*openAILLM)(nil)
 // If authKey is nil, the OpenAI SDK falls back to the OPENAI_API_KEY environment variable.
 //
 //nolint:unparam
-func NewOpenAILLM(_ context.Context, authKey AuthMethod, modelName string, opts ...option.RequestOption) (model.LLM, error) {
+func NewOpenAILLM(_ context.Context, apiKey, modelName string, params *ProviderParams, opts ...option.RequestOption) (model.LLM, error) {
 	userAgent := version.UserAgent("openai")
 
-	httpClient := httputil.NewClientWithTracing(3*time.Minute, httputil.DefaultTraceEnabled())
+	httpClient := httputil.NewClient(3 * time.Minute)
 	ropts := []option.RequestOption{
 		option.WithHTTPClient(httpClient),
 		option.WithHeader("User-Agent", userAgent),
 		option.WithMaxRetries(2),
 	}
-	if authKey != nil {
-		ropts = append(ropts, option.WithAPIKey(authKey.value()))
+	if apiKey != "" {
+		ropts = append(ropts, option.WithAPIKey(apiKey))
 	}
 
 	// opts are allowed to override by order
@@ -70,9 +73,10 @@ func NewOpenAILLM(_ context.Context, authKey AuthMethod, modelName string, opts 
 	client := openai.NewClient(opts...)
 
 	return &openAILLM{
-		client:    client,
-		name:      modelName,
-		userAgent: userAgent,
+		client:         client,
+		name:           modelName,
+		userAgent:      userAgent,
+		providerParams: params,
 	}, nil
 }
 
@@ -84,7 +88,7 @@ func (m *openAILLM) GenerateContent(ctx context.Context, req *model.LLMRequest, 
 	ctx, span := openaiTracer.Start(ctx, "gollm.openai.GenerateContent")
 	req.Config = adapter.NormalizeRequest(req, m.userAgent)
 
-	params, err := m.chatCompletionParams(req)
+	params, err := m.responseParams(req)
 	if err != nil {
 		return func(yield func(*model.LLMResponse, error) bool) {
 			defer func() { telemetry.End(span, err) }()
@@ -92,91 +96,85 @@ func (m *openAILLM) GenerateContent(ctx context.Context, req *model.LLMRequest, 
 		}
 	}
 
+	stopSeq := req.Config.StopSequences
+	count := max(req.Config.CandidateCount, 1)
+
 	if stream {
-		return m.stream(ctx, span, params)
+		// Responses streaming currently returns a single candidate; fall back to one even if caller asked for more.
+		return m.stream(ctx, params, stopSeq)
 	}
 
 	return func(yield func(*model.LLMResponse, error) bool) {
 		var spanErr error
 		defer func() { telemetry.End(span, spanErr) }()
 
-		resp, err := m.client.Chat.Completions.New(ctx, *params)
-		if err != nil {
-			spanErr = err
-			yield(nil, err)
-			return
-		}
+		for range count {
+			resp, err := m.client.Responses.New(ctx, *params)
+			if err != nil {
+				spanErr = err
+				yield(nil, err)
+				return
+			}
 
-		llmResp, err := adapter.OpenAIResponseToLLM(resp)
-		if err != nil {
-			spanErr = err
-			yield(nil, err)
-			return
+			llmResp, err := adapter.OpenAIResponseToLLM(resp, stopSeq)
+			if err != nil {
+				spanErr = err
+				yield(nil, err)
+				return
+			}
+			if !yield(llmResp, nil) {
+				return
+			}
 		}
-		yield(llmResp, nil)
 	}
 }
 
-// chatCompletionParams builds OpenAI chat completion parameters from the request.
+// responseParams builds OpenAI Responses parameters from the request.
 //
-// It converts genai contents to OpenAI messages and applies generation config,
-// returning an error when no messages remain after conversion.
-func (m *openAILLM) chatCompletionParams(req *model.LLMRequest) (*openai.ChatCompletionNewParams, error) {
-	msgs, err := adapter.GenAIToOpenAIMessages(req.Contents)
+// It converts GenAI contents to Responses input items and applies generation
+// config, returning an error when unsupported options are requested.
+func (m *openAILLM) responseParams(req *model.LLMRequest) (*responses.ResponseNewParams, error) {
+	items, err := adapter.GenAIToResponsesInput(req.Contents)
 	if err != nil {
 		return nil, fmt.Errorf("convert content: %w", err)
 	}
-	if len(msgs) == 0 {
-		return nil, fmt.Errorf("no messages to send")
+	if len(items) == 0 {
+		return nil, fmt.Errorf("no input items to send")
 	}
 
-	params := openai.ChatCompletionNewParams{
-		Model:    adapter.ModelName(m.name, req),
-		Messages: msgs,
+	params := responses.ResponseNewParams{
+		Model: adapter.ModelName(m.name, req),
+		Input: responses.ResponseNewParamsInputUnion{
+			OfInputItemList: responses.ResponseInputParam(items),
+		},
 	}
 
 	cfg := req.Config
 	if cfg.Temperature != nil {
-		params.Temperature = openai.Float(float64(*cfg.Temperature))
+		params.Temperature = param.NewOpt(float64(*cfg.Temperature))
 	}
 	if cfg.TopP != nil {
-		params.TopP = openai.Float(float64(*cfg.TopP))
+		params.TopP = param.NewOpt(float64(*cfg.TopP))
 	}
 	if cfg.MaxOutputTokens > 0 {
-		params.MaxTokens = openai.Int(int64(cfg.MaxOutputTokens))
-		params.MaxCompletionTokens = openai.Int(int64(cfg.MaxOutputTokens))
-	}
-	if cfg.CandidateCount > 0 {
-		params.N = openai.Int(int64(cfg.CandidateCount))
-	}
-	if len(cfg.StopSequences) > 0 {
-		// OpenAI stop accepts string or []string; we set []string.
-		params.Stop = openai.ChatCompletionNewParamsStopUnion{OfStringArray: cfg.StopSequences}
-	}
-	if cfg.Seed != nil {
-		params.Seed = openai.Int(int64(*cfg.Seed))
+		params.MaxOutputTokens = param.NewOpt(int64(cfg.MaxOutputTokens))
 	}
 	switch {
 	case cfg.Logprobs != nil:
-		params.Logprobs = openai.Bool(true)
-		params.TopLogprobs = openai.Int(int64(*cfg.Logprobs))
+		params.TopLogprobs = param.NewOpt(int64(*cfg.Logprobs))
+		params.Include = append(params.Include, responses.ResponseIncludableMessageOutputTextLogprobs)
 	case cfg.ResponseLogprobs:
-		params.Logprobs = openai.Bool(true)
+		params.Include = append(params.Include, responses.ResponseIncludableMessageOutputTextLogprobs)
 	}
-	if cfg.FrequencyPenalty != nil {
-		params.FrequencyPenalty = openai.Float(float64(*cfg.FrequencyPenalty))
-	}
-	if cfg.PresencePenalty != nil {
-		params.PresencePenalty = openai.Float(float64(*cfg.PresencePenalty))
-	}
-
 	if len(cfg.Tools) > 0 {
-		tools, tc := adapter.GenAIToolsToOpenAI(cfg.Tools, cfg.ToolConfig)
+		tools, tc := adapter.GenAIToolsToResponses(cfg.Tools, cfg.ToolConfig)
 		params.Tools = tools
 		if tc != nil {
 			params.ToolChoice = *tc
 		}
 	}
+
+	applyOpenAIProviderParams(req, m.providerParams, &params)
 
 	return &params, nil
 }
@@ -185,20 +183,21 @@ func (m *openAILLM) chatCompletionParams(req *model.LLMRequest) (*openai.ChatCom
 //
 // It forwards each streamed chunk through the OpenAI aggregator and emits final output
 // after the stream ends, respecting consumer backpressure.
-func (m *openAILLM) stream(ctx context.Context, span trace.Span, params *openai.ChatCompletionNewParams) iter.Seq2[*model.LLMResponse, error] {
-	agg := adapter.NewOpenAIStreamAggregator()
+func (m *openAILLM) stream(ctx context.Context, params *responses.ResponseNewParams, stopSeq []string) iter.Seq2[*model.LLMResponse, error] {
+	span := trace.SpanFromContext(ctx)
 
+	agg := adapter.NewOpenAIStreamAggregator(stopSeq)
 	return func(yield func(*model.LLMResponse, error) bool) {
-		stream := m.client.Chat.Completions.NewStreaming(ctx, *params)
+		stream := m.client.Responses.NewStreaming(ctx, *params)
 		defer stream.Close()
 
 		var spanErr error
 		defer func() { telemetry.End(span, spanErr) }()
 
 		for stream.Next() {
-			chunk := stream.Current()
+			event := stream.Current()
 
-			for _, resp := range agg.Process(&chunk) {
+			for _, resp := range agg.Process(&event) {
 				if !yield(resp, nil) {
 					return
 				}
@@ -211,8 +210,27 @@ func (m *openAILLM) stream(ctx context.Context, span trace.Span, params *openai.
 			return
 		}
 
+		if aggErr := agg.Err(); aggErr != nil {
+			spanErr = aggErr
+			yield(nil, aggErr)
+			return
+		}
+
 		if final := agg.Final(); final != nil {
 			yield(final, nil)
 		}
+	}
+}
+
+func applyOpenAIProviderParams(req *model.LLMRequest, defaults *ProviderParams, params *responses.ResponseNewParams) {
+	pp, ok := effectiveProviderParams(req, defaults)
+	if !ok || pp.OpenAI == nil {
+		return
+	}
+	for _, mutate := range pp.OpenAI.Mutate {
+		if mutate == nil {
+			continue
+		}
+		mutate(params)
 	}
 }

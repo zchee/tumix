@@ -40,9 +40,10 @@ var anthropicTracer = otel.Tracer("github.com/zchee/tumix/gollm/anthropic")
 
 // anthropicLLM implements the adk [model.LLM] interface using the Anthropic SDK.
 type anthropicLLM struct {
-	client    *anthropic.Client
-	name      string
-	userAgent string
+	client         *anthropic.Client
+	name           string
+	userAgent      string
+	providerParams *ProviderParams
 }
 
 var _ model.LLM = (*anthropicLLM)(nil)
@@ -52,20 +53,17 @@ var _ model.LLM = (*anthropicLLM)(nil)
 // If authKey is nil, the Anthropic SDK falls back to the ANTHROPIC_API_KEY environment variable.
 //
 //nolint:unparam
-func NewAnthropicLLM(_ context.Context, authKey AuthMethod, modelName string, opts ...option.RequestOption) (model.LLM, error) {
+func NewAnthropicLLM(_ context.Context, apiKey, modelName string, params *ProviderParams, opts ...option.RequestOption) (model.LLM, error) {
 	userAgent := version.UserAgent("anthropic")
 
-	httpClient := httputil.NewClientWithTracing(3*time.Minute, httputil.DefaultTraceEnabled())
+	httpClient := httputil.NewClient(3 * time.Minute)
 	ropts := []option.RequestOption{
 		option.WithHTTPClient(httpClient),
 		option.WithHeader("User-Agent", userAgent),
 		option.WithMaxRetries(2),
 	}
-	switch authKey := authKey.(type) {
-	case AuthMethodAPIKey:
-		ropts = append(ropts, option.WithAPIKey(authKey.value()))
-	case AuthMethodAPIToken:
-		ropts = append(ropts, option.WithAuthToken(authKey.value()))
+	if apiKey != "" {
+		ropts = append(ropts, option.WithAPIKey(apiKey))
 	}
 
 	// opts are allowed to override by order
@@ -73,9 +71,10 @@ func NewAnthropicLLM(_ context.Context, authKey AuthMethod, modelName string, op
 	client := anthropic.NewClient(opts...)
 
 	return &anthropicLLM{
-		client:    &client,
-		name:      modelName,
-		userAgent: userAgent,
+		client:         &client,
+		name:           modelName,
+		userAgent:      userAgent,
+		providerParams: params,
 	}, nil
 }
 
@@ -104,14 +103,14 @@ func (m *anthropicLLM) GenerateContent(ctx context.Context, req *model.LLMReques
 	}
 
 	if stream {
-		return m.stream(ctx, span, params)
+		return m.stream(ctx, params)
 	}
 
 	return func(yield func(*model.LLMResponse, error) bool) {
 		var spanErr error
 		defer func() { telemetry.End(span, spanErr) }()
 
-		resp, err := m.client.Messages.New(ctx, *params)
+		resp, err := m.client.Beta.Messages.New(ctx, *params)
 		if err != nil {
 			spanErr = err
 			yield(nil, err)
@@ -127,16 +126,16 @@ func (m *anthropicLLM) GenerateContent(ctx context.Context, req *model.LLMReques
 	}
 }
 
-// buildParams prepares Anthropic message parameters from a genai request.
+// buildParams prepares Anthropic Beta message parameters from a genai request.
 //
 // It validates presence of messages, maps config knobs, and sets defaults
 // required by the Anthropic API.
-func (m *anthropicLLM) buildParams(req *model.LLMRequest, system []anthropic.TextBlockParam, msgs []anthropic.MessageParam) (*anthropic.MessageNewParams, error) {
+func (m *anthropicLLM) buildParams(req *model.LLMRequest, system []anthropic.BetaTextBlockParam, msgs []anthropic.BetaMessageParam) (*anthropic.BetaMessageNewParams, error) {
 	if len(msgs) == 0 {
 		return nil, errors.New("no messages")
 	}
 
-	params := &anthropic.MessageNewParams{
+	params := &anthropic.BetaMessageNewParams{
 		Model:         anthropic.Model(adapter.ModelName(m.name, req)),
 		Messages:      msgs,
 		System:        system,
@@ -165,6 +164,8 @@ func (m *anthropicLLM) buildParams(req *model.LLMRequest, system []anthropic.Tex
 		}
 	}
 
+	applyAnthropicProviderParams(req, m.providerParams, params)
+
 	return params, nil
 }
 
@@ -172,9 +173,11 @@ func (m *anthropicLLM) buildParams(req *model.LLMRequest, system []anthropic.Tex
 //
 // It accumulates incremental deltas, yielding partial text as it arrives and a final
 // response once the stream signals completion.
-func (m *anthropicLLM) stream(ctx context.Context, span trace.Span, params *anthropic.MessageNewParams) iter.Seq2[*model.LLMResponse, error] {
-	stream := m.client.Messages.NewStreaming(ctx, *params)
-	acc := &anthropic.Message{}
+func (m *anthropicLLM) stream(ctx context.Context, params *anthropic.BetaMessageNewParams) iter.Seq2[*model.LLMResponse, error] {
+	span := trace.SpanFromContext(ctx)
+
+	stream := m.client.Beta.Messages.NewStreaming(ctx, *params)
+	acc := &anthropic.BetaMessage{}
 
 	return func(yield func(*model.LLMResponse, error) bool) {
 		defer stream.Close()
@@ -191,21 +194,25 @@ func (m *anthropicLLM) stream(ctx context.Context, span trace.Span, params *anth
 			}
 
 			switch ev := event.AsAny().(type) {
-			case anthropic.ContentBlockDeltaEvent:
+			case anthropic.BetaRawContentBlockDeltaEvent:
 				if delta := ev.Delta.AsAny(); delta != nil {
-					if t, ok := delta.(anthropic.TextDelta); ok && t.Text != "" {
-						if !yield(&model.LLMResponse{
+					if t, ok := delta.(anthropic.BetaTextDelta); ok && t.Text != "" {
+						resp := &model.LLMResponse{
 							Content: &genai.Content{
-								Role:  genai.RoleModel,
-								Parts: []*genai.Part{genai.NewPartFromText(adapter.AccText(acc))},
+								Role: genai.RoleModel,
+								Parts: []*genai.Part{
+									genai.NewPartFromText(adapter.AccText(acc)),
+								},
 							},
 							Partial: true,
-						}, nil) {
+						}
+						if !yield(resp, nil) {
 							return
 						}
 					}
 				}
-			case anthropic.MessageStopEvent:
+
+			case anthropic.BetaRawMessageStopEvent:
 				resp, err := adapter.AnthropicMessageToLLMResponse(acc)
 				if err != nil {
 					yield(nil, err)
@@ -221,5 +228,19 @@ func (m *anthropicLLM) stream(ctx context.Context, span trace.Span, params *anth
 			spanErr = err
 			yield(nil, err)
 		}
+	}
+}
+
+func applyAnthropicProviderParams(req *model.LLMRequest, defaults *ProviderParams, params *anthropic.BetaMessageNewParams) {
+	pp, ok := effectiveProviderParams(req, defaults)
+	if !ok || pp.Anthropic == nil {
+		return
+	}
+
+	for _, mutate := range pp.Anthropic.Mutate {
+		if mutate == nil {
+			continue
+		}
+		mutate(params)
 	}
 }

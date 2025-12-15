@@ -26,33 +26,32 @@ import (
 	"google.golang.org/genai"
 )
 
-// GenAIToAnthropicMessages converts GenAI contents into Anthropic message parameters.
-func GenAIToAnthropicMessages(system *genai.Content, contents []*genai.Content) ([]anthropic.TextBlockParam, []anthropic.MessageParam, error) {
-	var systemBlocks []anthropic.TextBlockParam
+// GenAIToAnthropicMessages converts the GenAI contents into Anthropic beta message parameters.
+func GenAIToAnthropicMessages(system *genai.Content, contents []*genai.Content) ([]anthropic.BetaTextBlockParam, []anthropic.BetaMessageParam, error) {
+	var systemBlocks []anthropic.BetaTextBlockParam
 	if system != nil {
 		text := joinTextParts(system.Parts)
 		if text != "" {
-			systemBlocks = append(systemBlocks, anthropic.TextBlockParam{
+			systemBlocks = append(systemBlocks, anthropic.BetaTextBlockParam{
 				Type: constant.ValueOf[constant.Text](),
 				Text: text,
 			})
 		}
 	}
 
-	msgs := make([]anthropic.MessageParam, 0, len(contents))
+	msgs := make([]anthropic.BetaMessageParam, 0, len(contents))
 	for idx, c := range contents {
 		if c == nil {
 			continue
 		}
 		role := strings.ToLower(c.Role)
-		mp := anthropic.MessageParam{
-			Content: make([]anthropic.ContentBlockParamUnion, 0, len(c.Parts)),
+		mp := anthropic.BetaMessageParam{
+			Content: make([]anthropic.BetaContentBlockParamUnion, 0, len(c.Parts)),
 		}
 		if role == genai.RoleUser {
-			mp.Role = anthropic.MessageParamRoleUser
+			mp.Role = anthropic.BetaMessageParamRoleUser
 		} else {
-			// treat everything else as assistant to satisfy API constraint (only user/assistant allowed).
-			mp.Role = anthropic.MessageParamRoleAssistant
+			mp.Role = anthropic.BetaMessageParamRoleAssistant
 		}
 
 		for pi, part := range c.Parts {
@@ -61,7 +60,7 @@ func GenAIToAnthropicMessages(system *genai.Content, contents []*genai.Content) 
 			}
 			switch {
 			case part.Text != "":
-				mp.Content = append(mp.Content, anthropic.NewTextBlock(part.Text))
+				mp.Content = append(mp.Content, anthropic.NewBetaTextBlock(part.Text))
 
 			case part.FunctionCall != nil:
 				fc := part.FunctionCall
@@ -72,8 +71,8 @@ func GenAIToAnthropicMessages(system *genai.Content, contents []*genai.Content) 
 				if args == nil {
 					args = map[string]any{}
 				}
-				mp.Content = append(mp.Content, anthropic.ContentBlockParamUnion{
-					OfToolUse: &anthropic.ToolUseBlockParam{
+				mp.Content = append(mp.Content, anthropic.BetaContentBlockParamUnion{
+					OfToolUse: &anthropic.BetaToolUseBlockParam{
 						ID:    toolID(fc.ID, idx, pi),
 						Name:  fc.Name,
 						Input: args,
@@ -90,11 +89,16 @@ func GenAIToAnthropicMessages(system *genai.Content, contents []*genai.Content) 
 				if err != nil {
 					return nil, nil, fmt.Errorf("marshal json: %w", err)
 				}
-				mp.Content = append(mp.Content, anthropic.ContentBlockParamUnion{
-					OfToolResult: &anthropic.ToolResultBlockParam{
+				mp.Content = append(mp.Content, anthropic.BetaContentBlockParamUnion{
+					OfToolResult: &anthropic.BetaToolResultBlockParam{
 						ToolUseID: toolID(fr.ID, idx, pi),
-						Content: []anthropic.ToolResultBlockParamContentUnion{
-							{OfText: &anthropic.TextBlockParam{Type: constant.ValueOf[constant.Text](), Text: string(contentJSON)}},
+						Content: []anthropic.BetaToolResultBlockParamContentUnion{
+							{
+								OfText: &anthropic.BetaTextBlockParam{
+									Type: constant.ValueOf[constant.Text](),
+									Text: string(contentJSON),
+								},
+							},
 						},
 						Type: constant.ValueOf[constant.ToolResult](),
 					},

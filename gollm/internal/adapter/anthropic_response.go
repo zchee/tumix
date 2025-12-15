@@ -28,22 +28,31 @@ import (
 	"google.golang.org/genai"
 )
 
-// AnthropicMessageToLLMResponse converts a non-streaming Anthropic message into an ADK LLM response.
-func AnthropicMessageToLLMResponse(msg *anthropic.Message) (*model.LLMResponse, error) {
+// AnthropicMessageToLLMResponse converts an Anthropic beta message into an ADK LLM response.
+func AnthropicMessageToLLMResponse(msg *anthropic.BetaMessage) (*model.LLMResponse, error) {
 	if msg == nil {
-		return nil, errors.New("nil anthropic message")
+		return nil, errors.New("nil anthropic beta message")
 	}
 
 	parts := make([]*genai.Part, 0, len(msg.Content))
 	for block := range slices.Values(msg.Content) {
 		switch v := block.AsAny().(type) {
-		case anthropic.TextBlock:
+		case anthropic.BetaTextBlock:
 			parts = append(parts, genai.NewPartFromText(v.Text))
-		case anthropic.ToolUseBlock:
+
+		case anthropic.BetaToolUseBlock:
 			args := map[string]any{}
-			if len(v.Input) > 0 {
-				if err := json.Unmarshal(v.Input, &args); err != nil {
-					return nil, fmt.Errorf("unmarshal json: %w", err)
+			switch inp := v.Input.(type) {
+			case nil:
+			case map[string]any:
+				args = inp
+			default:
+				raw, err := json.Marshal(inp)
+				if err != nil {
+					return nil, fmt.Errorf("marshal tool input: %w", err)
+				}
+				if err := json.Unmarshal(raw, &args); err != nil {
+					return nil, fmt.Errorf("unmarshal tool input: %w", err)
 				}
 			}
 			parts = append(parts, &genai.Part{
@@ -73,27 +82,27 @@ func AnthropicMessageToLLMResponse(msg *anthropic.Message) (*model.LLMResponse, 
 	}, nil
 }
 
-func mapAnthropicFinishReason(reason anthropic.StopReason) genai.FinishReason {
+func mapAnthropicFinishReason(reason anthropic.BetaStopReason) genai.FinishReason {
 	switch reason {
-	case anthropic.StopReasonStopSequence, anthropic.StopReasonEndTurn:
+	case anthropic.BetaStopReasonStopSequence, anthropic.BetaStopReasonEndTurn:
 		return genai.FinishReasonStop
-	case anthropic.StopReasonMaxTokens:
+	case anthropic.BetaStopReasonMaxTokens:
 		return genai.FinishReasonMaxTokens
-	case anthropic.StopReasonToolUse:
+	case anthropic.BetaStopReasonToolUse:
 		return genai.FinishReasonOther
 	default:
 		return genai.FinishReasonUnspecified
 	}
 }
 
-// AccText concatenates all text blocks from an Anthropic message.
-func AccText(msg *anthropic.Message) string {
+// AccText concatenates all text blocks from an Anthropic Beta message.
+func AccText(msg *anthropic.BetaMessage) string {
 	if msg == nil {
 		return ""
 	}
 	var sb strings.Builder
 	for block := range slices.Values(msg.Content) {
-		if v, ok := block.AsAny().(anthropic.TextBlock); ok {
+		if v, ok := block.AsAny().(anthropic.BetaTextBlock); ok {
 			sb.WriteString(v.Text)
 		}
 	}

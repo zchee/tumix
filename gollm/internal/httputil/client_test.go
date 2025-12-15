@@ -68,8 +68,8 @@ func TestDefaultTraceEnabled(t *testing.T) {
 			t.Setenv("TUMIX_HTTP_TRACE", tc.env)
 
 			traceOnce = sync.Once{} // reset cached value
-			if got := DefaultTraceEnabled(); got != tc.want {
-				t.Fatalf("DefaultTraceEnabled() = %v, want %v (env=%q)", got, tc.want, tc.env)
+			if defaultTraceEnabled(); traceEnabled != tc.want {
+				t.Fatalf("DefaultTraceEnabled() = %v, want %v (env=%q)", traceEnabled, tc.want, tc.env)
 			}
 		})
 	}

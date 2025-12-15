@@ -4,9 +4,11 @@
 
 - This codebase is in early development. So you can plan for large-scale refactoring.
 - MUST READ the following files in the context of the ADK (Agent Development Kit):
-  - .agents/llms/adk-go.xml
-  - .agents/llms/adk-docs.xml
-  - .agents/llms/go-genai.xml
+  - .agent/llms/adk-go.xml
+  - .agent/llms/adk-docs.xml
+  - .agent/llms/go-genai.xml
+  - .agent/llms/anthropic-sdk-go.xml
+  - .agent/llm/openai-go.xml
 
 ## Project Structure
 

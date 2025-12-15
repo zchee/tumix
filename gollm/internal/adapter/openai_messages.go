@@ -21,23 +21,30 @@ import (
 	"fmt"
 	"strings"
 
-	openai "github.com/openai/openai-go/v3"
-	"github.com/openai/openai-go/v3/shared/constant"
+	"github.com/openai/openai-go/v3/responses"
 	"google.golang.org/genai"
 )
 
-// GenAIToOpenAIMessages converts GenAI content slices into OpenAI chat completion message params.
-func GenAIToOpenAIMessages(contents []*genai.Content) ([]openai.ChatCompletionMessageParamUnion, error) {
-	var msgs []openai.ChatCompletionMessageParamUnion
-	var text strings.Builder
+// GenAIToResponsesInput converts GenAI content slices into OpenAI Responses input items.
+func GenAIToResponsesInput(contents []*genai.Content) ([]responses.ResponseInputItemUnionParam, error) {
+	var items []responses.ResponseInputItemUnionParam
 
 	for i, c := range contents {
 		if c == nil {
 			continue
 		}
 
-		text.Reset()
-		toolCalls := make([]openai.ChatCompletionMessageToolCallUnionParam, 0, len(c.Parts))
+		role := toEasyRole(c.Role)
+		var text strings.Builder
+
+		flush := func() {
+			if text.Len() == 0 {
+				return
+			}
+			items = append(items, responses.ResponseInputItemParamOfMessage(text.String(), role))
+			text.Reset()
+		}
+
 		for j, part := range c.Parts {
 			if part == nil {
 				continue
@@ -48,6 +55,7 @@ func GenAIToOpenAIMessages(contents []*genai.Content) ([]openai.ChatCompletionMe
 				text.WriteString(part.Text)
 
 			case part.FunctionCall != nil:
+				flush()
 				fc := part.FunctionCall
 				if fc.Name == "" {
 					return nil, fmt.Errorf("content[%d] part[%d]: function call missing name", i, j)
@@ -57,18 +65,12 @@ func GenAIToOpenAIMessages(contents []*genai.Content) ([]openai.ChatCompletionMe
 					return nil, fmt.Errorf("content[%d] part[%d]: marshal function args: %w", i, j, err)
 				}
 
-				toolCalls = append(toolCalls, openai.ChatCompletionMessageToolCallUnionParam{
-					OfFunction: &openai.ChatCompletionMessageFunctionToolCallParam{
-						ID:   toolID(fc.ID, i, j),
-						Type: constant.ValueOf[constant.Function](),
-						Function: openai.ChatCompletionMessageFunctionToolCallFunctionParam{
-							Name:      fc.Name,
-							Arguments: string(argsJSON),
-						},
-					},
-				})
+				items = append(items,
+					responses.ResponseInputItemParamOfFunctionCall(string(argsJSON), toolID(fc.ID, i, j), fc.Name),
+				)
 
 			case part.FunctionResponse != nil:
+				flush()
 				fr := part.FunctionResponse
 				if fr.Name == "" {
 					return nil, fmt.Errorf("content[%d] part[%d]: function response missing name", i, j)
@@ -77,8 +79,9 @@ func GenAIToOpenAIMessages(contents []*genai.Content) ([]openai.ChatCompletionMe
 				if err != nil {
 					return nil, fmt.Errorf("content[%d] part[%d]: marshal function response: %w", i, j, err)
 				}
-				msgs = append(msgs,
-					openai.ToolMessage(string(data), toolID(fr.ID, i, j)),
+
+				items = append(items,
+					responses.ResponseInputItemParamOfFunctionCallOutput(toolID(fr.ID, i, j), string(data)),
 				)
 
 			default:
@@ -86,34 +89,23 @@ func GenAIToOpenAIMessages(contents []*genai.Content) ([]openai.ChatCompletionMe
 			}
 		}
 
-		role := strings.ToLower(strings.TrimSpace(c.Role))
-		switch role {
-		case genai.RoleUser:
-			msgs = append(msgs, openai.UserMessage(text.String()))
-
-		case genai.RoleModel:
-			var modelParam openai.ChatCompletionAssistantMessageParam
-			if text.Len() > 0 {
-				modelParam.Content = openai.ChatCompletionAssistantMessageParamContentUnion{
-					OfString: openai.String(text.String()),
-				}
-			}
-			if len(toolCalls) > 0 {
-				modelParam.ToolCalls = toolCalls
-			}
-			// [openai.ChatCompletionAssistantMessageParam.Role] can be elided but just in case
-			modelParam.Role = constant.ValueOf[constant.Assistant]()
-
-			msgs = append(msgs,
-				openai.ChatCompletionMessageParamUnion{
-					OfAssistant: &modelParam,
-				},
-			)
-
-		default:
-			return nil, fmt.Errorf("content[%d]: unsupported role %q", i, role)
-		}
+		flush()
 	}
 
-	return msgs, nil
+	return items, nil
+}
+
+func toEasyRole(role string) responses.EasyInputMessageRole {
+	switch strings.ToLower(strings.TrimSpace(role)) {
+	case genai.RoleUser:
+		return responses.EasyInputMessageRoleUser
+	case genai.RoleModel:
+		return responses.EasyInputMessageRoleAssistant
+	case "system":
+		return responses.EasyInputMessageRoleSystem
+	case "developer":
+		return responses.EasyInputMessageRoleDeveloper
+	default:
+		return responses.EasyInputMessageRoleUser
+	}
 }

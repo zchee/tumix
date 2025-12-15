@@ -21,57 +21,53 @@ import (
 	"fmt"
 	"strings"
 
-	openai "github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/packages/param"
+	"github.com/openai/openai-go/v3/responses"
 	"github.com/openai/openai-go/v3/shared"
 	"github.com/openai/openai-go/v3/shared/constant"
 	"google.golang.org/genai"
 )
 
-// GenAIToolsToOpenAI maps GenAI tool declarations into OpenAI chat completion tool parameters and choice options.
-func GenAIToolsToOpenAI(tools []*genai.Tool, cfg *genai.ToolConfig) (params []openai.ChatCompletionToolUnionParam, choiceOpt *openai.ChatCompletionToolChoiceOptionUnionParam) {
+// GenAIToolsToResponses maps GenAI tool declarations into Responses tool parameters and choice options.
+func GenAIToolsToResponses(tools []*genai.Tool, cfg *genai.ToolConfig) (params []responses.ToolUnionParam, choiceOpt *responses.ResponseNewParamsToolChoiceUnion) {
 	if len(tools) == 0 {
 		return nil, nil
 	}
 
-	params = make([]openai.ChatCompletionToolUnionParam, 0, len(tools))
+	params = make([]responses.ToolUnionParam, 0, len(tools))
 	for _, t := range tools {
 		for _, decl := range t.FunctionDeclarations {
 			if decl == nil || decl.Name == "" {
 				continue
 			}
 
-			fn := shared.FunctionDefinitionParam{
-				Name: decl.Name,
-			}
+			fn := responses.ToolParamOfFunction(decl.Name, nil, true)
 			if desc := strings.TrimSpace(decl.Description); desc != "" {
-				fn.Description = openai.String(desc)
+				fn.OfFunction.Description = param.NewOpt(desc)
 			}
 
-			if params, err := toFunctionParameters(decl.ParametersJsonSchema); err == nil && params != nil {
-				fn.Parameters = params
-			} else if params, err := toFunctionParameters(decl.Parameters); err == nil && params != nil {
-				fn.Parameters = params
+			if paramsJSON, err := toFunctionParameters(decl.ParametersJsonSchema); err == nil && paramsJSON != nil {
+				fn.OfFunction.Parameters = paramsJSON
+			} else if paramsJSON, err := toFunctionParameters(decl.Parameters); err == nil && paramsJSON != nil {
+				fn.OfFunction.Parameters = paramsJSON
 			}
 
-			params = append(params, openai.ChatCompletionFunctionTool(fn))
+			params = append(params, fn)
 		}
 	}
 
 	if cfg != nil && cfg.FunctionCallingConfig != nil {
 		switch cfg.FunctionCallingConfig.Mode {
 		case genai.FunctionCallingConfigModeNone:
-			choiceOpt = &openai.ChatCompletionToolChoiceOptionUnionParam{
-				OfAuto: openai.String("none"),
+			choiceOpt = &responses.ResponseNewParamsToolChoiceUnion{
+				OfToolChoiceMode: param.NewOpt(responses.ToolChoiceOptionsNone),
 			}
 
 		case genai.FunctionCallingConfigModeAny:
 			if len(cfg.FunctionCallingConfig.AllowedFunctionNames) == 1 {
-				choiceOpt = &openai.ChatCompletionToolChoiceOptionUnionParam{
-					OfFunctionToolChoice: &openai.ChatCompletionNamedToolChoiceParam{
-						Function: openai.ChatCompletionNamedToolChoiceFunctionParam{
-							Name: cfg.FunctionCallingConfig.AllowedFunctionNames[0],
-						},
-						// [openai.ChatCompletionToolChoiceOptionUnionParam.Type] can be elided but just in case
+				choiceOpt = &responses.ResponseNewParamsToolChoiceUnion{
+					OfFunctionTool: &responses.ToolChoiceFunctionParam{
+						Name: cfg.FunctionCallingConfig.AllowedFunctionNames[0],
 						Type: constant.ValueOf[constant.Function](),
 					},
 				}

@@ -16,23 +16,22 @@
 
 package gollm
 
-// AuthMethod represents the type of authentication method used.
-type AuthMethod interface {
-	value() string
+import (
+	"testing"
+)
+
+func TestLLMNames(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]string{
+		"anthropic": (&anthropicLLM{name: "claude"}).Name(),
+		"openai":    (&openAILLM{name: "gpt"}).Name(),
+		"xai":       (&xaiLLM{name: "grok"}).Name(),
+	}
+
+	for provider, got := range cases {
+		if got == "" {
+			t.Fatalf("%s Name() empty", provider)
+		}
+	}
 }
-
-// AuthMethodAPIKey represents API key authentication.
-type AuthMethodAPIKey string
-
-var _ AuthMethod = AuthMethodAPIKey("")
-
-// value returns the API key string for the data plane.
-func (a AuthMethodAPIKey) value() string { return string(a) }
-
-// AuthMethodAPIToken represents API token authentication.
-type AuthMethodAPIToken string
-
-var _ AuthMethod = AuthMethodAPIToken("")
-
-// value returns the API token string for the data plane.
-func (a AuthMethodAPIToken) value() string { return string(a) }

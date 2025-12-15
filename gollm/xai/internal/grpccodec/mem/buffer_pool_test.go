@@ -106,3 +106,45 @@ func TestBufferPoolIgnoresShortBuffers(t *testing.T) {
 	// pool, it could cause a panic.
 	pool.Get(10)
 }
+
+func TestTieredBufferPoolClearsIntermediateSizes(t *testing.T) {
+	const (
+		smallTier = 32 << 10
+		largeTier = 1 << 20
+		reqSize   = 40 << 10
+	)
+
+	pool := mem.NewTieredBufferPool(smallTier, largeTier)
+
+	for {
+		buf1 := pool.Get(reqSize)
+		for i := range *buf1 {
+			(*buf1)[i] = 0xFF
+		}
+		pool.Put(buf1)
+
+		buf2 := pool.Get(reqSize)
+		if unsafe.SliceData(*buf1) != unsafe.SliceData(*buf2) {
+			pool.Put(buf2)
+			// Try again until the pool reuses the same buffer.
+			continue
+		}
+
+		if !bytes.Equal(*buf2, make([]byte, reqSize)) {
+			t.Fatalf("buffer not cleared for intermediate size request")
+		}
+		pool.Put(buf2)
+		break
+	}
+}
+
+func TestDefaultBufferPoolHasIntermediateTiers(t *testing.T) {
+	pool := mem.DefaultBufferPool()
+
+	const reqSize = 40 << 10 // between 32KB and 64KB tiers
+	buf := pool.Get(reqSize)
+	if gotCap := cap(*buf); gotCap != 64<<10 {
+		t.Fatalf("DefaultBufferPool.Get(%d) cap=%d, want %d", reqSize, gotCap, 64<<10)
+	}
+	pool.Put(buf)
+}

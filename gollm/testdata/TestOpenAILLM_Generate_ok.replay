@@ -1,5 +1,5 @@
 {
-  "Initial": "AQAAAA7gwBoRDO9bCAIc",
+  "Initial": "AQAAAA7gyqo9G9Rf2AIc",
   "Version": "0.2",
   "Converter": {
     "ScrubBody": null,
@@ -25,7 +25,8 @@
       "^X-Stainless-Arch$",
       "^X-Stainless-Os$",
       "^X-Stainless-Retry-Count$",
-      "^X-Stainless-Runtime-Version$"
+      "^X-Stainless-Runtime-Version$",
+      "^X-Api-Key$"
     ],
     "RemoveResponseHeaders": [
       "^X-Google-.*$",
@@ -39,16 +40,16 @@
   },
   "Entries": [
     {
-      "ID": "e0568e2f4f142232",
+      "ID": "a38bf18a844b1eab",
       "Request": {
         "Method": "POST",
-        "URL": "https://api.openai.com/v1/chat/completions",
+        "URL": "https://api.openai.com/v1/responses",
         "Header": {
           "Accept": [
             "application/json"
           ],
           "Content-Length": [
-            "94"
+            "88"
           ],
           "X-Stainless-Lang": [
             "go"
@@ -62,7 +63,7 @@
         },
         "MediaType": "application/json",
         "BodyParts": [
-          "eyJtZXNzYWdlcyI6W3siY29udGVudCI6IldoYXQgaXMgdGhlIGNhcGl0YWwgb2YgRnJhbmNlPyIsInJvbGUiOiJ1c2VyIn1dLCJtb2RlbCI6ImdwdC01LW1pbmkifQ=="
+          "eyJpbnB1dCI6W3siY29udGVudCI6IldoYXQgaXMgdGhlIGNhcGl0YWwgb2YgRnJhbmNlPyIsInJvbGUiOiJ1c2VyIn1dLCJtb2RlbCI6ImdwdC01LjEifQ=="
         ]
       },
       "Response": {
@@ -71,9 +72,6 @@
         "ProtoMajor": 1,
         "ProtoMinor": 1,
         "Header": {
-          "Access-Control-Expose-Headers": [
-            "X-Request-ID"
-          ],
           "Alt-Svc": [
             "h3=\":443\"; ma=86400"
           ],
@@ -81,7 +79,7 @@
             "DYNAMIC"
           ],
           "Cf-Ray": [
-            "9a7652cdc88f8a78-NRT"
+            "9ab857e0d95e781c-NRT"
           ],
           "Content-Encoding": [
             "gzip"
@@ -90,10 +88,10 @@
             "application/json"
           ],
           "Date": [
-            "Mon, 01 Dec 2025 23:21:54 GMT"
+            "Tue, 09 Dec 2025 23:39:42 GMT"
           ],
           "Openai-Processing-Ms": [
-            "653"
+            "611"
           ],
           "Openai-Version": [
             "2020-10-01"
@@ -108,34 +106,31 @@
             "nosniff"
           ],
           "X-Envoy-Upstream-Service-Time": [
-            "806"
-          ],
-          "X-Openai-Proxy-Wasm": [
-            "v0.1"
+            "615"
           ],
           "X-Ratelimit-Limit-Requests": [
-            "30000"
+            "15000"
           ],
           "X-Ratelimit-Limit-Tokens": [
-            "180000000"
+            "40000000"
           ],
           "X-Ratelimit-Remaining-Requests": [
-            "29999"
+            "14999"
           ],
           "X-Ratelimit-Remaining-Tokens": [
-            "179999988"
+            "40000000"
           ],
           "X-Ratelimit-Reset-Requests": [
-            "2ms"
+            "4ms"
           ],
           "X-Ratelimit-Reset-Tokens": [
             "0s"
           ],
           "X-Request-Id": [
-            "req_8a3c647088cf436d996e68629ec5d66e"
+            "req_dc9a9133ff8543888f7828e9c80dab73"
           ]
         },
-        "Body": "H4sIAAAAAAAAA4xSTWvbQBC961cMe7aCbCd262MCDYQcQig9pAQxWY2kSbUf7I5L3eD/Xnb9IYWm0IsO8+Y9vfd23goAxY3agNI9ijZ+KG94/e3O3P7G9rFdVf5yfd+Z3fz6yTyGpxs1Swz38kpaTqwL7YwfSNjZA6wDoVBSna9Xl6vlfDlfZsC4hoZE67yUV6Vhy+WiWlyV1aeyWh/JvWNNUW3gewEA8Ja/yaZt6JfaQDU7TQzFiB2pzXkJQAU3pInCGDkKWlGzEdTOCtns/GtPoNGz4ACuhS8BrSbgCA8YOF5MWYHabcRk3G6HYQKgtU4wBc9+n4/I/uywZcuxrwNhdDb9NYrzKqP7AuA5J96+C6F8cMZLLe4HZdlDd9n8qeYJuDqC4gSHcb74PPtArW5IkIc4aUxp1D01I3OsF7cNuwlQTLL9beYj7UNutt3/yI+A1uSFmtoHali/DzyuBUpH+K+1c8fZsIoUfrKmWphCegcf2AWW3eHm4i4Kmbpl21HwgfOFpLcu9sUfAAAA//8DACAkgSYjAwAA"
+        "Body": "H4sIAAAAAAAAAwAAAP//fFTLbuMwDLznKwSdm8KPJnHyAXvew96KhUHLdKqNLAoSFTQo8u8Ly7ETb9u92RxyRHJG+lgJIXUrD0J6DK7O1GZfvGCL233XFU2XZdt9WTVl2TYZVlW+L2GP7bbEptpvqu1L1cingYKaP6h4oiEbcIwrj8DY1jBg+W67KYtyU+UJCwwcw1CjqHcGGduxqAF1OnqKduirAxNwDGtjtD3Kg/hYCSGEdHBBP9S3eEZDDr1cCXFNyeg9DZiNxqSAttMpdYsM2oQlGthHxZrsIt7De02RXeSa6YSfQSYytQKzpOupRTN0dnS83jzn6yIrNus8X+flbV+JUx7EaxplHGiWog/H/yjRFTs1KFHt2nK73yEWTbHrdpvEnFj44jDxYAhwxDvw3coTqMgy2ntTj40taKeF4DvP1SkBrCWGaYmvvxegoaPz1HyBJKKDkL/eUChwmsEI6sQPD1ah0EH8BK/Ds5xrrrevmUZ6Mqk1CEEHBstj8pCYkqQDD8agWQrGPo7ech7PmmKoJ/vWSYlZUOepd1wrUG9Yn/DyLeZx2KEm+5jhEQLZhXex68inqS3ZSSEZYt+Dn9hnMwfokC+1bgfqTuPC2AH9WSuseYxL5zV5zRd5u2Tk8XFSxt6hB44pnD9nt2iS4NZcR76H+/+D9ClvXO2t5TP6hsJwXjJcq2N/v4Xjst9Iq1GdyCRn4O4EyeTqB39kc9A99uijVXDbrWx1gMZMT0ZMPp8H0HZxY/Py6XP84RmYx0watvfCbDHqvw9BvvsK+Ip3NsB31EwM5g6W2bzCGJZy98jQAsNAf11d/wIAAP//AwDsnOdrwQUAAA=="
       }
     }
   ]

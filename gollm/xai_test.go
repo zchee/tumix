@@ -44,20 +44,22 @@ func TestXAILLM_Generate(t *testing.T) {
 				Config:   &genai.GenerateContentConfig{},
 			},
 			want: &model.LLMResponse{
-				Content: genai.NewContentFromText("**Paris** is the capital of France. \n\n"+
-					"This has been the case since 987 AD under the Capetian dynasty, when Hugh Capet established it as the political center. "+
-					"Paris remains the seat of the French government, including the Élysée Palace (presidential residence), the National Assembly, and the Senate. "+
-					"It's also France's largest city, with a population of about 2.1 million in the city proper and 12.6 million in the metropolitan area (INSEE data, 2023).", genai.RoleModel),
+				Content: genai.NewContentFromText(
+					"**Paris** is the capital of France. \n\n"+
+						"This has been the case since 987 AD, when Hugh Capet established the Capetian dynasty there, and it's confirmed by official sources like the French government's website and the CIA World Factbook. "+
+						"Paris serves as the political, cultural, and economic center, housing the Eiffel Tower, Louvre, and national government institutions.",
+					genai.RoleModel,
+				),
 				UsageMetadata: &genai.GenerateContentResponseUsageMetadata{
-					CachedContentTokenCount: 161,
-					CandidatesTokenCount:    104,
+					CachedContentTokenCount: 174,
+					CandidatesTokenCount:    73,
 					PromptTokenCount:        175,
 					ThoughtsTokenCount:      0,
-					TotalTokenCount:         279,
+					TotalTokenCount:         248,
 				},
 				CustomMetadata: map[string]any{
 					"xai_finish_reason":      "REASON_STOP",
-					"xai_system_fingerprint": "fp_ed3b9934bf",
+					"xai_system_fingerprint": "fp_2daa9bdef5",
 				},
 				FinishReason: genai.FinishReasonStop,
 			},
@@ -74,7 +76,7 @@ func TestXAILLM_Generate(t *testing.T) {
 			mgmtConn, cleanup2 := rr.NewGRPCConn(t, "xai-management", xai.ManagementAPIHost, xai.BuildDialOptions(opts, managementKey)...)
 			t.Cleanup(cleanup2)
 
-			llm, err := NewXAILLM(t.Context(), AuthMethodAPIKey(apiKey), tt.modelName,
+			llm, err := NewXAILLM(t.Context(), apiKey, tt.modelName, nil,
 				xai.WithAPIConn(conn),
 				xai.WithManagementConn(mgmtConn),
 			)
@@ -110,7 +112,7 @@ func TestXAILLM_GenerateStream(t *testing.T) {
 		"ok": {
 			modelName: "grok-4-1-fast-non-reasoning",
 			req: &model.LLMRequest{
-				Contents: genai.Text("What is the capital of France? One word."),
+				Contents: genai.Text("What is the capital of France? Answer is should be one word."),
 				Config:   &genai.GenerateContentConfig{},
 			},
 			want: "Paris",
@@ -127,7 +129,7 @@ func TestXAILLM_GenerateStream(t *testing.T) {
 			mgmtConn, cleanup2 := rr.NewGRPCConn(t, "xai-management", xai.ManagementAPIHost, xai.BuildDialOptions(opts, managementKey)...)
 			t.Cleanup(cleanup2)
 
-			llm, err := NewXAILLM(t.Context(), AuthMethodAPIKey(apiKey), tt.modelName,
+			llm, err := NewXAILLM(t.Context(), apiKey, tt.modelName, nil,
 				xai.WithAPIConn(conn),
 				xai.WithManagementConn(mgmtConn),
 			)
