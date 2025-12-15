@@ -383,6 +383,18 @@ func TestAppendDelta(t *testing.T) {
 	}
 }
 
+func TestIsZeroPart(t *testing.T) {
+	if isZeroPart(nil) {
+		t.Fatalf("isZeroPart(nil) = true, want false")
+	}
+	if !isZeroPart(&genai.Part{}) {
+		t.Fatalf("isZeroPart(empty Part) = false, want true")
+	}
+	if isZeroPart(&genai.Part{Text: "x"}) {
+		t.Fatalf("isZeroPart(text Part) = true, want false")
+	}
+}
+
 func BenchmarkXAIStreamAggregator(b *testing.B) {
 	ctx := b.Context()
 	lengths := []int{

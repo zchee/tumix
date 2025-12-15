@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"iter"
-	"reflect"
 	"strings"
 
 	"google.golang.org/adk/model"
@@ -89,7 +88,7 @@ func (s *XAIStreamAggregator) aggregateResponse(llmResponse *model.LLMResponse) 
 
 	// gemini 3 in streaming returns a last response with an empty part. We need to filter it out.
 	// TODO(zchee): This logic for the gemini 3.
-	if part0 != nil && reflect.ValueOf(*part0).IsZero() {
+	if isZeroPart(part0) {
 		llmResponse.Partial = true
 		return nil
 	}
@@ -157,4 +156,21 @@ func appendDeltaToBuilder(incoming string, acc *strings.Builder) string {
 
 	acc.WriteString(delta)
 	return delta
+}
+
+func isZeroPart(p *genai.Part) bool {
+	if p == nil {
+		return false
+	}
+	return p.MediaResolution == nil &&
+		p.CodeExecutionResult == nil &&
+		p.ExecutableCode == nil &&
+		p.FileData == nil &&
+		p.FunctionCall == nil &&
+		p.FunctionResponse == nil &&
+		p.InlineData == nil &&
+		p.Text == "" &&
+		!p.Thought &&
+		len(p.ThoughtSignature) == 0 &&
+		p.VideoMetadata == nil
 }
