@@ -34,7 +34,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.38.0
 	go.opentelemetry.io/otel/trace v1.38.0
 	google.golang.org/adk v0.2.1-0.20251202162810-24465d0c9d00 // @main
-	google.golang.org/genai v1.36.0
+	google.golang.org/genai v1.39.0
 	google.golang.org/grpc v1.77.0
 	google.golang.org/protobuf v1.36.10
 )
