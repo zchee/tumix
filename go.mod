@@ -36,7 +36,7 @@ require (
 	google.golang.org/adk v0.2.1-0.20251202162810-24465d0c9d00 // @main
 	google.golang.org/genai v1.36.0
 	google.golang.org/grpc v1.77.0
-	google.golang.org/protobuf v1.36.10
+	google.golang.org/protobuf v1.36.11
 )
 
 require (
