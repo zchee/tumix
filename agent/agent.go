@@ -152,9 +152,9 @@ func NewCoTAgent(llm model.LLM, genCfg *genai.GenerateContentConfig) (agent.Agen
 - Short name: {CoT}`,
 		Model:                 llm,
 		GenerateContentConfig: cloneGenConfig(genCfg),
-		Instruction: `• Analyze the question step by step and try to list all the careful points.
-• Then try to acquire the final answer with step by step analysis.
-• In the end of your response, directly output the answer to the question.
+		Instruction: `* Analyze the question step by step and try to list all the careful points.
+* Then try to acquire the final answer with step by step analysis.
+* In the end of your response, directly output the answer to the question.
 
 **Do not output the code for execution.**`,
 	}

@@ -43,7 +43,7 @@ func NewAutoAgents(llm model.LLM, genCfg *genai.GenerateContentConfig, n int) ([
 			GenerateContentConfig: cloneGenConfig(genCfg),
 			Instruction: fmt.Sprintf(`You are an auto-designed agent. Primary focus: %s.
 Use chain-of-thought, then pick a single best action: plain answer, one python block, or one <search>…</search> query.
-Do not mix code and search in the same turn. Respond with final answer inside «< and »>.`, emphasis),
+Do not mix code and search in the same turn. Respond with final answer inside `+code(`<<<`)+` and `+code(`>>>`)+`.`, emphasis),
 		}
 		applySharedContext(&cfg)
 		a, err := llmagent.New(cfg)
