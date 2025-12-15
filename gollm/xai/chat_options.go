@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/invopop/jsonschema"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/proto"
@@ -221,6 +222,7 @@ type ChatSession struct {
 	chat           xaipb.ChatClient
 	request        *xaipb.GetCompletionsRequest
 	conversationID string
+	spanReqAttrs   *[]attribute.KeyValue
 }
 
 // Append adds a message or response to the chat session.
@@ -244,6 +246,7 @@ func (s *ChatSession) Append(message any) *ChatSession {
 		panic("append accepts *pb.Message or *Response")
 	}
 
+	s.spanReqAttrs = nil
 	return s
 }
 

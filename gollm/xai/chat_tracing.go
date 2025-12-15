@@ -28,6 +28,10 @@ import (
 
 //nolint:cyclop,gocyclo,gocognit // TODO(zchee): fix nolint
 func (s *ChatSession) makeSpanRequestAttributes() []attribute.KeyValue {
+	if s.spanReqAttrs != nil {
+		return *s.spanReqAttrs
+	}
+
 	msgs := s.request.GetMessages()
 	attrs := make([]attribute.KeyValue, 0, 18+len(msgs)*6)
 
@@ -81,28 +85,33 @@ func (s *ChatSession) makeSpanRequestAttributes() []attribute.KeyValue {
 		attrs = append(attrs, attribute.String("gen_ai.request.previous_response_id", s.request.GetPreviousResponseId()))
 	}
 
-	var contentBuf strings.Builder
 	for i, msg := range msgs {
 		prefix := "gen_ai.prompt." + strconv.Itoa(i)
 		role := messageRoleLower(msg.GetRole())
 		attrs = append(attrs, attribute.String(prefix+".role", role))
 
-		contentBuf.Reset()
+		var content string
 		if parts := msg.GetContent(); len(parts) > 0 {
-			total := 0
-			for _, c := range parts {
-				total += len(c.GetText())
-			}
-			if total > 0 {
-				contentBuf.Grow(total)
+			if len(parts) == 1 {
+				content = parts[0].GetText()
+			} else {
+				total := 0
 				for _, c := range parts {
-					if txt := c.GetText(); txt != "" {
-						contentBuf.WriteString(txt)
+					total += len(c.GetText())
+				}
+				if total > 0 {
+					var b strings.Builder
+					b.Grow(total)
+					for _, c := range parts {
+						if txt := c.GetText(); txt != "" {
+							b.WriteString(txt)
+						}
 					}
+					content = b.String()
 				}
 			}
 		}
-		attrs = append(attrs, attribute.String(prefix+".content", contentBuf.String()))
+		attrs = append(attrs, attribute.String(prefix+".content", content))
 
 		if msg.GetRole() == xaipb.MessageRole_ROLE_ASSISTANT {
 			if tcs := msg.GetToolCalls(); len(tcs) > 0 {
@@ -116,6 +125,7 @@ func (s *ChatSession) makeSpanRequestAttributes() []attribute.KeyValue {
 		}
 	}
 
+	s.spanReqAttrs = &attrs
 	return attrs
 }
 
