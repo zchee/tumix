@@ -91,7 +91,7 @@ func (s *ChatSession) makeSpanRequestAttributes() []attribute.KeyValue {
 		attrs = append(attrs, attribute.String(prefix+".role", role))
 
 		var content string
-		if parts := msg.GetContent(); len(parts) > 0 {
+		if parts := msg.GetContent(); len(parts) > 0 { //nolint:nestif // TODO(zchee): fix notlint
 			if len(parts) == 1 {
 				content = parts[0].GetText()
 			} else {
