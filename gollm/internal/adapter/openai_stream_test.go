@@ -17,6 +17,7 @@
 package adapter
 
 import (
+	"strconv"
 	"testing"
 
 	"github.com/openai/openai-go/v3/responses"
@@ -37,5 +38,56 @@ func BenchmarkOpenAIStreamAggregator(b *testing.B) {
 		if final := agg.Final(); final == nil {
 			b.Fatalf("Final() returned nil")
 		}
+	}
+}
+
+func BenchmarkOpenAIStreamAggregatorToolCalls(b *testing.B) {
+	tests := []struct {
+		name          string
+		toolCalls     int
+		deltasPerCall int
+	}{
+		{name: "calls=4", toolCalls: 4, deltasPerCall: 4},
+		{name: "calls=16", toolCalls: 16, deltasPerCall: 4},
+		{name: "calls=64", toolCalls: 64, deltasPerCall: 4},
+		{name: "calls=256", toolCalls: 256, deltasPerCall: 4},
+	}
+
+	for _, tt := range tests {
+		b.Run(tt.name, func(b *testing.B) {
+			events := make([]responses.ResponseStreamEventUnion, 0, tt.toolCalls*(tt.deltasPerCall+1))
+			for i := 0; i < tt.toolCalls; i++ {
+				id := "tool-" + strconv.Itoa(i)
+				for j := 0; j < tt.deltasPerCall; j++ {
+					events = append(events, responses.ResponseStreamEventUnion{
+						Type:        "response.function_call_arguments.delta",
+						OutputIndex: int64(i),
+						ItemID:      id,
+						Delta:       `{"x":`,
+					})
+				}
+				events = append(events, responses.ResponseStreamEventUnion{
+					Type:        "response.function_call_arguments.done",
+					OutputIndex: int64(i),
+					ItemID:      id,
+					Name:        "fn",
+					Arguments:   `{"x":1}`,
+				})
+			}
+
+			b.ReportAllocs()
+			for b.Loop() {
+				agg := NewOpenAIStreamAggregator(nil)
+				for i := range events {
+					agg.Process(&events[i])
+				}
+				if got := len(agg.toolCalls); got != tt.toolCalls {
+					b.Fatalf("len(toolCalls)=%d, want %d", got, tt.toolCalls)
+				}
+				if agg.Err() != nil {
+					b.Fatalf("unexpected err: %v", agg.Err())
+				}
+			}
+		})
 	}
 }

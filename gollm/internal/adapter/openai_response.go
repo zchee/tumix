@@ -45,25 +45,26 @@ func OpenAIResponseToLLM(resp *responses.Response, stopSequences []string) (*mod
 
 	for i := range resp.Output {
 		item := &resp.Output[i]
-		typ := strings.ToLower(strings.TrimSpace(item.Type))
-		switch typ {
-		case "message":
+		typ := strings.TrimSpace(item.Type)
+		switch {
+		case strings.EqualFold(typ, "message"):
 			for ci := range item.Content {
 				c := &item.Content[ci]
-				switch strings.ToLower(strings.TrimSpace(c.Type)) {
-				case "output_text":
+				ctype := strings.TrimSpace(c.Type)
+				switch {
+				case strings.EqualFold(ctype, "output_text"):
 					if c.Text != "" {
 						parts = append(parts, genai.NewPartFromText(c.Text))
 						sawText = true
 					}
-				case "refusal":
+				case strings.EqualFold(ctype, "refusal"):
 					if c.Refusal != "" {
 						parts = append(parts, genai.NewPartFromText(c.Refusal))
 						sawText = true
 					}
 				}
 			}
-		case "function_call":
+		case strings.EqualFold(typ, "function_call"):
 			fnID := item.CallID
 			if fnID == "" {
 				fnID = item.ID
@@ -75,7 +76,7 @@ func OpenAIResponseToLLM(resp *responses.Response, stopSequences []string) (*mod
 					Args: parseArgs(item.Arguments),
 				},
 			})
-		case "shell_call_output":
+		case strings.EqualFold(typ, "shell_call_output"):
 			out := responseOutputUnionToAny(&item.Output)
 			name := item.CallID
 			if name == "" {
@@ -123,6 +124,8 @@ type toolCallState struct {
 type OpenAIStreamAggregator struct {
 	text      strings.Builder
 	toolCalls []*toolCallState
+	byIndex   map[int64]*toolCallState
+	byID      map[string]*toolCallState
 	usage     *responses.ResponseUsage
 	status    responses.ResponseStatus
 	final     *model.LLMResponse
@@ -174,7 +177,16 @@ func (a *OpenAIStreamAggregator) Process(event *responses.ResponseStreamEventUni
 			state.args.WriteString(event.Arguments)
 		}
 		if event.ItemID != "" {
+			if a.byID != nil && state.id != "" && state.id != event.ItemID {
+				delete(a.byID, state.id)
+			}
+			if a.byIndex != nil {
+				delete(a.byIndex, state.index)
+			}
 			state.id = event.ItemID
+			if a.byID != nil {
+				a.byID[event.ItemID] = state
+			}
 		}
 		return nil
 
@@ -263,7 +275,68 @@ func (a *OpenAIStreamAggregator) Err() error {
 	return a.err
 }
 
+const toolCallLookupThreshold = 32
+
+func (a *OpenAIStreamAggregator) maybeInitToolCallLookup() {
+	if a.byID != nil || len(a.toolCalls) < toolCallLookupThreshold {
+		return
+	}
+
+	byID := make(map[string]*toolCallState, len(a.toolCalls))
+	var byIndex map[int64]*toolCallState
+	for _, tc := range a.toolCalls {
+		if tc.id != "" {
+			byID[tc.id] = tc
+			continue
+		}
+		if byIndex == nil {
+			byIndex = make(map[int64]*toolCallState, len(a.toolCalls))
+		}
+		byIndex[tc.index] = tc
+	}
+
+	a.byID = byID
+	a.byIndex = byIndex
+}
+
 func (a *OpenAIStreamAggregator) ensureToolCall(idx int64, id string) *toolCallState {
+	if a.byID != nil {
+		if id != "" {
+			if tc := a.byID[id]; tc != nil {
+				return tc
+			}
+			if a.byIndex != nil {
+				if tc := a.byIndex[idx]; tc != nil {
+					delete(a.byIndex, idx)
+					tc.id = id
+					a.byID[id] = tc
+					return tc
+				}
+			}
+
+			tc := &toolCallState{
+				id:    id,
+				index: idx,
+			}
+			a.toolCalls = append(a.toolCalls, tc)
+			a.byID[id] = tc
+			return tc
+		}
+
+		if a.byIndex == nil {
+			a.byIndex = make(map[int64]*toolCallState, 1)
+		}
+		if tc := a.byIndex[idx]; tc != nil {
+			return tc
+		}
+		tc := &toolCallState{
+			index: idx,
+		}
+		a.toolCalls = append(a.toolCalls, tc)
+		a.byIndex[idx] = tc
+		return tc
+	}
+
 	for _, tc := range a.toolCalls {
 		if tc.index == idx || (id != "" && tc.id == id) {
 			return tc
@@ -275,6 +348,15 @@ func (a *OpenAIStreamAggregator) ensureToolCall(idx int64, id string) *toolCallS
 		index: idx,
 	}
 	a.toolCalls = append(a.toolCalls, tc)
+
+	a.maybeInitToolCallLookup()
+	if a.byID != nil {
+		if id != "" {
+			a.byID[id] = tc
+		} else if a.byIndex != nil {
+			a.byIndex[idx] = tc
+		}
+	}
 
 	return tc
 }

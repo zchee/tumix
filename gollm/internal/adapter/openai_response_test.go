@@ -17,11 +17,13 @@
 package adapter
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/openai/openai-go/v3/shared/constant"
+	"google.golang.org/adk/model"
 	"google.golang.org/genai"
 )
 
@@ -35,6 +37,40 @@ func BenchmarkParseArgs(b *testing.B) {
 }
 
 const longJSONFragment = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+var sinkOpenAIResponseToLLM *model.LLMResponse
+
+func BenchmarkOpenAIResponseToLLM(b *testing.B) {
+	const items = 64
+
+	output := make([]responses.ResponseOutputItemUnion, 0, items)
+	for range items {
+		output = append(output, responses.ResponseOutputItemUnion{
+			Type: "message",
+			Role: constant.ValueOf[constant.Assistant](),
+			Content: []responses.ResponseOutputMessageContentUnion{
+				{
+					Type: "output_text",
+					Text: "hello",
+				},
+			},
+		})
+	}
+
+	resp := responses.Response{
+		Status: responses.ResponseStatusCompleted,
+		Output: output,
+	}
+
+	b.ReportAllocs()
+	for b.Loop() {
+		llm, err := OpenAIResponseToLLM(&resp, nil)
+		if err != nil {
+			b.Fatalf("OpenAIResponseToLLM: %v", err)
+		}
+		sinkOpenAIResponseToLLM = llm
+	}
+}
 
 func TestTrimAtStop(t *testing.T) {
 	t.Parallel()
@@ -187,6 +223,109 @@ func TestOpenAIStreamAggregator_FinalFromAccumulated(t *testing.T) {
 	}
 	if final.FinishReason != genai.FinishReasonStop {
 		t.Fatalf("finish = %v, want stop", final.FinishReason)
+	}
+}
+
+func TestOpenAIStreamAggregator_ManyToolCalls(t *testing.T) {
+	t.Parallel()
+
+	const toolCalls = 32
+	agg := NewOpenAIStreamAggregator(nil)
+
+	for i := toolCalls - 1; i >= 0; i-- {
+		id := fmt.Sprintf("tool-%d", i)
+		// Deliberately send multiple events per tool call to exercise the lookup path.
+		for j := 0; j < 3; j++ {
+			agg.Process(&responses.ResponseStreamEventUnion{
+				Type:        "response.function_call_arguments.delta",
+				OutputIndex: int64(i),
+				ItemID:      id,
+				Delta:       `{"i":`,
+			})
+		}
+
+		agg.Process(&responses.ResponseStreamEventUnion{
+			Type:        "response.function_call_arguments.done",
+			OutputIndex: int64(i),
+			ItemID:      id,
+			Name:        "fn",
+			Arguments:   fmt.Sprintf(`{"i":%d}`, i),
+		})
+	}
+
+	final := agg.Final()
+	if final == nil {
+		t.Fatalf("Final() nil")
+	}
+	if final.Content == nil {
+		t.Fatalf("Final().Content nil: %+v", final)
+	}
+	if got := len(final.Content.Parts); got != toolCalls {
+		t.Fatalf("len(parts)=%d, want %d", got, toolCalls)
+	}
+
+	for i := range toolCalls {
+		part := final.Content.Parts[i]
+		if part == nil || part.FunctionCall == nil {
+			t.Fatalf("part[%d] missing FunctionCall: %+v", i, part)
+		}
+		if got, want := part.FunctionCall.ID, fmt.Sprintf("tool-%d", i); got != want {
+			t.Fatalf("part[%d].FunctionCall.ID=%q, want %q", i, got, want)
+		}
+		if got, want := part.FunctionCall.Name, "fn"; got != want {
+			t.Fatalf("part[%d].FunctionCall.Name=%q, want %q", i, got, want)
+		}
+		if got := part.FunctionCall.Args["i"]; got != float64(i) {
+			t.Fatalf("part[%d].FunctionCall.Args[i]=%v, want %v", i, got, float64(i))
+		}
+	}
+}
+
+func TestOpenAIStreamAggregator_ToolCallIDArrivesLate(t *testing.T) {
+	t.Parallel()
+
+	agg := NewOpenAIStreamAggregator(nil)
+
+	for i := 0; i < toolCallLookupThreshold; i++ {
+		agg.Process(&responses.ResponseStreamEventUnion{
+			Type:        "response.function_call_arguments.delta",
+			OutputIndex: int64(i),
+			Delta:       "",
+		})
+	}
+
+	// This is a correctness edge case: a tool call can exist without an item_id
+	// when lookup maps have already been initialized. We must not create a
+	// duplicate tool call once the ID appears.
+	agg.Process(&responses.ResponseStreamEventUnion{
+		Type:        "response.function_call_arguments.done",
+		OutputIndex: 0,
+		ItemID:      "tool-0",
+		Name:        "fn",
+		Arguments:   `{"i":0}`,
+	})
+
+	if got := len(agg.toolCalls); got != toolCallLookupThreshold {
+		t.Fatalf("len(toolCalls)=%d, want %d", got, toolCallLookupThreshold)
+	}
+
+	final := agg.Final()
+	if final == nil || final.Content == nil || len(final.Content.Parts) == 0 {
+		t.Fatalf("Final() returned empty response: %+v", final)
+	}
+
+	part0 := final.Content.Parts[0]
+	if part0 == nil || part0.FunctionCall == nil {
+		t.Fatalf("final part missing FunctionCall: %+v", part0)
+	}
+	if got, want := part0.FunctionCall.ID, "tool-0"; got != want {
+		t.Fatalf("FunctionCall.ID=%q, want %q", got, want)
+	}
+	if got, want := part0.FunctionCall.Name, "fn"; got != want {
+		t.Fatalf("FunctionCall.Name=%q, want %q", got, want)
+	}
+	if got := part0.FunctionCall.Args["i"]; got != float64(0) {
+		t.Fatalf("FunctionCall.Args[i]=%v, want %v", got, float64(0))
 	}
 }
 
