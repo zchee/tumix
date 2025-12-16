@@ -27,6 +27,7 @@ func (m *IndexedChunk) CloneVT() *IndexedChunk {
 		return (*IndexedChunk)(nil)
 	}
 	r := new(IndexedChunk)
+	r.ChunkId = m.ChunkId
 	r.ChunkNumber = m.ChunkNumber
 	r.Data = m.Data
 	if rhs := m.Vector; rhs != nil {
@@ -167,6 +168,9 @@ func (this *IndexedChunk) EqualVT(that *IndexedChunk) bool {
 		return false
 	}
 	if string(this.DataHash) != string(that.DataHash) {
+		return false
+	}
+	if this.ChunkId != that.ChunkId {
 		return false
 	}
 	return string(this.unknownFields) == string(that.unknownFields)
@@ -358,6 +362,13 @@ func (m *IndexedChunk) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.ChunkId) > 0 {
+		i -= len(m.ChunkId)
+		copy(dAtA[i:], m.ChunkId)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.ChunkId)))
+		i--
+		dAtA[i] = 0x2a
 	}
 	if len(m.DataHash) > 0 {
 		i -= len(m.DataHash)
@@ -662,6 +673,13 @@ func (m *IndexedChunk) MarshalToSizedBufferVTStrict(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if len(m.ChunkId) > 0 {
+		i -= len(m.ChunkId)
+		copy(dAtA[i:], m.ChunkId)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.ChunkId)))
+		i--
+		dAtA[i] = 0x2a
+	}
 	if len(m.DataHash) > 0 {
 		i -= len(m.DataHash)
 		copy(dAtA[i:], m.DataHash)
@@ -960,6 +978,10 @@ func (m *IndexedChunk) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
+	l = len(m.ChunkId)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -1228,6 +1250,38 @@ func (m *IndexedChunk) UnmarshalVT(dAtA []byte) error {
 			if m.DataHash == nil {
 				m.DataHash = []byte{}
 			}
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ChunkId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ChunkId = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -1885,6 +1939,42 @@ func (m *IndexedChunk) UnmarshalVTUnsafe(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.DataHash = dAtA[iNdEx:postIndex]
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ChunkId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			var stringValue string
+			if intStringLen > 0 {
+				stringValue = unsafe.String(&dAtA[iNdEx], intStringLen)
+			}
+			m.ChunkId = stringValue
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

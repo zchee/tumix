@@ -713,12 +713,12 @@ func (m *Tool_Mcp) CloneVT() isTool_Tool {
 	return r
 }
 
-func (m *Tool_DocumentSearch) CloneVT() isTool_Tool {
+func (m *Tool_AttachmentSearch) CloneVT() isTool_Tool {
 	if m == nil {
-		return (*Tool_DocumentSearch)(nil)
+		return (*Tool_AttachmentSearch)(nil)
 	}
-	r := new(Tool_DocumentSearch)
-	r.DocumentSearch = m.DocumentSearch.CloneVT()
+	r := new(Tool_AttachmentSearch)
+	r.AttachmentSearch = m.AttachmentSearch.CloneVT()
 	return r
 }
 
@@ -853,6 +853,15 @@ func (m *CollectionsSearch) CloneVT() *CollectionsSearch {
 		tmpVal := *rhs
 		r.Limit = &tmpVal
 	}
+	if rhs := m.Instructions; rhs != nil {
+		tmpVal := *rhs
+		r.Instructions = &tmpVal
+	}
+	if m.RetrievalMode != nil {
+		r.RetrievalMode = m.RetrievalMode.(interface {
+			CloneVT() isCollectionsSearch_RetrievalMode
+		}).CloneVT()
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -864,11 +873,38 @@ func (m *CollectionsSearch) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
-func (m *DocumentSearch) CloneVT() *DocumentSearch {
+func (m *CollectionsSearch_HybridRetrieval) CloneVT() isCollectionsSearch_RetrievalMode {
 	if m == nil {
-		return (*DocumentSearch)(nil)
+		return (*CollectionsSearch_HybridRetrieval)(nil)
 	}
-	r := new(DocumentSearch)
+	r := new(CollectionsSearch_HybridRetrieval)
+	r.HybridRetrieval = m.HybridRetrieval.CloneVT()
+	return r
+}
+
+func (m *CollectionsSearch_SemanticRetrieval) CloneVT() isCollectionsSearch_RetrievalMode {
+	if m == nil {
+		return (*CollectionsSearch_SemanticRetrieval)(nil)
+	}
+	r := new(CollectionsSearch_SemanticRetrieval)
+	r.SemanticRetrieval = m.SemanticRetrieval.CloneVT()
+	return r
+}
+
+func (m *CollectionsSearch_KeywordRetrieval) CloneVT() isCollectionsSearch_RetrievalMode {
+	if m == nil {
+		return (*CollectionsSearch_KeywordRetrieval)(nil)
+	}
+	r := new(CollectionsSearch_KeywordRetrieval)
+	r.KeywordRetrieval = m.KeywordRetrieval.CloneVT()
+	return r
+}
+
+func (m *AttachmentSearch) CloneVT() *AttachmentSearch {
+	if m == nil {
+		return (*AttachmentSearch)(nil)
+	}
+	r := new(AttachmentSearch)
 	if rhs := m.Limit; rhs != nil {
 		tmpVal := *rhs
 		r.Limit = &tmpVal
@@ -880,7 +916,7 @@ func (m *DocumentSearch) CloneVT() *DocumentSearch {
 	return r
 }
 
-func (m *DocumentSearch) CloneMessageVT() proto.Message {
+func (m *AttachmentSearch) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
@@ -2470,8 +2506,8 @@ func (this *Tool_Mcp) EqualVT(thatIface isTool_Tool) bool {
 	return true
 }
 
-func (this *Tool_DocumentSearch) EqualVT(thatIface isTool_Tool) bool {
-	that, ok := thatIface.(*Tool_DocumentSearch)
+func (this *Tool_AttachmentSearch) EqualVT(thatIface isTool_Tool) bool {
+	that, ok := thatIface.(*Tool_AttachmentSearch)
 	if !ok {
 		return false
 	}
@@ -2481,12 +2517,12 @@ func (this *Tool_DocumentSearch) EqualVT(thatIface isTool_Tool) bool {
 	if this == nil && that != nil || this != nil && that == nil {
 		return false
 	}
-	if p, q := this.DocumentSearch, that.DocumentSearch; p != q {
+	if p, q := this.AttachmentSearch, that.AttachmentSearch; p != q {
 		if p == nil {
-			p = &DocumentSearch{}
+			p = &AttachmentSearch{}
 		}
 		if q == nil {
-			q = &DocumentSearch{}
+			q = &AttachmentSearch{}
 		}
 		if !p.EqualVT(q) {
 			return false
@@ -2649,6 +2685,18 @@ func (this *CollectionsSearch) EqualVT(that *CollectionsSearch) bool {
 	} else if this == nil || that == nil {
 		return false
 	}
+	if this.RetrievalMode == nil && that.RetrievalMode != nil {
+		return false
+	} else if this.RetrievalMode != nil {
+		if that.RetrievalMode == nil {
+			return false
+		}
+		if !this.RetrievalMode.(interface {
+			EqualVT(isCollectionsSearch_RetrievalMode) bool
+		}).EqualVT(that.RetrievalMode) {
+			return false
+		}
+	}
 	if len(this.CollectionIds) != len(that.CollectionIds) {
 		return false
 	}
@@ -2661,6 +2709,9 @@ func (this *CollectionsSearch) EqualVT(that *CollectionsSearch) bool {
 	if p, q := this.Limit, that.Limit; (p == nil && q != nil) || (p != nil && (q == nil || *p != *q)) {
 		return false
 	}
+	if p, q := this.Instructions, that.Instructions; (p == nil && q != nil) || (p != nil && (q == nil || *p != *q)) {
+		return false
+	}
 	return string(this.unknownFields) == string(that.unknownFields)
 }
 
@@ -2671,7 +2722,82 @@ func (this *CollectionsSearch) EqualMessageVT(thatMsg proto.Message) bool {
 	}
 	return this.EqualVT(that)
 }
-func (this *DocumentSearch) EqualVT(that *DocumentSearch) bool {
+func (this *CollectionsSearch_HybridRetrieval) EqualVT(thatIface isCollectionsSearch_RetrievalMode) bool {
+	that, ok := thatIface.(*CollectionsSearch_HybridRetrieval)
+	if !ok {
+		return false
+	}
+	if this == that {
+		return true
+	}
+	if this == nil && that != nil || this != nil && that == nil {
+		return false
+	}
+	if p, q := this.HybridRetrieval, that.HybridRetrieval; p != q {
+		if p == nil {
+			p = &HybridRetrieval{}
+		}
+		if q == nil {
+			q = &HybridRetrieval{}
+		}
+		if !p.EqualVT(q) {
+			return false
+		}
+	}
+	return true
+}
+
+func (this *CollectionsSearch_SemanticRetrieval) EqualVT(thatIface isCollectionsSearch_RetrievalMode) bool {
+	that, ok := thatIface.(*CollectionsSearch_SemanticRetrieval)
+	if !ok {
+		return false
+	}
+	if this == that {
+		return true
+	}
+	if this == nil && that != nil || this != nil && that == nil {
+		return false
+	}
+	if p, q := this.SemanticRetrieval, that.SemanticRetrieval; p != q {
+		if p == nil {
+			p = &SemanticRetrieval{}
+		}
+		if q == nil {
+			q = &SemanticRetrieval{}
+		}
+		if !p.EqualVT(q) {
+			return false
+		}
+	}
+	return true
+}
+
+func (this *CollectionsSearch_KeywordRetrieval) EqualVT(thatIface isCollectionsSearch_RetrievalMode) bool {
+	that, ok := thatIface.(*CollectionsSearch_KeywordRetrieval)
+	if !ok {
+		return false
+	}
+	if this == that {
+		return true
+	}
+	if this == nil && that != nil || this != nil && that == nil {
+		return false
+	}
+	if p, q := this.KeywordRetrieval, that.KeywordRetrieval; p != q {
+		if p == nil {
+			p = &KeywordRetrieval{}
+		}
+		if q == nil {
+			q = &KeywordRetrieval{}
+		}
+		if !p.EqualVT(q) {
+			return false
+		}
+	}
+	return true
+}
+
+func (this *AttachmentSearch) EqualVT(that *AttachmentSearch) bool {
 	if this == that {
 		return true
 	} else if this == nil || that == nil {
@@ -2683,8 +2809,8 @@ func (this *DocumentSearch) EqualVT(that *DocumentSearch) bool {
 	return string(this.unknownFields) == string(that.unknownFields)
 }
 
-func (this *DocumentSearch) EqualMessageVT(thatMsg proto.Message) bool {
-	that, ok := thatMsg.(*DocumentSearch)
+func (this *AttachmentSearch) EqualMessageVT(thatMsg proto.Message) bool {
+	that, ok := thatMsg.(*AttachmentSearch)
 	if !ok {
 		return false
 	}
@@ -5061,15 +5187,15 @@ func (m *Tool_Mcp) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	}
 	return len(dAtA) - i, nil
 }
-func (m *Tool_DocumentSearch) MarshalToVT(dAtA []byte) (int, error) {
+func (m *Tool_AttachmentSearch) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *Tool_DocumentSearch) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *Tool_AttachmentSearch) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	i := len(dAtA)
-	if m.DocumentSearch != nil {
-		size, err := m.DocumentSearch.MarshalToSizedBufferVT(dAtA[:i])
+	if m.AttachmentSearch != nil {
+		size, err := m.AttachmentSearch.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
 			return 0, err
 		}
@@ -5388,6 +5514,22 @@ func (m *CollectionsSearch) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if vtmsg, ok := m.RetrievalMode.(interface {
+		MarshalToSizedBufferVT([]byte) (int, error)
+	}); ok {
+		size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+	}
+	if m.Instructions != nil {
+		i -= len(*m.Instructions)
+		copy(dAtA[i:], *m.Instructions)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(*m.Instructions)))
+		i--
+		dAtA[i] = 0x1a
+	}
 	if m.Limit != nil {
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(*m.Limit))
 		i--
@@ -5405,7 +5547,76 @@ func (m *CollectionsSearch) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *DocumentSearch) MarshalVT() (dAtA []byte, err error) {
+func (m *CollectionsSearch_HybridRetrieval) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *CollectionsSearch_HybridRetrieval) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	if m.HybridRetrieval != nil {
+		size, err := m.HybridRetrieval.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x22
+	} else {
+		i = protohelpers.EncodeVarint(dAtA, i, 0)
+		i--
+		dAtA[i] = 0x22
+	}
+	return len(dAtA) - i, nil
+}
+func (m *CollectionsSearch_SemanticRetrieval) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *CollectionsSearch_SemanticRetrieval) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	if m.SemanticRetrieval != nil {
+		size, err := m.SemanticRetrieval.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x2a
+	} else {
+		i = protohelpers.EncodeVarint(dAtA, i, 0)
+		i--
+		dAtA[i] = 0x2a
+	}
+	return len(dAtA) - i, nil
+}
+func (m *CollectionsSearch_KeywordRetrieval) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *CollectionsSearch_KeywordRetrieval) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	if m.KeywordRetrieval != nil {
+		size, err := m.KeywordRetrieval.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x32
+	} else {
+		i = protohelpers.EncodeVarint(dAtA, i, 0)
+		i--
+		dAtA[i] = 0x32
+	}
+	return len(dAtA) - i, nil
+}
+func (m *AttachmentSearch) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -5418,12 +5629,12 @@ func (m *DocumentSearch) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *DocumentSearch) MarshalToVT(dAtA []byte) (int, error) {
+func (m *AttachmentSearch) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *DocumentSearch) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *AttachmentSearch) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -8136,7 +8347,7 @@ func (m *Tool) MarshalToSizedBufferVTStrict(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if msg, ok := m.Tool.(*Tool_DocumentSearch); ok {
+	if msg, ok := m.Tool.(*Tool_AttachmentSearch); ok {
 		size, err := msg.MarshalToSizedBufferVTStrict(dAtA[:i])
 		if err != nil {
 			return 0, err
@@ -8326,15 +8537,15 @@ func (m *Tool_Mcp) MarshalToSizedBufferVTStrict(dAtA []byte) (int, error) {
 	}
 	return len(dAtA) - i, nil
 }
-func (m *Tool_DocumentSearch) MarshalToVTStrict(dAtA []byte) (int, error) {
+func (m *Tool_AttachmentSearch) MarshalToVTStrict(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVTStrict(dAtA[:size])
 }
 
-func (m *Tool_DocumentSearch) MarshalToSizedBufferVTStrict(dAtA []byte) (int, error) {
+func (m *Tool_AttachmentSearch) MarshalToSizedBufferVTStrict(dAtA []byte) (int, error) {
 	i := len(dAtA)
-	if m.DocumentSearch != nil {
-		size, err := m.DocumentSearch.MarshalToSizedBufferVTStrict(dAtA[:i])
+	if m.AttachmentSearch != nil {
+		size, err := m.AttachmentSearch.MarshalToSizedBufferVTStrict(dAtA[:i])
 		if err != nil {
 			return 0, err
 		}
@@ -8653,6 +8864,34 @@ func (m *CollectionsSearch) MarshalToSizedBufferVTStrict(dAtA []byte) (int, erro
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if msg, ok := m.RetrievalMode.(*CollectionsSearch_KeywordRetrieval); ok {
+		size, err := msg.MarshalToSizedBufferVTStrict(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+	}
+	if msg, ok := m.RetrievalMode.(*CollectionsSearch_SemanticRetrieval); ok {
+		size, err := msg.MarshalToSizedBufferVTStrict(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+	}
+	if msg, ok := m.RetrievalMode.(*CollectionsSearch_HybridRetrieval); ok {
+		size, err := msg.MarshalToSizedBufferVTStrict(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+	}
+	if m.Instructions != nil {
+		i -= len(*m.Instructions)
+		copy(dAtA[i:], *m.Instructions)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(*m.Instructions)))
+		i--
+		dAtA[i] = 0x1a
+	}
 	if m.Limit != nil {
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(*m.Limit))
 		i--
@@ -8670,7 +8909,76 @@ func (m *CollectionsSearch) MarshalToSizedBufferVTStrict(dAtA []byte) (int, erro
 	return len(dAtA) - i, nil
 }
 
-func (m *DocumentSearch) MarshalVTStrict() (dAtA []byte, err error) {
+func (m *CollectionsSearch_HybridRetrieval) MarshalToVTStrict(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVTStrict(dAtA[:size])
+}
+
+func (m *CollectionsSearch_HybridRetrieval) MarshalToSizedBufferVTStrict(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	if m.HybridRetrieval != nil {
+		size, err := m.HybridRetrieval.MarshalToSizedBufferVTStrict(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x22
+	} else {
+		i = protohelpers.EncodeVarint(dAtA, i, 0)
+		i--
+		dAtA[i] = 0x22
+	}
+	return len(dAtA) - i, nil
+}
+func (m *CollectionsSearch_SemanticRetrieval) MarshalToVTStrict(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVTStrict(dAtA[:size])
+}
+
+func (m *CollectionsSearch_SemanticRetrieval) MarshalToSizedBufferVTStrict(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	if m.SemanticRetrieval != nil {
+		size, err := m.SemanticRetrieval.MarshalToSizedBufferVTStrict(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x2a
+	} else {
+		i = protohelpers.EncodeVarint(dAtA, i, 0)
+		i--
+		dAtA[i] = 0x2a
+	}
+	return len(dAtA) - i, nil
+}
+func (m *CollectionsSearch_KeywordRetrieval) MarshalToVTStrict(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVTStrict(dAtA[:size])
+}
+
+func (m *CollectionsSearch_KeywordRetrieval) MarshalToSizedBufferVTStrict(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	if m.KeywordRetrieval != nil {
+		size, err := m.KeywordRetrieval.MarshalToSizedBufferVTStrict(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x32
+	} else {
+		i = protohelpers.EncodeVarint(dAtA, i, 0)
+		i--
+		dAtA[i] = 0x32
+	}
+	return len(dAtA) - i, nil
+}
+func (m *AttachmentSearch) MarshalVTStrict() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -8683,12 +8991,12 @@ func (m *DocumentSearch) MarshalVTStrict() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *DocumentSearch) MarshalToVTStrict(dAtA []byte) (int, error) {
+func (m *AttachmentSearch) MarshalToVTStrict(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVTStrict(dAtA[:size])
 }
 
-func (m *DocumentSearch) MarshalToSizedBufferVTStrict(dAtA []byte) (int, error) {
+func (m *AttachmentSearch) MarshalToSizedBufferVTStrict(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -10567,14 +10875,14 @@ func (m *Tool_Mcp) SizeVT() (n int) {
 	}
 	return n
 }
-func (m *Tool_DocumentSearch) SizeVT() (n int) {
+func (m *Tool_AttachmentSearch) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
 	var l int
 	_ = l
-	if m.DocumentSearch != nil {
-		l = m.DocumentSearch.SizeVT()
+	if m.AttachmentSearch != nil {
+		l = m.AttachmentSearch.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	} else {
 		n += 2
@@ -10707,11 +11015,60 @@ func (m *CollectionsSearch) SizeVT() (n int) {
 	if m.Limit != nil {
 		n += 1 + protohelpers.SizeOfVarint(uint64(*m.Limit))
 	}
+	if m.Instructions != nil {
+		l = len(*m.Instructions)
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if vtmsg, ok := m.RetrievalMode.(interface{ SizeVT() int }); ok {
+		n += vtmsg.SizeVT()
+	}
 	n += len(m.unknownFields)
 	return n
 }
 
-func (m *DocumentSearch) SizeVT() (n int) {
+func (m *CollectionsSearch_HybridRetrieval) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.HybridRetrieval != nil {
+		l = m.HybridRetrieval.SizeVT()
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	} else {
+		n += 2
+	}
+	return n
+}
+func (m *CollectionsSearch_SemanticRetrieval) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.SemanticRetrieval != nil {
+		l = m.SemanticRetrieval.SizeVT()
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	} else {
+		n += 2
+	}
+	return n
+}
+func (m *CollectionsSearch_KeywordRetrieval) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.KeywordRetrieval != nil {
+		l = m.KeywordRetrieval.SizeVT()
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	} else {
+		n += 2
+	}
+	return n
+}
+func (m *AttachmentSearch) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -15272,7 +15629,7 @@ func (m *Tool) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 8:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field DocumentSearch", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field AttachmentSearch", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -15299,16 +15656,16 @@ func (m *Tool) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if oneof, ok := m.Tool.(*Tool_DocumentSearch); ok {
-				if err := oneof.DocumentSearch.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+			if oneof, ok := m.Tool.(*Tool_AttachmentSearch); ok {
+				if err := oneof.AttachmentSearch.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 					return err
 				}
 			} else {
-				v := &DocumentSearch{}
+				v := &AttachmentSearch{}
 				if err := v.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 					return err
 				}
-				m.Tool = &Tool_DocumentSearch{DocumentSearch: v}
+				m.Tool = &Tool_AttachmentSearch{AttachmentSearch: v}
 			}
 			iNdEx = postIndex
 		default:
@@ -16169,6 +16526,162 @@ func (m *CollectionsSearch) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.Limit = &v
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Instructions", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			s := string(dAtA[iNdEx:postIndex])
+			m.Instructions = &s
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field HybridRetrieval", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if oneof, ok := m.RetrievalMode.(*CollectionsSearch_HybridRetrieval); ok {
+				if err := oneof.HybridRetrieval.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				v := &HybridRetrieval{}
+				if err := v.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+				m.RetrievalMode = &CollectionsSearch_HybridRetrieval{HybridRetrieval: v}
+			}
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SemanticRetrieval", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if oneof, ok := m.RetrievalMode.(*CollectionsSearch_SemanticRetrieval); ok {
+				if err := oneof.SemanticRetrieval.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				v := &SemanticRetrieval{}
+				if err := v.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+				m.RetrievalMode = &CollectionsSearch_SemanticRetrieval{SemanticRetrieval: v}
+			}
+			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field KeywordRetrieval", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if oneof, ok := m.RetrievalMode.(*CollectionsSearch_KeywordRetrieval); ok {
+				if err := oneof.KeywordRetrieval.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				v := &KeywordRetrieval{}
+				if err := v.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+				m.RetrievalMode = &CollectionsSearch_KeywordRetrieval{KeywordRetrieval: v}
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -16191,7 +16704,7 @@ func (m *CollectionsSearch) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *DocumentSearch) UnmarshalVT(dAtA []byte) error {
+func (m *AttachmentSearch) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -16214,10 +16727,10 @@ func (m *DocumentSearch) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: DocumentSearch: wiretype end group for non-group")
+			return fmt.Errorf("proto: AttachmentSearch: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: DocumentSearch: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: AttachmentSearch: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 2:
@@ -23097,7 +23610,7 @@ func (m *Tool) UnmarshalVTUnsafe(dAtA []byte) error {
 			iNdEx = postIndex
 		case 8:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field DocumentSearch", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field AttachmentSearch", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -23124,16 +23637,16 @@ func (m *Tool) UnmarshalVTUnsafe(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if oneof, ok := m.Tool.(*Tool_DocumentSearch); ok {
-				if err := oneof.DocumentSearch.UnmarshalVTUnsafe(dAtA[iNdEx:postIndex]); err != nil {
+			if oneof, ok := m.Tool.(*Tool_AttachmentSearch); ok {
+				if err := oneof.AttachmentSearch.UnmarshalVTUnsafe(dAtA[iNdEx:postIndex]); err != nil {
 					return err
 				}
 			} else {
-				v := &DocumentSearch{}
+				v := &AttachmentSearch{}
 				if err := v.UnmarshalVTUnsafe(dAtA[iNdEx:postIndex]); err != nil {
 					return err
 				}
-				m.Tool = &Tool_DocumentSearch{DocumentSearch: v}
+				m.Tool = &Tool_AttachmentSearch{AttachmentSearch: v}
 			}
 			iNdEx = postIndex
 		default:
@@ -24042,6 +24555,166 @@ func (m *CollectionsSearch) UnmarshalVTUnsafe(dAtA []byte) error {
 				}
 			}
 			m.Limit = &v
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Instructions", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			var stringValue string
+			if intStringLen > 0 {
+				stringValue = unsafe.String(&dAtA[iNdEx], intStringLen)
+			}
+			s := stringValue
+			m.Instructions = &s
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field HybridRetrieval", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if oneof, ok := m.RetrievalMode.(*CollectionsSearch_HybridRetrieval); ok {
+				if err := oneof.HybridRetrieval.UnmarshalVTUnsafe(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				v := &HybridRetrieval{}
+				if err := v.UnmarshalVTUnsafe(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+				m.RetrievalMode = &CollectionsSearch_HybridRetrieval{HybridRetrieval: v}
+			}
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SemanticRetrieval", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if oneof, ok := m.RetrievalMode.(*CollectionsSearch_SemanticRetrieval); ok {
+				if err := oneof.SemanticRetrieval.UnmarshalVTUnsafe(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				v := &SemanticRetrieval{}
+				if err := v.UnmarshalVTUnsafe(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+				m.RetrievalMode = &CollectionsSearch_SemanticRetrieval{SemanticRetrieval: v}
+			}
+			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field KeywordRetrieval", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if oneof, ok := m.RetrievalMode.(*CollectionsSearch_KeywordRetrieval); ok {
+				if err := oneof.KeywordRetrieval.UnmarshalVTUnsafe(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				v := &KeywordRetrieval{}
+				if err := v.UnmarshalVTUnsafe(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+				m.RetrievalMode = &CollectionsSearch_KeywordRetrieval{KeywordRetrieval: v}
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -24064,7 +24737,7 @@ func (m *CollectionsSearch) UnmarshalVTUnsafe(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *DocumentSearch) UnmarshalVTUnsafe(dAtA []byte) error {
+func (m *AttachmentSearch) UnmarshalVTUnsafe(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -24087,10 +24760,10 @@ func (m *DocumentSearch) UnmarshalVTUnsafe(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: DocumentSearch: wiretype end group for non-group")
+			return fmt.Errorf("proto: AttachmentSearch: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: DocumentSearch: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: AttachmentSearch: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 2:

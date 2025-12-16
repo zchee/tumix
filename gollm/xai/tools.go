@@ -140,11 +140,11 @@ func MCPTool(serverURL, serverLabel, serverDescription string, allowedToolNames 
 	}
 }
 
-// DocumentSearchTool enables server-side document search.
-func DocumentSearchTool(limit int32) *xaipb.Tool {
+// AttachmentSearchTool enables server-side attachment search.
+func AttachmentSearchTool(limit int32) *xaipb.Tool {
 	return &xaipb.Tool{
-		Tool: &xaipb.Tool_DocumentSearch{
-			DocumentSearch: &xaipb.DocumentSearch{
+		Tool: &xaipb.Tool_AttachmentSearch{
+			AttachmentSearch: &xaipb.AttachmentSearch{
 				Limit: &limit,
 			},
 		},
