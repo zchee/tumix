@@ -104,7 +104,7 @@ func TestSetStateAndGetState(t *testing.T) {
 			}
 
 			got, err := test.op(ctx)
-			if test.wantErrSubstr != "" {
+			if test.wantErrSubstr != "" { //nolint:nestif // TODO(zchee): fix nolint
 				if err == nil {
 					t.Fatalf("op err = nil, want substring %q", test.wantErrSubstr)
 				}
@@ -137,7 +137,7 @@ func TestNewFinalizeToolRun(t *testing.T) {
 	t.Parallel()
 
 	type runnableTool interface {
-		Run(tool.Context, any) (map[string]any, error)
+		Run(ctx tool.Context, args any) (map[string]any, error)
 	}
 
 	tests := map[string]struct {

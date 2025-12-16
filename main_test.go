@@ -354,7 +354,7 @@ func TestEnforcePromptTokensWithCounterNilResponse(t *testing.T) {
 
 	cfg := config{Prompt: "hello world", MaxPromptTokens: 5, ModelName: "m"}
 	counter := func(ctx context.Context, model string, contents []*genai.Content, config *genai.CountTokensConfig) (*genai.CountTokensResponse, error) {
-		return nil, nil
+		return nil, nil //nolint:nilnil
 	}
 	if err := enforcePromptTokensWithCounter(t.Context(), &cfg, counter); err == nil {
 		t.Fatalf("expected error on nil response")
