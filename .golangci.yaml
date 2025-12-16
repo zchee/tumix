@@ -384,6 +384,7 @@ linters:
           - gocyclo
           - gosec
           - lll
+          - nestif
           - wrapcheck
         path: _test\.go
 
