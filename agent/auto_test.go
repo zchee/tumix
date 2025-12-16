@@ -27,8 +27,12 @@ import (
 
 type stubLLM struct{}
 
+var _ model.LLM = (*stubLLM)(nil)
+
+// Name implements [model.LLM].
 func (s *stubLLM) Name() string { return "stub" }
 
+// GenerateContent implements [model.LLM].
 func (s *stubLLM) GenerateContent(_ context.Context, _ *model.LLMRequest, _ bool) iter.Seq2[*model.LLMResponse, error] {
 	return func(yield func(*model.LLMResponse, error) bool) {}
 }
@@ -54,7 +58,6 @@ func TestNewAutoAgents(t *testing.T) {
 	}
 }
 
-// Ensure zero is handled.
 func TestNewAutoAgentsZero(t *testing.T) {
 	llm := &stubLLM{}
 	agents, err := NewAutoAgents(llm, nil, 0)
@@ -66,9 +69,7 @@ func TestNewAutoAgentsZero(t *testing.T) {
 	}
 }
 
-// Compile-time check: auto agents accept real LLM too.
 func TestNewAutoAgentsRealConfig(t *testing.T) {
-	t.Helper()
 	agents, err := NewAutoAgents(&stubLLM{}, nil, 1)
 	if err != nil {
 		t.Fatalf("NewAutoAgents real config: %v", err)

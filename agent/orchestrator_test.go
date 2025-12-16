@@ -44,10 +44,19 @@ func TestTumixStopsWhenJudgeEscalates(t *testing.T) {
 
 	ctx := t.Context()
 	svc := session.InMemoryService()
-	if _, err := svc.Create(ctx, &session.CreateRequest{AppName: "app", UserID: "u", SessionID: "s"}); err != nil {
+	if _, err := svc.Create(ctx, &session.CreateRequest{
+		AppName:   "app",
+		UserID:    "u",
+		SessionID: "s",
+	}); err != nil {
 		t.Fatalf("create session: %v", err)
 	}
-	r, err := runner.New(runner.Config{AppName: "app", Agent: loader.RootAgent(), SessionService: svc})
+
+	r, err := runner.New(runner.Config{
+		AppName:        "app",
+		Agent:          loader.RootAgent(),
+		SessionService: svc,
+	})
 	if err != nil {
 		t.Fatalf("runner: %v", err)
 	}
@@ -61,10 +70,15 @@ func TestTumixStopsWhenJudgeEscalates(t *testing.T) {
 		}
 	}
 
-	res, err := svc.Get(ctx, &session.GetRequest{AppName: "app", UserID: "u", SessionID: "s"})
+	res, err := svc.Get(ctx, &session.GetRequest{
+		AppName:   "app",
+		UserID:    "u",
+		SessionID: "s",
+	})
 	if err != nil {
 		t.Fatalf("get session: %v", err)
 	}
+
 	answer, err := res.Session.State().Get(stateKeyAnswer)
 	if err != nil {
 		t.Fatalf("state answer: %v", err)
@@ -72,6 +86,7 @@ func TestTumixStopsWhenJudgeEscalates(t *testing.T) {
 	if answer != "done" {
 		t.Fatalf("expected final answer 'done', got %v", answer)
 	}
+
 	joined, err := res.Session.State().Get(stateKeyJoined)
 	if err != nil {
 		t.Fatalf("state joined: %v", err)
@@ -82,7 +97,11 @@ func TestTumixStopsWhenJudgeEscalates(t *testing.T) {
 }
 
 func TestTumixMajorityFallback(t *testing.T) {
-	candidates := []agent.Agent{staticCandidate("X", "foo"), staticCandidate("Y", "foo"), staticCandidate("Z", "bar")}
+	candidates := []agent.Agent{
+		staticCandidate("X", "foo"),
+		staticCandidate("Y", "foo"),
+		staticCandidate("Z", "bar"),
+	}
 	judge := noOpJudge()
 	loader, err := NewTumixAgentWithConfig(TumixConfig{
 		Candidates: candidates,
@@ -96,10 +115,19 @@ func TestTumixMajorityFallback(t *testing.T) {
 
 	ctx := t.Context()
 	svc := session.InMemoryService()
-	if _, err := svc.Create(ctx, &session.CreateRequest{AppName: "app", UserID: "u", SessionID: "s2"}); err != nil {
+	if _, err := svc.Create(ctx, &session.CreateRequest{
+		AppName:   "app",
+		UserID:    "u",
+		SessionID: "s2",
+	}); err != nil {
 		t.Fatalf("create session: %v", err)
 	}
-	r, err := runner.New(runner.Config{AppName: "app", Agent: loader.RootAgent(), SessionService: svc})
+
+	r, err := runner.New(runner.Config{
+		AppName:        "app",
+		Agent:          loader.RootAgent(),
+		SessionService: svc,
+	})
 	if err != nil {
 		t.Fatalf("runner: %v", err)
 	}
@@ -108,10 +136,15 @@ func TestTumixMajorityFallback(t *testing.T) {
 		// drain events
 	}
 
-	res, err := svc.Get(ctx, &session.GetRequest{AppName: "app", UserID: "u", SessionID: "s2"})
+	res, err := svc.Get(ctx, &session.GetRequest{
+		AppName:   "app",
+		UserID:    "u",
+		SessionID: "s2",
+	})
 	if err != nil {
 		t.Fatalf("get session: %v", err)
 	}
+
 	answer, err := res.Session.State().Get(stateKeyAnswer)
 	if err != nil {
 		t.Fatalf("state answer: %v", err)
@@ -140,10 +173,19 @@ func TestTumixAutoStopOnStableMajority(t *testing.T) {
 
 	ctx := t.Context()
 	svc := session.InMemoryService()
-	if _, err := svc.Create(ctx, &session.CreateRequest{AppName: "app", UserID: "u", SessionID: "s3"}); err != nil {
+	if _, err := svc.Create(ctx, &session.CreateRequest{
+		AppName:   "app",
+		UserID:    "u",
+		SessionID: "s3",
+	}); err != nil {
 		t.Fatalf("create session: %v", err)
 	}
-	r, err := runner.New(runner.Config{AppName: "app", Agent: loader.RootAgent(), SessionService: svc})
+
+	r, err := runner.New(runner.Config{
+		AppName:        "app",
+		Agent:          loader.RootAgent(),
+		SessionService: svc,
+	})
 	if err != nil {
 		t.Fatalf("runner: %v", err)
 	}
@@ -152,10 +194,15 @@ func TestTumixAutoStopOnStableMajority(t *testing.T) {
 		// drain
 	}
 
-	res, err := svc.Get(ctx, &session.GetRequest{AppName: "app", UserID: "u", SessionID: "s3"})
+	res, err := svc.Get(ctx, &session.GetRequest{
+		AppName:   "app",
+		UserID:    "u",
+		SessionID: "s3",
+	})
 	if err != nil {
 		t.Fatalf("get session: %v", err)
 	}
+
 	answer, err := res.Session.State().Get(stateKeyAnswer)
 	if err != nil {
 		t.Fatalf("state answer: %v", err)
@@ -163,6 +210,7 @@ func TestTumixAutoStopOnStableMajority(t *testing.T) {
 	if answer != "foo" {
 		t.Fatalf("expected final answer foo, got %v", answer)
 	}
+
 	roundVal, err := res.Session.State().Get(stateKeyRound)
 	if err != nil && !errors.Is(err, session.ErrStateKeyNotExist) {
 		t.Fatalf("state round: %v", err)
