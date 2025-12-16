@@ -30,9 +30,9 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
+	"golang.org/x/sys/unix"
 	"google.golang.org/adk/session"
 )
 
@@ -44,25 +44,25 @@ func Service(dir string) (session.Service, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("sessionfs: mkdir %s: %w", dir, err)
 	}
+
 	lockFile, err := os.OpenFile(filepath.Join(dir, "sessions.lock"), os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("sessionfs: lock file: %w", err)
 	}
-	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX); err != nil {
+	if err := unix.Flock(int(lockFile.Fd()), unix.LOCK_EX); err != nil {
 		return nil, fmt.Errorf("sessionfs: flock: %w", err)
 	}
-	fs := &fileService{root: dir, sessions: make(map[string]*persistSession), lockFile: lockFile}
+
+	fs := &fileService{
+		root:     dir,
+		sessions: make(map[string]*persistSession),
+		lockFile: lockFile,
+	}
 	if err := fs.load(); err != nil {
 		return nil, err
 	}
-	return fs, nil
-}
 
-type fileService struct {
-	mu       sync.RWMutex
-	root     string
-	sessions map[string]*persistSession
-	lockFile *os.File
+	return fs, nil
 }
 
 // persistSession is the on-disk representation.
@@ -75,93 +75,68 @@ type persistSession struct {
 	UpdatedAt time.Time        `json:"updated_at"`
 }
 
-// fileSession implements session.Session.
-type fileSession struct {
-	s  *persistSession
-	mu *sync.RWMutex
+// fileService implements [session.Service].
+type fileService struct {
+	mu       sync.RWMutex
+	root     string
+	sessions map[string]*persistSession
+	lockFile *os.File
 }
 
-func (f *fileSession) ID() string { return f.s.SessionID }
+var _ session.Service = (*fileService)(nil)
 
-func (f *fileSession) AppName() string { return f.s.AppName }
+func (f *fileService) key(app, user, sessionID string) string {
+	return filepath.Join(app, user, sessionID)
+}
 
-func (f *fileSession) UserID() string { return f.s.UserID }
+func (f *fileService) load() error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 
-func (f *fileSession) LastUpdateTime() time.Time { return f.s.UpdatedAt }
-
-func (f *fileSession) Events() session.Events { return fileEvents{f} }
-
-func (f *fileSession) State() session.State { return &fileState{mu: f.mu, state: f.s.State} }
-
-type fileEvents struct{ fs *fileSession }
-
-func (e fileEvents) All() iter.Seq[*session.Event] {
-	return func(yield func(*session.Event) bool) {
-		e.fs.mu.RLock()
-		defer e.fs.mu.RUnlock()
-		for _, ev := range e.fs.s.Events {
-			if !yield(ev) {
-				return
-			}
+	dataPath := filepath.Join(f.root, "sessions.json")
+	data, err := os.ReadFile(dataPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
 		}
+		return fmt.Errorf("sessionfs: read: %w", err)
 	}
-}
-
-func (e fileEvents) Len() int {
-	e.fs.mu.RLock()
-	defer e.fs.mu.RUnlock()
-	return len(e.fs.s.Events)
-}
-
-func (e fileEvents) At(i int) *session.Event {
-	e.fs.mu.RLock()
-	defer e.fs.mu.RUnlock()
-	if i < 0 || i >= len(e.fs.s.Events) {
+	if len(data) == 0 {
 		return nil
 	}
-	return e.fs.s.Events[i]
-}
 
-type fileState struct {
-	mu    *sync.RWMutex
-	state map[string]any
-}
-
-func (s *fileState) Get(key string) (any, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	val, ok := s.state[key]
-	if !ok {
-		return nil, session.ErrStateKeyNotExist
+	if err := json.Unmarshal(data, &f.sessions); err != nil {
+		return fmt.Errorf("sessionfs: unmarshal sessions: %w", err)
 	}
-	return val, nil
-}
 
-func (s *fileState) Set(key string, value any) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.state[key] = value
 	return nil
 }
 
-func (s *fileState) All() iter.Seq2[string, any] {
-	return func(yield func(string, any) bool) {
-		s.mu.RLock()
-		for k, v := range s.state {
-			s.mu.RUnlock()
-			if !yield(k, v) {
-				return
-			}
-			s.mu.RLock()
-		}
-		s.mu.RUnlock()
+func (f *fileService) saveLocked() error {
+	dataPath := filepath.Join(f.root, "sessions.json")
+	tmp := dataPath + ".tmp"
+	data, err := json.Marshal(f.sessions)
+	if err != nil {
+		return fmt.Errorf("sessionfs: marshal: %w", err)
 	}
+
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+		return fmt.Errorf("sessionfs: write tmp: %w", err)
+	}
+
+	if err := os.Rename(tmp, dataPath); err != nil {
+		return fmt.Errorf("sessionfs: rename: %w", err)
+	}
+
+	return nil
 }
 
+// Create implements [session.Service].
 func (f *fileService) Create(_ context.Context, req *session.CreateRequest) (*session.CreateResponse, error) {
 	if req.AppName == "" || req.UserID == "" {
 		return nil, fmt.Errorf("sessionfs: app_name and user_id are required")
 	}
+
 	id := req.SessionID
 	if id == "" {
 		id = fmt.Sprintf("%d", time.Now().UnixNano())
@@ -191,29 +166,45 @@ func (f *fileService) Create(_ context.Context, req *session.CreateRequest) (*se
 		return nil, err
 	}
 
-	return &session.CreateResponse{Session: &fileSession{s: ps, mu: &f.mu}}, nil
+	return &session.CreateResponse{
+		Session: &fileSession{
+			s:  ps,
+			mu: &f.mu,
+		},
+	}, nil
 }
 
+// Get implements [session.Service].
 func (f *fileService) Get(_ context.Context, req *session.GetRequest) (*session.GetResponse, error) {
 	if req.AppName == "" || req.UserID == "" || req.SessionID == "" {
 		return nil, errors.New("sessionfs: app_name, user_id, session_id required")
 	}
+
 	f.mu.RLock()
 	ps, ok := f.sessions[f.key(req.AppName, req.UserID, req.SessionID)]
 	f.mu.RUnlock()
+
 	if !ok {
 		return nil, fmt.Errorf("sessionfs: session %s not found", req.SessionID)
 	}
 
-	return &session.GetResponse{Session: &fileSession{s: ps, mu: &f.mu}}, nil
+	return &session.GetResponse{
+		Session: &fileSession{
+			s:  ps,
+			mu: &f.mu,
+		},
+	}, nil
 }
 
+// List implements [session.Service].
 func (f *fileService) List(_ context.Context, req *session.ListRequest) (*session.ListResponse, error) {
 	if req.AppName == "" {
 		return nil, errors.New("sessionfs: app_name required")
 	}
+
 	f.mu.RLock()
 	defer f.mu.RUnlock()
+
 	out := make([]session.Session, 0)
 	prefix := req.AppName + "/"
 	for k, ps := range f.sessions {
@@ -225,19 +216,27 @@ func (f *fileService) List(_ context.Context, req *session.ListRequest) (*sessio
 		}
 		out = append(out, &fileSession{s: ps, mu: &f.mu})
 	}
-	return &session.ListResponse{Sessions: out}, nil
+
+	return &session.ListResponse{
+		Sessions: out,
+	}, nil
 }
 
+// Delete implements [session.Service].
 func (f *fileService) Delete(_ context.Context, req *session.DeleteRequest) error {
 	if req.AppName == "" || req.UserID == "" || req.SessionID == "" {
 		return errors.New("sessionfs: app_name, user_id, session_id required")
 	}
+
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
 	delete(f.sessions, f.key(req.AppName, req.UserID, req.SessionID))
+
 	return f.saveLocked()
 }
 
+// AppendEvent implements [session.Service].
 func (f *fileService) AppendEvent(_ context.Context, sess session.Session, ev *session.Event) error {
 	if sess == nil || ev == nil {
 		return errors.New("sessionfs: session and event required")
@@ -268,52 +267,116 @@ func (f *fileService) AppendEvent(_ context.Context, sess session.Session, ev *s
 	return f.saveLocked()
 }
 
-// --- helpers ---
-
-func (f *fileService) key(app, user, sessionID string) string {
-	return filepath.Join(app, user, sessionID)
+// fileSession implements [session.Session].
+type fileSession struct {
+	s  *persistSession
+	mu *sync.RWMutex
 }
 
-func (f *fileService) load() error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	dataPath := filepath.Join(f.root, "sessions.json")
-	data, err := os.ReadFile(dataPath)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
+var _ session.Session = (*fileSession)(nil)
+
+// ID implements [session.Session].
+func (f *fileSession) ID() string { return f.s.SessionID }
+
+// AppName implements [session.Session].
+func (f *fileSession) AppName() string { return f.s.AppName }
+
+// UserID implements [session.Session].
+func (f *fileSession) UserID() string { return f.s.UserID }
+
+// State implements [session.Session].
+func (f *fileSession) State() session.State { return &fileState{mu: f.mu, state: f.s.State} }
+
+// Events implements [session.Session].
+func (f *fileSession) Events() session.Events { return fileEvents{f} }
+
+// LastUpdateTime implements [session.Session].
+func (f *fileSession) LastUpdateTime() time.Time { return f.s.UpdatedAt }
+
+// fileEvents implements [session.Events].
+type fileEvents struct {
+	fs *fileSession
+}
+
+var _ session.Events = (*fileEvents)(nil)
+
+// All implements [session.Events].
+func (e fileEvents) All() iter.Seq[*session.Event] {
+	return func(yield func(*session.Event) bool) {
+		e.fs.mu.RLock()
+		defer e.fs.mu.RUnlock()
+		for _, ev := range e.fs.s.Events {
+			if !yield(ev) {
+				return
+			}
 		}
-		return fmt.Errorf("sessionfs: read: %w", err)
 	}
-	if len(data) == 0 {
+}
+
+// Len implements [session.Events].
+func (e fileEvents) Len() int {
+	e.fs.mu.RLock()
+	defer e.fs.mu.RUnlock()
+	return len(e.fs.s.Events)
+}
+
+// At implements [session.Events].
+func (e fileEvents) At(i int) *session.Event {
+	e.fs.mu.RLock()
+	defer e.fs.mu.RUnlock()
+	if i < 0 || i >= len(e.fs.s.Events) {
 		return nil
 	}
-	if err := json.Unmarshal(data, &f.sessions); err != nil {
-		return fmt.Errorf("sessionfs: unmarshal sessions: %w", err)
+	return e.fs.s.Events[i]
+}
+
+// fileState implements [session.State].
+type fileState struct {
+	mu    *sync.RWMutex
+	state map[string]any
+}
+
+var _ session.State = (*fileState)(nil)
+
+// Get implements [session.State].
+func (s *fileState) Get(key string) (any, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	val, ok := s.state[key]
+	if !ok {
+		return nil, session.ErrStateKeyNotExist
 	}
+	return val, nil
+}
+
+// Set implements [session.State].
+func (s *fileState) Set(key string, value any) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.state[key] = value
 	return nil
 }
 
-func (f *fileService) saveLocked() error {
-	dataPath := filepath.Join(f.root, "sessions.json")
-	tmp := dataPath + ".tmp"
-	data, err := json.Marshal(f.sessions)
-	if err != nil {
-		return fmt.Errorf("sessionfs: marshal: %w", err)
+// All implements [session.State].
+func (s *fileState) All() iter.Seq2[string, any] {
+	return func(yield func(string, any) bool) {
+		s.mu.RLock()
+		for k, v := range s.state {
+			s.mu.RUnlock()
+			if !yield(k, v) {
+				return
+			}
+			s.mu.RLock()
+		}
+		s.mu.RUnlock()
 	}
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return fmt.Errorf("sessionfs: write tmp: %w", err)
-	}
-	if err := os.Rename(tmp, dataPath); err != nil {
-		return fmt.Errorf("sessionfs: rename: %w", err)
-	}
-	return nil
 }
 
 func trimTemp(ev *session.Event) *session.Event {
 	if len(ev.Actions.StateDelta) == 0 {
 		return ev
 	}
+
 	filtered := make(map[string]any)
 	for k, v := range ev.Actions.StateDelta {
 		if !strings.HasPrefix(k, session.KeyPrefixTemp) {
@@ -321,6 +384,7 @@ func trimTemp(ev *session.Event) *session.Event {
 		}
 	}
 	ev.Actions.StateDelta = filtered
+
 	return ev
 }
 
@@ -328,6 +392,7 @@ func applyState(ps *persistSession, ev *session.Event) {
 	if ev.Actions.StateDelta == nil {
 		return
 	}
+
 	if ps.State == nil {
 		ps.State = make(map[string]any)
 	}
@@ -338,5 +403,3 @@ func applyState(ps *persistSession, ev *session.Event) {
 		ps.State[k] = v
 	}
 }
-
-var _ session.Service = (*fileService)(nil)
