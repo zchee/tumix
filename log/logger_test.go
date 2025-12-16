@@ -20,51 +20,48 @@ import (
 	"bytes"
 	"context"
 	json "encoding/json/v2"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"testing"
 )
 
 func TestLogAddSource(t *testing.T) {
 	wantFile, wantFunc := "logger_test.go", "TestLogAddSource"
 
-	testCases := []struct {
-		name string
+	tests := map[string]struct {
 		call func(context.Context)
 	}{
-		{
-			name: "Log",
+		"Log": {
 			call: func(ctx context.Context) {
 				Log(ctx, slog.LevelInfo, "hello")
 			},
 		},
-		{
-			name: "Info",
+		"Info": {
 			call: func(ctx context.Context) {
 				Info(ctx, "hello")
 			},
 		},
-		{
-			name: "Warn",
+		"Warn": {
 			call: func(ctx context.Context) {
 				Warn(ctx, "hello")
 			},
 		},
-		{
-			name: "Error",
+		"Error": {
 			call: func(ctx context.Context) {
 				Error(ctx, "hello", fmt.Errorf("fail"))
 			},
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
 			var buf bytes.Buffer
 			handler := slog.NewJSONHandler(&buf, &slog.HandlerOptions{AddSource: true})
 
-			tc.call(WithLogger(t.Context(), slog.New(handler)))
+			tt.call(WithLogger(t.Context(), slog.New(handler)))
 
 			var written map[string]any
 			if err := json.Unmarshal(buf.Bytes(), &written); err != nil {
@@ -109,4 +106,107 @@ func BenchmarkLogCallerCapture(b *testing.B) {
 			}
 		})
 	}
+}
+
+func TestFromContextAndCaptureToggle(t *testing.T) {
+	cases := map[string]struct {
+		capture bool
+		useCtx  bool
+	}{
+		"capture:on_with_context_logger": {
+			capture: true,
+			useCtx:  true,
+		},
+		"capture:off_with_context_logger": {
+			capture: false,
+			useCtx:  true,
+		},
+		"default_logger_fallback": {
+			capture: true,
+			useCtx:  false,
+		},
+	}
+
+	for name, tt := range cases {
+		t.Run(name, func(t *testing.T) {
+			SetCaptureCaller(tt.capture)
+			t.Cleanup(func() { SetCaptureCaller(true) })
+
+			rec := &recordingHandler{}
+			logger := slog.New(rec)
+
+			var ctx context.Context
+			if tt.useCtx {
+				ctx = WithLogger(t.Context(), logger)
+			} else {
+				ctx = t.Context()
+				orig := slog.Default()
+				slog.SetDefault(logger)
+				t.Cleanup(func() { slog.SetDefault(orig) })
+			}
+
+			Info(ctx, "hello")
+
+			if len(rec.records) != 1 {
+				t.Fatalf("records = %d, want 1", len(rec.records))
+			}
+			gotPC := rec.records[0].PC
+			if tt.capture && gotPC == 0 {
+				t.Fatalf("capture enabled but pc=0")
+			}
+			if !tt.capture && gotPC != 0 {
+				t.Fatalf("capture disabled but pc=%d", gotPC)
+			}
+		})
+	}
+}
+
+func TestErrorAddsErrorAttribute(t *testing.T) {
+	t.Parallel()
+
+	rec := &recordingHandler{}
+	logger := slog.New(rec)
+	ctx := WithLogger(t.Context(), logger)
+
+	err := fmt.Errorf("boom")
+	Error(ctx, "failed", err, "k", 1)
+
+	if len(rec.records) != 1 {
+		t.Fatalf("records = %d, want 1", len(rec.records))
+	}
+	attrs := attrsToMap(rec.records[0])
+	gotErr, ok := attrs["error"].(error)
+	if !ok || !errors.Is(gotErr, err) {
+		t.Fatalf("error attr = %v, want %v", attrs["error"], err)
+	}
+	if got := fmt.Sprint(attrs["k"]); got != "1" {
+		t.Fatalf("k attr = %v, want 1", attrs["k"])
+	}
+}
+
+type recordingHandler struct {
+	mu      sync.Mutex
+	records []slog.Record
+}
+
+func (r *recordingHandler) Enabled(context.Context, slog.Level) bool { return true }
+
+func (r *recordingHandler) Handle(_ context.Context, rec slog.Record) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.records = append(r.records, rec.Clone())
+	return nil
+}
+
+func (r *recordingHandler) WithAttrs([]slog.Attr) slog.Handler { return r }
+
+func (r *recordingHandler) WithGroup(string) slog.Handler { return r }
+
+func attrsToMap(rec slog.Record) map[string]any {
+	out := make(map[string]any)
+	rec.Attrs(func(a slog.Attr) bool {
+		out[a.Key] = a.Value.Any()
+		return true
+	})
+	return out
 }
