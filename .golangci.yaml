@@ -70,14 +70,11 @@ linters:
     - canonicalheader
     - contextcheck
     - copyloopvar
-    # - cyclop
-    # - decorder
     - depguard
     - dogsled
     - dupl
     - dupword
     - durationcheck
-    - embeddedstructfieldcheck
     - errcheck
     - errchkjson
     - errname
@@ -88,7 +85,6 @@ linters:
     - ginkgolinter
     - gocheckcompilerdirectives
     - gochecksumtype
-    - goconst
     - gocritic
     - godoclint
     - godot
@@ -323,6 +319,11 @@ linters:
         - set-status
       ignore-check-signatures:
         - telemetry.RecordError
+    tagliatelle:
+      case:
+        use-field-name: false
+        rules:
+          json: snake
     testpackage:
       skip-regexp: .*(export)_test\.go
     unconvert:
@@ -383,6 +384,7 @@ linters:
           - gocyclo
           - gosec
           - lll
+          - nestif
           - wrapcheck
         path: _test\.go
 

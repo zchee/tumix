@@ -20,7 +20,958 @@
 package main
 
 import (
-	"google.golang.org/adk/agent"
+	"bufio"
+	"cmp"
+	"context"
+	"encoding/json/jsontext"
+	json "encoding/json/v2"
+	"errors"
+	"expvar"
+	"flag"
+	"fmt"
+	"log/slog"
+	"math"
+	"net/http"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"reflect"
+	"strconv"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
+	"go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
+	adkagent "google.golang.org/adk/agent"
+	"google.golang.org/adk/model"
+	"google.golang.org/adk/model/gemini"
+	"google.golang.org/adk/runner"
+	"google.golang.org/adk/session"
+	"google.golang.org/genai"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
+	tumixagent "github.com/zchee/tumix/agent"
+	"github.com/zchee/tumix/gollm"
+	"github.com/zchee/tumix/internal/version"
+	"github.com/zchee/tumix/log"
+	"github.com/zchee/tumix/session/sessiondb"
+	"github.com/zchee/tumix/session/sessionfs"
+	"github.com/zchee/tumix/telemetry/httptelemetry"
 )
 
-var _ agent.Agent
+type config struct {
+	AppName         string
+	LLMBackend      string
+	ModelName       string
+	APIKey          string
+	TraceHTTP       bool
+	UserID          string
+	SessionID       string
+	SessionDir      string
+	MaxRounds       uint
+	MinRounds       uint
+	Temperature     float64
+	TopP            float64
+	TopK            int
+	MaxTokens       int
+	Seed            int64
+	OutputJSON      bool
+	DryRun          bool
+	LogJSON         bool
+	OTLPEndpoint    string
+	CallWarn        int
+	BatchFile       string
+	Concurrency     int
+	MaxPromptChars  int
+	MaxPromptTokens int
+	MaxCostUSD      float64
+	AutoAgents      int
+	BudgetTokens    int
+	BenchLocal      int
+	MetricsAddr     string
+	Prompt          string
+}
+
+var (
+	prices = map[string]struct {
+		inUSDPerKT, outUSDPerKT float64
+	}{
+		"gemini-2.5-flash":     {inUSDPerKT: 0.00015, outUSDPerKT: 0.0006},
+		"gemini-2.5-flash-002": {inUSDPerKT: 0.00015, outUSDPerKT: 0.0006},
+		"gemini-2.5-pro":       {inUSDPerKT: 0.00125, outUSDPerKT: 0.0050},
+		"gemini-2.5-pro-002":   {inUSDPerKT: 0.00125, outUSDPerKT: 0.0050},
+		"gemini-1.5-flash":     {inUSDPerKT: 0.00020, outUSDPerKT: 0.0008},
+		"gemini-1.5-flash-8b":  {inUSDPerKT: 0.00020, outUSDPerKT: 0.0008},
+		"gemini-1.5-pro":       {inUSDPerKT: 0.00100, outUSDPerKT: 0.0040},
+	}
+	meter            metric.Meter
+	requestCounter   metric.Int64Counter
+	inputTokCounter  metric.Int64Counter
+	outputTokCounter metric.Int64Counter
+	costCounter      metric.Float64Counter
+	expRequests      = expvar.NewInt("tumix_requests")
+	expInputTokens   = expvar.NewInt("tumix_input_tokens")
+	expOutputTokens  = expvar.NewInt("tumix_output_tokens")
+	expCostUSD       = expvar.NewFloat("tumix_cost_usd")
+)
+
+func main() {
+	os.Exit(run())
+}
+
+func run() int {
+	cfg, err := parseConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "config error: %v\n", err)
+		return 2
+	}
+
+	logger := log.New(log.Options{JSON: cfg.LogJSON})
+	ctx, stop := signal.NotifyContext(log.WithLogger(context.Background(), logger), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	ctx = log.WithLogger(ctx, logger)
+
+	loadPricing(ctx)
+
+	shutdownTrace, traceErr := initTracing(ctx, &cfg)
+	if traceErr != nil {
+		log.Warn(ctx, "tracing disabled", "error", traceErr)
+	}
+	defer shutdownTrace()
+	if err := initMetrics(); err != nil {
+		log.Warn(ctx, "init metrics failed", "error", err)
+	}
+	if cfg.MetricsAddr != "" {
+		go serveMetrics(ctx, cfg.MetricsAddr)
+	}
+
+	httpClient := newHTTPClient(cfg.TraceHTTP)
+	if err := enforcePromptTokens(ctx, &cfg, httpClient); err != nil {
+		log.Error(ctx, "prompt too large", err)
+		return 1
+	}
+	log.Info(ctx, "using model", "llm backend", cfg.LLMBackend)
+	llm, err := buildModel(ctx, &cfg, httpClient)
+	if err != nil {
+		log.Error(ctx, "failed to create model", err)
+		return 1
+	}
+
+	genCfg := buildGenConfig(&cfg)
+	candidateCount := 15 + cfg.AutoAgents
+	if cfg.MaxCostUSD > 0 {
+		capRounds := max(capRoundsByBudget(&cfg, candidateCount), cfg.MinRounds)
+		if capRounds < cfg.MaxRounds {
+			log.Info(ctx, "reducing max_rounds to respect budget", "from", cfg.MaxRounds, "to", capRounds, "max_cost_usd", cfg.MaxCostUSD)
+			cfg.MaxRounds = capRounds
+		}
+	}
+
+	loader, _, err := buildTumixLoader(llm, genCfg, cfg.MinRounds, cfg.MaxRounds, cfg.AutoAgents)
+	if err != nil {
+		log.Error(ctx, "failed to build tumix agent", err)
+		return 1
+	}
+
+	if cfg.MaxCostUSD > 0 {
+		capRounds := capRoundsByBudget(&cfg, candidateCount)
+		if capRounds < cfg.MinRounds {
+			log.Warn(ctx, "budget too low for requested min_rounds; raising budget to min_rounds", "budget_round_cap", capRounds, "min_rounds", cfg.MinRounds)
+			capRounds = cfg.MinRounds
+		}
+		if capRounds < cfg.MaxRounds {
+			log.Info(ctx, "reducing max_rounds to respect budget", "from", cfg.MaxRounds, "to", capRounds, "max_cost_usd", cfg.MaxCostUSD)
+			cfg.MaxRounds = capRounds
+		}
+	}
+
+	if cfg.DryRun {
+		if err := printConfig(&cfg); err != nil {
+			log.Error(ctx, "print config failed", err)
+			return 1
+		}
+		return 0
+	}
+
+	if cfg.BenchLocal > 0 {
+		benchLocal(&cfg)
+		return 0
+	}
+
+	if cfg.BatchFile != "" {
+		if err := runBatch(ctx, &cfg, loader); err != nil {
+			log.Error(ctx, "batch run failed", err)
+			return 1
+		}
+		return 0
+	}
+
+	log.Info(ctx, "run tumix", slog.Any("cfg", &cfg), slog.Any("loader", &loader))
+	if err := runOnce(ctx, &cfg, loader); err != nil {
+		log.Error(ctx, "run failed", err)
+		return 1
+	}
+	return 0
+}
+
+func parseConfig() (config, error) {
+	cfg := config{
+		AppName:         "tumix",
+		LLMBackend:      cmp.Or(os.Getenv("TUMIX_BACKEND"), "gemini"),
+		ModelName:       cmp.Or(os.Getenv("TUMIX_MODEL"), "gemini-2.5-flash"),
+		TraceHTTP:       parseEnv("TUMIX_HTTP_TRACE", false),
+		UserID:          cmp.Or(os.Getenv("TUMIX_USER"), "user"),
+		SessionID:       cmp.Or(os.Getenv("TUMIX_SESSION"), ""),
+		SessionDir:      cmp.Or(os.Getenv("TUMIX_SESSION_DIR"), ""),
+		MaxRounds:       parseEnv("TUMIX_MAX_ROUNDS", uint(3)),
+		MinRounds:       parseEnv("TUMIX_MIN_ROUNDS", uint(2)),
+		Temperature:     parseEnv("TUMIX_TEMPERATURE", float64(-1)),
+		TopP:            parseEnv("TUMIX_TOP_P", float64(-1)),
+		TopK:            parseEnv("TUMIX_TOP_K", int(0)),
+		MaxTokens:       parseEnv("TUMIX_MAX_TOKENS", int(0)),
+		Seed:            parseEnv("TUMIX_SEED", int64(0)),
+		CallWarn:        parseEnv("TUMIX_CALL_WARN", int(300)),
+		Concurrency:     parseEnv("TUMIX_CONCURRENCY", int(1)),
+		MaxPromptChars:  parseEnv("TUMIX_MAX_PROMPT_CHARS", int(8000)),
+		MaxPromptTokens: parseEnv("TUMIX_MAX_PROMPT_TOKENS", int(0)),
+		MaxCostUSD:      parseEnv("TUMIX_MAX_COST_USD", float64(0.01)),
+		AutoAgents:      parseEnv("TUMIX_AUTO_AGENTS", int(0)),
+		BudgetTokens:    parseEnv("TUMIX_BUDGET_TOKENS", int(0)),
+	}
+
+	flag.StringVar(&cfg.LLMBackend, "backend", cfg.LLMBackend, "LLM backend to use (gemini, openai, anthropic, xai)")
+	flag.StringVar(&cfg.ModelName, "model", cfg.ModelName, "Gemini model to use (default TUMIX_MODEL or gemini-2.5-flash)")
+	flag.StringVar(&cfg.APIKey, "api_key", cfg.APIKey, "Gemini API key (GOOGLE_API_KEY)")
+	flag.BoolVar(&cfg.TraceHTTP, "http_trace", cfg.TraceHTTP, "Enable HTTP client OpenTelemetry spans")
+	flag.StringVar(&cfg.UserID, "user", cfg.UserID, "User ID for the session")
+	flag.StringVar(&cfg.SessionID, "session", cfg.SessionID, "Session ID (auto-generated if empty)")
+	flag.StringVar(&cfg.SessionDir, "session_dir", cfg.SessionDir, "Directory to persist sessions (optional, uses in-memory if empty)")
+	flag.UintVar(&cfg.MaxRounds, "max_rounds", cfg.MaxRounds, "Maximum TUMIX iterations (default 3, overridable via TUMIX_MAX_ROUNDS)")
+	flag.UintVar(&cfg.MinRounds, "min_rounds", cfg.MinRounds, "Minimum TUMIX iterations before judge can stop (default 2, TUMIX_MIN_ROUNDS)")
+	flag.Float64Var(&cfg.Temperature, "temperature", cfg.Temperature, "Sampling temperature (set <0 to leave model default; env TUMIX_TEMPERATURE)")
+	flag.Float64Var(&cfg.TopP, "top_p", cfg.TopP, "Top-p nucleus sampling (set <0 to leave model default; env TUMIX_TOP_P)")
+	flag.IntVar(&cfg.TopK, "top_k", cfg.TopK, "Top-k sampling (0 to leave default; env TUMIX_TOP_K)")
+	flag.IntVar(&cfg.MaxTokens, "max_tokens", cfg.MaxTokens, "Max output tokens (0 to leave default; env TUMIX_MAX_TOKENS)")
+	flag.Int64Var(&cfg.Seed, "seed", cfg.Seed, "Deterministic seed (0 to leave unset; env TUMIX_SEED)")
+	flag.BoolVar(&cfg.OutputJSON, "json", false, "Emit final answer as JSON to stdout")
+	flag.BoolVar(&cfg.DryRun, "dry_run", false, "Print resolved config and exit without calling model")
+	flag.BoolVar(&cfg.LogJSON, "log_json", false, "Use JSON logging format")
+	flag.StringVar(&cfg.OTLPEndpoint, "otlp_endpoint", cfg.OTLPEndpoint, "OTLP endpoint for tracing (empty to disable)")
+	flag.IntVar(&cfg.CallWarn, "call_warn", cfg.CallWarn, "Warn if estimated LLM calls exceed this number")
+	flag.StringVar(&cfg.BatchFile, "batch_file", cfg.BatchFile, "Optional file with one prompt per line for batch processing")
+	flag.IntVar(&cfg.Concurrency, "concurrency", cfg.Concurrency, "Max concurrent prompts when using -batch_file")
+	flag.IntVar(&cfg.MaxPromptChars, "max_prompt_chars", cfg.MaxPromptChars, "Fail if user prompt exceeds this many characters")
+	flag.IntVar(&cfg.MaxPromptTokens, "max_prompt_tokens", cfg.MaxPromptTokens, "Fail if estimated prompt tokens exceed this value (heuristic)")
+	flag.Float64Var(&cfg.MaxCostUSD, "max_cost_usd", cfg.MaxCostUSD, "Hard cap on estimated LLM cost per run (default $0.01, TUMIX_MAX_COST_USD)")
+	flag.IntVar(&cfg.AutoAgents, "auto_agents", cfg.AutoAgents, "Number of auto-designed agents to add (0 disables; TUMIX_AUTO_AGENTS)")
+	flag.IntVar(&cfg.BudgetTokens, "budget_tokens", cfg.BudgetTokens, "Optional per-round input token budget override (0 uses estimate)")
+	flag.IntVar(&cfg.BenchLocal, "bench_local", cfg.BenchLocal, "Run local synthetic benchmark for N iterations and exit")
+	flag.StringVar(&cfg.MetricsAddr, "metrics_addr", cmp.Or(os.Getenv("TUMIX_METRICS_ADDR"), cfg.MetricsAddr), "If set, serve /debug/vars and /healthz on this address (e.g. :9090)")
+	flag.Parse()
+
+	cfg.Prompt = strings.TrimSpace(strings.Join(flag.Args(), " "))
+	if cfg.Prompt == "" {
+		return cfg, errors.New("prompt is required; pass text after flags")
+	}
+	if cfg.MaxPromptChars > 0 && len(cfg.Prompt) > cfg.MaxPromptChars {
+		return cfg, fmt.Errorf("prompt length %d exceeds max_prompt_chars %d", len(cfg.Prompt), cfg.MaxPromptChars)
+	}
+	if cfg.MaxPromptTokens > 0 {
+		est := estimateTokensFromChars(len(cfg.Prompt))
+		if est > cfg.MaxPromptTokens {
+			return cfg, fmt.Errorf("prompt token estimate %d exceeds max_prompt_tokens %d", est, cfg.MaxPromptTokens)
+		}
+	}
+
+	// Validate backend
+	switch cfg.LLMBackend {
+	case "gemini", "openai", "anthropic", "xai":
+		// ok
+	default:
+		return cfg, fmt.Errorf("invalid backend %q; must be one of: gemini, openai, anthropic, xai", cfg.LLMBackend)
+	}
+
+	if cfg.APIKey == "" {
+		// Try to fetch from backend specific env vars if generic GOOGLE_API_KEY is not set
+		switch cfg.LLMBackend {
+		case "gemini":
+			cfg.APIKey = os.Getenv("GOOGLE_API_KEY")
+		case "openai":
+			cfg.APIKey = os.Getenv("OPENAI_API_KEY")
+		case "anthropic":
+			cfg.APIKey = os.Getenv("ANTHROPIC_API_KEY")
+		case "xai":
+			cfg.APIKey = os.Getenv("XAI_API_KEY")
+		}
+	}
+
+	if cfg.APIKey == "" {
+		return cfg, errors.New("API key must be set (via -api_key or appropriate environment variable)")
+	}
+	if cfg.SessionID == "" {
+		cfg.SessionID = fmt.Sprintf("session-%d", time.Now().UnixNano())
+	}
+	if cfg.Temperature >= 0 && (cfg.Temperature < 0 || cfg.Temperature > 2) {
+		return cfg, errors.New("temperature must be between 0 and 2")
+	}
+	if cfg.TopP >= 0 && (cfg.TopP < 0 || cfg.TopP > 1) {
+		return cfg, errors.New("top_p must be between 0 and 1")
+	}
+	if cfg.TopK < 0 {
+		return cfg, errors.New("top_k cannot be negative")
+	}
+	if cfg.MaxTokens < 0 {
+		return cfg, errors.New("max_tokens cannot be negative")
+	}
+	if cfg.MinRounds == 0 {
+		cfg.MinRounds = 1
+	}
+	if cfg.MinRounds > cfg.MaxRounds {
+		return cfg, fmt.Errorf("min_rounds (%d) cannot exceed max_rounds (%d)", cfg.MinRounds, cfg.MaxRounds)
+	}
+	if cfg.MaxCostUSD < 0 {
+		return cfg, errors.New("max_cost_usd cannot be negative")
+	}
+	if cfg.AutoAgents < 0 {
+		return cfg, errors.New("auto_agents cannot be negative")
+	}
+	if cfg.BudgetTokens < 0 {
+		return cfg, errors.New("budget_tokens cannot be negative")
+	}
+	if cfg.Concurrency < 1 {
+		cfg.Concurrency = 1
+	}
+
+	return cfg, nil
+}
+
+func newHTTPClient(traceEnabled bool) *http.Client {
+	return &http.Client{
+		Transport: httptelemetry.NewTransportWithTrace(nil, traceEnabled),
+	}
+}
+
+type countTokensFunc func(ctx context.Context, model string, contents []*genai.Content, config *genai.CountTokensConfig) (*genai.CountTokensResponse, error)
+
+func enforcePromptTokens(ctx context.Context, cfg *config, httpClient *http.Client) error {
+	if cfg.MaxPromptTokens <= 0 {
+		return nil
+	}
+	client, err := genai.NewClient(ctx, &genai.ClientConfig{
+		APIKey:     cfg.APIKey,
+		HTTPClient: httpClient,
+		HTTPOptions: genai.HTTPOptions{Headers: http.Header{
+			"User-Agent": []string{version.UserAgent("genai")},
+		}},
+	})
+	if err != nil {
+		return fmt.Errorf("init token client: %w", err)
+	}
+	return enforcePromptTokensWithCounter(ctx, cfg, func(ctx context.Context, model string, contents []*genai.Content, config *genai.CountTokensConfig) (*genai.CountTokensResponse, error) {
+		return client.Models.CountTokens(ctx, model, contents, config)
+	})
+}
+
+func enforcePromptTokensWithCounter(ctx context.Context, cfg *config, counter countTokensFunc) error {
+	if cfg.MaxPromptTokens <= 0 {
+		return nil
+	}
+	contents := []*genai.Content{genai.NewContentFromText(cfg.Prompt, genai.RoleUser)}
+	resp, err := counter(ctx, cfg.ModelName, contents, nil)
+	if err != nil {
+		return fmt.Errorf("count tokens: %w", err)
+	}
+	if resp == nil {
+		return errors.New("count tokens: empty response")
+	}
+	if tokens := int(resp.TotalTokens); tokens > cfg.MaxPromptTokens {
+		return fmt.Errorf("prompt tokens %d exceed max_prompt_tokens %d", tokens, cfg.MaxPromptTokens)
+	}
+	return nil
+}
+
+func buildModel(ctx context.Context, cfg *config, httpClient *http.Client) (model.LLM, error) {
+	switch cfg.LLMBackend {
+	case "gemini":
+		clientConfig := &genai.ClientConfig{
+			APIKey:     cfg.APIKey,
+			HTTPClient: httpClient,
+		}
+
+		llm, err := gemini.NewModel(ctx, cfg.ModelName, clientConfig)
+		if err != nil {
+			return nil, fmt.Errorf("create model %s: %w", cfg.ModelName, err)
+		}
+		return llm, nil
+
+	case "openai":
+		llm, err := gollm.NewOpenAILLM(ctx, cfg.APIKey, cfg.ModelName, nil)
+		if err != nil {
+			return nil, fmt.Errorf("create model %s: %w", cfg.ModelName, err)
+		}
+		return llm, nil
+
+	case "anthropic":
+		llm, err := gollm.NewAnthropicLLM(ctx, cfg.APIKey, cfg.ModelName, nil)
+		if err != nil {
+			return nil, fmt.Errorf("create model %s: %w", cfg.ModelName, err)
+		}
+		return llm, nil
+
+	case "xai":
+		llm, err := gollm.NewXAILLM(ctx, cfg.APIKey, cfg.ModelName, nil)
+		if err != nil {
+			return nil, fmt.Errorf("create model %s: %w", cfg.ModelName, err)
+		}
+		return llm, nil
+
+	default:
+		return nil, fmt.Errorf("unsupported backend: %s", cfg.LLMBackend)
+	}
+}
+
+func buildGenConfig(cfg *config) *genai.GenerateContentConfig {
+	if cfg.Temperature < 0 && cfg.TopP < 0 {
+		if cfg.TopK == 0 && cfg.MaxTokens == 0 && cfg.Seed == 0 {
+			return nil
+		}
+	}
+	c := &genai.GenerateContentConfig{}
+	if cfg.Temperature >= 0 {
+		val := float32(cfg.Temperature)
+		c.Temperature = &val
+	}
+	if cfg.TopP >= 0 {
+		val := float32(cfg.TopP)
+		c.TopP = &val
+	}
+	if cfg.TopK > 0 {
+		val := float32(cfg.TopK)
+		c.TopK = &val
+	}
+	if cfg.MaxTokens > 0 {
+		c.MaxOutputTokens = int32(cfg.MaxTokens) //nolint:gosec // TODO(zchee): fix nolint
+	}
+	if cfg.Seed > 0 {
+		val := int32(cfg.Seed) //nolint:gosec // TODO(zchee): fix nolint
+		c.Seed = &val
+	}
+	return c
+}
+
+func buildTumixLoader(llm model.LLM, genCfg *genai.GenerateContentConfig, minRounds, maxRounds uint, autoAgents int) (adkagent.Loader, int, error) {
+	builders := []func(model.LLM, *genai.GenerateContentConfig) (adkagent.Agent, error){
+		tumixagent.NewBaseAgent,
+		tumixagent.NewCoTAgent,
+		tumixagent.NewCoTCodeAgent,
+		tumixagent.NewSearchAgent,
+		tumixagent.NewCodeAgent,
+		tumixagent.NewCodePlusAgent,
+		tumixagent.NewDualToolGSAgent,
+		tumixagent.NewDualToolLLMAgent,
+		tumixagent.NewDualToolComAgent,
+		tumixagent.NewGuidedGSAgent,
+		tumixagent.NewGuidedLLMAgent,
+		tumixagent.NewGuidedComAgent,
+		// tumixagent.NewGuidedPlusGSAgent,
+		// tumixagent.NewGuidedPlusLLMAgent,
+		// tumixagent.NewGuidedPlusComAgent,
+	}
+
+	candidates := make([]adkagent.Agent, 0, len(builders)+autoAgents)
+	for i, builder := range builders {
+		a, err := builder(llm, genCfg)
+		if err != nil {
+			return nil, 0, fmt.Errorf("build candidate %d: %w", i+1, err)
+		}
+		candidates = append(candidates, a)
+	}
+
+	if autoAgents > 0 {
+		autoAgents, err := tumixagent.NewAutoAgents(llm, genCfg, autoAgents)
+		if err != nil {
+			return nil, 0, fmt.Errorf("build auto agents: %w", err)
+		}
+		candidates = append(candidates, autoAgents...)
+	}
+
+	judge, err := tumixagent.NewJudgeAgent(llm, genCfg)
+	if err != nil {
+		return nil, 0, fmt.Errorf("build judge agent: %w", err)
+	}
+
+	loader, err := tumixagent.NewTumixAgentWithConfig(tumixagent.TumixConfig{
+		Candidates: candidates,
+		Judge:      judge,
+		MaxRounds:  maxRounds,
+		MinRounds:  minRounds,
+	})
+	return loader, len(candidates), err
+}
+
+func runOnce(ctx context.Context, cfg *config, loader adkagent.Loader) error {
+	sessionService := session.InMemoryService()
+	if cfg.SessionDir != "" {
+		svc, err := sessionfs.Service(cfg.SessionDir)
+		if err != nil {
+			return fmt.Errorf("init session store: %w", err)
+		}
+		sessionService = svc
+	} else if dbPath := os.Getenv("TUMIX_SESSION_SQLITE"); dbPath != "" {
+		svc, err := sessiondb.Service(ctx, dbPath)
+		if err != nil {
+			return fmt.Errorf("init sqlite store: %w", err)
+		}
+		sessionService = svc
+	}
+	if _, err := sessionService.Create(ctx, &session.CreateRequest{
+		AppName:   cfg.AppName,
+		UserID:    cfg.UserID,
+		SessionID: cfg.SessionID,
+	}); err != nil {
+		return fmt.Errorf("create session: %w", err)
+	}
+
+	r, err := runner.New(runner.Config{
+		AppName:        cfg.AppName,
+		Agent:          loader.RootAgent(),
+		SessionService: sessionService,
+	})
+	if err != nil {
+		return fmt.Errorf("runner init: %w", err)
+	}
+
+	content := genai.NewContentFromText(cfg.Prompt, genai.RoleUser)
+	var finalAuthor, finalText string
+	var totalIn, totalOut int64
+	for event, err := range r.Run(ctx, cfg.UserID, cfg.SessionID, content, adkagent.RunConfig{}) {
+		if err != nil {
+			return fmt.Errorf("agent run: %w", err)
+		}
+		if !cfg.OutputJSON {
+			logEvent(ctx, event)
+		}
+		if text := firstText(event); text != "" {
+			finalText = text
+			finalAuthor = event.Author
+		}
+		inTok, outTok := recordUsage(ctx, event)
+		totalIn += inTok
+		totalOut += outTok
+	}
+	estimateAndWarn(ctx, cfg, int(totalIn), int(totalOut))
+
+	if cfg.OutputJSON {
+		out := map[string]any{
+			"session_id":    cfg.SessionID,
+			"author":        finalAuthor,
+			"text":          finalText,
+			"input_tokens":  totalIn,
+			"output_tokens": totalOut,
+			"config": map[string]any{
+				"model":       cfg.ModelName,
+				"max_rounds":  cfg.MaxRounds,
+				"temperature": cfg.Temperature,
+				"top_p":       cfg.TopP,
+				"top_k":       cfg.TopK,
+				"max_tokens":  cfg.MaxTokens,
+				"seed":        cfg.Seed,
+			},
+		}
+		enc := jsontext.NewEncoder(os.Stdout)
+		if err := json.MarshalEncode(enc, out); err != nil {
+			return fmt.Errorf("encode json: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func runBatch(ctx context.Context, cfg *config, loader adkagent.Loader) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	f, err := os.Open(filepath.Clean(cfg.BatchFile))
+	if err != nil {
+		return fmt.Errorf("open batch file: %w", err)
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	var prompts []string
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		prompts = append(prompts, line)
+	}
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("read batch file: %w", err)
+	}
+
+	promptCh := make(chan string)
+	errCh := make(chan error, cfg.Concurrency)
+	var wg sync.WaitGroup
+	for i := range cfg.Concurrency {
+		wg.Add(1)
+		go func(worker int) {
+			defer wg.Done()
+			for p := range promptCh {
+				if ctx.Err() != nil {
+					return
+				}
+				local := *cfg
+				local.Prompt = p
+				if local.SessionID == "" {
+					local.SessionID = fmt.Sprintf("session-%d-%d", time.Now().UnixNano(), worker)
+				}
+				if err := runOnce(ctx, &local, loader); err != nil {
+					errCh <- fmt.Errorf("prompt %q: %w", p, err)
+					cancel()
+					return
+				}
+			}
+		}(i)
+	}
+
+	go func() {
+		for _, p := range prompts {
+			promptCh <- p
+		}
+		close(promptCh)
+	}()
+
+	wg.Wait()
+	select {
+	case err := <-errCh:
+		return err
+	default:
+		return nil
+	}
+}
+
+func logEvent(ctx context.Context, event *session.Event) {
+	if event == nil || event.Partial {
+		return
+	}
+
+	var texts []string
+	if event.Content != nil {
+		for _, part := range event.Content.Parts {
+			if part == nil {
+				continue
+			}
+			if part.Text != "" {
+				texts = append(texts, part.Text)
+			}
+		}
+	}
+	if len(texts) == 0 {
+		return
+	}
+
+	log.Info(ctx, "agent response", "author", event.Author, "text", strings.Join(texts, " "))
+}
+
+func firstText(event *session.Event) string {
+	if event == nil || event.Content == nil {
+		return ""
+	}
+	for _, part := range event.Content.Parts {
+		if part == nil {
+			continue
+		}
+		if part.Text != "" {
+			return part.Text
+		}
+	}
+	return ""
+}
+
+func initTracing(ctx context.Context, cfg *config) (func(), error) {
+	if cfg.OTLPEndpoint == "" {
+		return func() {}, nil
+	}
+	exp, err := otlptracegrpc.New(ctx,
+		otlptracegrpc.WithEndpoint(cfg.OTLPEndpoint),
+		otlptracegrpc.WithDialOption(grpc.WithTransportCredentials(insecure.NewCredentials())),
+	)
+	if err != nil {
+		return func() {}, fmt.Errorf("otlp exporter: %w", err)
+	}
+	res, err := resource.Merge(resource.Default(), resource.NewSchemaless(
+		semconv.ServiceName("tumix"),
+	))
+	if err != nil {
+		return func() {}, fmt.Errorf("resource: %w", err)
+	}
+	tp := trace.NewTracerProvider(trace.WithBatcher(exp), trace.WithResource(res))
+	otel.SetTracerProvider(tp)
+	return func() {
+		shutdownCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		if err := tp.Shutdown(shutdownCtx); err != nil {
+			log.Warn(ctx, "shutdown tracer provider", "error", err)
+		}
+	}, nil
+}
+
+func initMetrics() error {
+	meter = otel.GetMeterProvider().Meter("tumix")
+	var err error
+	requestCounter, err = meter.Int64Counter("tumix.llm_requests")
+	if err != nil {
+		return fmt.Errorf("init llm_requests counter: %w", err)
+	}
+	inputTokCounter, err = meter.Int64Counter("tumix.input_tokens")
+	if err != nil {
+		return fmt.Errorf("init input_tokens counter: %w", err)
+	}
+	outputTokCounter, err = meter.Int64Counter("tumix.output_tokens")
+	if err != nil {
+		return fmt.Errorf("init output_tokens counter: %w", err)
+	}
+	costCounter, err = meter.Float64Counter("tumix.cost_usd")
+	if err != nil {
+		return fmt.Errorf("init cost_usd counter: %w", err)
+	}
+	return nil
+}
+
+func serveMetrics(ctx context.Context, addr string) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		if _, err := w.Write([]byte("ok")); err != nil {
+			log.Warn(ctx, "healthz write failed", "error", err)
+		}
+	})
+	mux.Handle("/debug/vars", expvar.Handler())
+	mux.HandleFunc("/metrics", func(w http.ResponseWriter, _ *http.Request) {
+		writePromMetrics(w)
+	})
+	go func() {
+		server := &http.Server{
+			Addr:              addr,
+			Handler:           mux,
+			ReadHeaderTimeout: 5 * time.Second,
+			WriteTimeout:      15 * time.Second,
+			IdleTimeout:       60 * time.Second,
+		}
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Warn(ctx, "metrics server stopped", "error", err)
+		}
+	}()
+}
+
+func writePromMetrics(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+	fmt.Fprintf(w, "# TYPE tumix_requests counter\n")
+	fmt.Fprintf(w, "tumix_requests %d\n", expRequests.Value())
+	fmt.Fprintf(w, "# TYPE tumix_input_tokens counter\n")
+	fmt.Fprintf(w, "tumix_input_tokens %d\n", expInputTokens.Value())
+	fmt.Fprintf(w, "# TYPE tumix_output_tokens counter\n")
+	fmt.Fprintf(w, "tumix_output_tokens %d\n", expOutputTokens.Value())
+	fmt.Fprintf(w, "# TYPE tumix_cost_usd counter\n")
+	fmt.Fprintf(w, "tumix_cost_usd %f\n", expCostUSD.Value())
+}
+
+func estimateTokensFromChars(n int) int {
+	// crude heuristic ~4 chars per token
+	if n <= 0 {
+		return 0
+	}
+	return (n + 3) / 4
+}
+
+func benchLocal(cfg *config) {
+	start := time.Now()
+	var wg sync.WaitGroup
+	prompts := cfg.BenchLocal
+	workers := max(cfg.Concurrency, 1)
+	ch := make(chan int)
+	for range workers {
+		wg.Go(func() {
+			for range ch {
+				_ = strings.Repeat("x", 1024)
+			}
+		})
+	}
+	for i := range prompts {
+		ch <- i
+	}
+	close(ch)
+	wg.Wait()
+	dur := time.Since(start)
+	fmt.Fprintf(os.Stdout, "bench_local iters=%d workers=%d duration=%s per_iter=%s\n", prompts, workers, dur, dur/time.Duration(prompts))
+}
+
+func estimateAndWarn(ctx context.Context, cfg *config, totalIn, totalOut int) {
+	// Upper-bound call count: (candidates + judge) per round.
+	agents := 12 + 1                     // 12 candidates + judge
+	calls := int(cfg.MaxRounds) * agents //nolint:gosec // TODO(zchee): fix nolint
+	if cfg.CallWarn > 0 && calls > cfg.CallWarn {
+		log.Warn(ctx, "estimated LLM calls high", "calls", calls, "threshold", cfg.CallWarn)
+	}
+	if cost := estimateCost(cfg.ModelName, totalIn, totalOut); cost > 0 {
+		costCounter.Add(ctx, cost)
+		expCostUSD.Add(cost)
+		log.Info(ctx, "usage", "input_tokens", totalIn, "output_tokens", totalOut, "cost_usd", cost)
+	}
+}
+
+func estimateCost(modelName string, inputTokens, outputTokens int) float64 {
+	p, ok := prices[modelName]
+	if !ok {
+		p = prices["gemini-2.5-flash"]
+	}
+	return (float64(inputTokens)/1000.0)*p.inUSDPerKT + (float64(outputTokens)/1000.0)*p.outUSDPerKT
+}
+
+func capRoundsByBudget(cfg *config, candidates int) uint {
+	if cfg.MaxCostUSD <= 0 {
+		return cfg.MaxRounds
+	}
+	if candidates <= 0 {
+		candidates = 1
+	}
+	// Rough, conservative token estimates.
+	inputTokens := cfg.BudgetTokens
+	if inputTokens == 0 {
+		if cfg.MaxPromptTokens > 0 {
+			inputTokens = cfg.MaxPromptTokens
+		} else {
+			inputTokens = estimateTokensFromChars(len(cfg.Prompt))
+		}
+	}
+	if inputTokens < 1 {
+		inputTokens = 1
+	}
+	outputTokens := cfg.MaxTokens
+	if outputTokens <= 0 {
+		outputTokens = 256
+	}
+	perCall := estimateCost(cfg.ModelName, inputTokens, outputTokens)
+	roundCost := perCall * float64(candidates+1) // candidates plus judge
+	if roundCost <= 0 {
+		return cfg.MaxRounds
+	}
+	capRounds := max(uint(math.Floor(cfg.MaxCostUSD/roundCost)), 1)
+	return capRounds
+}
+
+func loadPricing(ctx context.Context) {
+	path := os.Getenv("TUMIX_PRICING_FILE")
+	if path == "" {
+		return
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		log.Warn(ctx, "pricing file read failed", "error", err)
+		return
+	}
+	tmp := map[string]struct {
+		In  float64 `json:"in_per_kt"`
+		Out float64 `json:"out_per_kt"`
+	}{}
+	if err := json.Unmarshal(b, &tmp); err != nil {
+		log.Warn(ctx, "pricing file parse failed", "error", err)
+		return
+	}
+	for k, v := range tmp {
+		prices[k] = struct{ inUSDPerKT, outUSDPerKT float64 }{inUSDPerKT: v.In, outUSDPerKT: v.Out}
+	}
+}
+
+func recordUsage(ctx context.Context, event *session.Event) (in, out int64) {
+	if event == nil || event.UsageMetadata == nil {
+		return 0, 0
+	}
+	in = int64(event.UsageMetadata.PromptTokenCount)
+	out = int64(event.UsageMetadata.CandidatesTokenCount)
+	requestCounter.Add(ctx, 1)
+	inputTokCounter.Add(ctx, in)
+	outputTokCounter.Add(ctx, out)
+	expRequests.Add(1)
+	expInputTokens.Add(in)
+	expOutputTokens.Add(out)
+	return in, out
+}
+
+func printConfig(cfg *config) error {
+	out := map[string]any{
+		"model":             cfg.ModelName,
+		"max_rounds":        cfg.MaxRounds,
+		"min_rounds":        cfg.MinRounds,
+		"temperature":       cfg.Temperature,
+		"top_p":             cfg.TopP,
+		"top_k":             cfg.TopK,
+		"max_tokens":        cfg.MaxTokens,
+		"seed":              cfg.Seed,
+		"session_dir":       cfg.SessionDir,
+		"http_trace":        cfg.TraceHTTP,
+		"log_json":          cfg.LogJSON,
+		"otlp_endpoint":     cfg.OTLPEndpoint,
+		"batch_file":        cfg.BatchFile,
+		"concurrency":       cfg.Concurrency,
+		"max_cost_usd":      cfg.MaxCostUSD,
+		"auto_agents":       cfg.AutoAgents,
+		"budget_tokens":     cfg.BudgetTokens,
+		"metrics_addr":      cfg.MetricsAddr,
+		"max_prompt_tokens": cfg.MaxPromptTokens,
+	}
+	data, err := json.Marshal(out)
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+	if _, err := fmt.Fprintln(os.Stdout, string(data)); err != nil {
+		return fmt.Errorf("write config: %w", err)
+	}
+	return nil
+}
+
+func parseEnv[T any](key string, fallback T) T {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return fallback
+	}
+
+	typ := reflect.TypeFor[T]()
+	kind := typ.Kind()
+
+	var (
+		v   any
+		err error
+	)
+	switch kind {
+	case reflect.String:
+		v = raw
+	case reflect.Bool:
+		v, err = strconv.ParseBool(raw)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		v, err = strconv.ParseInt(raw, 10, typ.Bits())
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		v, err = strconv.ParseUint(raw, 10, typ.Bits())
+	case reflect.Float32, reflect.Float64:
+		v, err = strconv.ParseFloat(raw, typ.Bits())
+	default:
+		return fallback
+	}
+	if err != nil {
+		return fallback
+	}
+
+	rv := reflect.ValueOf(v)
+	if !rv.Type().ConvertibleTo(typ) {
+		return fallback
+	}
+	return rv.Convert(typ).Interface().(T)
+}

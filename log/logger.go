@@ -24,11 +24,40 @@ package log
 import (
 	"context"
 	"log/slog"
+	"os"
 	"runtime"
 	"slices"
 	"sync/atomic"
 	"time"
+
+	"github.com/Marlliton/slogpretty"
 )
+
+// Options configures a logger.
+type Options struct {
+	JSON bool
+}
+
+// New returns a slog.Logger configured per options.
+func New(opts Options) *slog.Logger {
+	if opts.JSON {
+		handler := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})
+		logger := slog.New(handler)
+		slog.SetDefault(logger)
+		return logger
+	}
+
+	handler := slogpretty.New(os.Stdout, &slogpretty.Options{
+		Level:      slog.LevelDebug,
+		AddSource:  true,                         // Show file location
+		Colorful:   true,                         // Enable colors. Default is true
+		Multiline:  true,                         // Pretty print for complex data
+		TimeFormat: slogpretty.DefaultTimeFormat, // Custom format (e.g., time.Kitchen)
+	})
+	logger := slog.New(handler)
+	slog.SetDefault(logger)
+	return logger
+}
 
 // loggerKey is the type used for the [context.Context] key for storing the logger.
 type loggerKey struct{}
