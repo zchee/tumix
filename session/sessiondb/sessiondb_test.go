@@ -17,61 +17,228 @@
 package sessiondb
 
 import (
+	"errors"
+	"maps"
+	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/adk/session"
 )
 
-func TestSQLiteSessionLifecycle(t *testing.T) {
+func TestSQLiteSessionLifecycleAndFilters(t *testing.T) {
 	t.Parallel()
 
-	dbPath := t.TempDir() + "/sessions.db"
+	dbPath := filepath.Join(t.TempDir(), "sessions.db")
 	svc, err := Service(t.Context(), dbPath)
 	if err != nil {
 		t.Fatalf("Service error: %v", err)
 	}
 
 	ctx := t.Context()
-	if _, err := svc.Create(ctx, &session.CreateRequest{AppName: "app", UserID: "u", SessionID: "s1"}); err != nil {
-		t.Fatalf("Create: %v", err)
+	_, err = svc.Create(ctx, &session.CreateRequest{
+		AppName:   "app",
+		UserID:    "u1",
+		SessionID: "s1",
+	})
+	if err != nil {
+		t.Fatalf("Create u1 s1: %v", err)
+	}
+
+	_, err = svc.Create(ctx, &session.CreateRequest{
+		AppName:   "app",
+		UserID:    "u2",
+		SessionID: "s2",
+	})
+	if err != nil {
+		t.Fatalf("Create u2 s2: %v", err)
+	}
+
+	listAll, err := svc.List(ctx, &session.ListRequest{
+		AppName: "app",
+	})
+	if err != nil {
+		t.Fatalf("List all: %v", err)
+	}
+	if len(listAll.Sessions) != 2 {
+		t.Fatalf("List all sessions = %d, want 2", len(listAll.Sessions))
+	}
+
+	listU1, err := svc.List(ctx, &session.ListRequest{
+		AppName: "app",
+		UserID:  "u1",
+	})
+	if err != nil {
+		t.Fatalf("List user filter: %v", err)
+	}
+	if len(listU1.Sessions) != 1 || listU1.Sessions[0].ID() != "s1" {
+		t.Fatalf("List user filter got %+v", listU1.Sessions)
 	}
 
 	ev := session.NewEvent("inv")
 	ev.Author = "a"
-	ev.Actions.StateDelta = map[string]any{"k": "v"}
-
-	got, err := svc.Get(ctx, &session.GetRequest{AppName: "app", UserID: "u", SessionID: "s1"})
+	ev.Timestamp = time.Now()
+	ev.Actions.StateDelta = map[string]any{
+		"k":                             "v",
+		session.KeyPrefixTemp + "tempk": "tempv",
+	}
+	got, err := svc.Get(ctx, &session.GetRequest{
+		AppName:   "app",
+		UserID:    "u1",
+		SessionID: "s1",
+	})
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
+
 	if err := svc.AppendEvent(ctx, got.Session, ev); err != nil {
 		t.Fatalf("AppendEvent: %v", err)
 	}
 
+	// Re-open to verify persistence and temp-key filtering.
 	svc2, err := Service(t.Context(), dbPath)
 	if err != nil {
 		t.Fatalf("Service reload: %v", err)
 	}
-	got2, err := svc2.Get(ctx, &session.GetRequest{AppName: "app", UserID: "u", SessionID: "s1"})
+
+	got2, err := svc2.Get(ctx, &session.GetRequest{
+		AppName:   "app",
+		UserID:    "u1",
+		SessionID: "s1",
+	})
 	if err != nil {
 		t.Fatalf("Get reload: %v", err)
 	}
+
 	val, err := got2.Session.State().Get("k")
 	if err != nil || val != "v" {
 		t.Fatalf("state after reload = %v err %v", val, err)
 	}
+
+	if _, err := got2.Session.State().Get(session.KeyPrefixTemp + "tempk"); !errors.Is(err, session.ErrStateKeyNotExist) {
+		t.Fatalf("temp key should be filtered, err=%v", err)
+	}
+
 	if got2.Session.Events().Len() != 1 {
-		t.Fatalf("events len = %d", got2.Session.Events().Len())
+		t.Fatalf("events len = %d, want 1", got2.Session.Events().Len())
 	}
-	iter := got2.Session.Events().All()
-	count := 0
-	for ev := range iter {
-		if ev.Author != "a" {
-			t.Fatalf("event author = %s", ev.Author)
-		}
-		count++
+
+	if err := svc2.Delete(ctx, &session.DeleteRequest{
+		AppName:   "app",
+		UserID:    "u1",
+		SessionID: "s1",
+	}); err != nil {
+		t.Fatalf("Delete: %v", err)
 	}
-	if count != 1 {
-		t.Fatalf("iter count = %d, want 1", count)
+
+	if _, err := svc2.Get(ctx, &session.GetRequest{
+		AppName:   "app",
+		UserID:    "u1",
+		SessionID: "s1",
+	}); err == nil {
+		t.Fatalf("expected error after delete, got nil")
+	}
+}
+
+func TestSQLiteSessionErrorPaths(t *testing.T) {
+	t.Parallel()
+
+	dbPath := filepath.Join(t.TempDir(), "sessions.db")
+	svc, err := Service(t.Context(), dbPath)
+	if err != nil {
+		t.Fatalf("Service error: %v", err)
+	}
+
+	ctx := t.Context()
+
+	if _, err := svc.Create(ctx, &session.CreateRequest{
+		AppName: "",
+		UserID:  "u",
+	}); err == nil {
+		t.Fatalf("Create without app should error")
+	}
+
+	if _, err := svc.Create(ctx, &session.CreateRequest{
+		AppName: "app",
+		UserID:  "",
+	}); err == nil {
+		t.Fatalf("Create without user should error")
+	}
+
+	// Duplicate create should fail due to primary key constraint.
+	if _, err := svc.Create(ctx, &session.CreateRequest{
+		AppName:   "app",
+		UserID:    "u",
+		SessionID: "dup",
+	}); err != nil {
+		t.Fatalf("Create dup first: %v", err)
+	}
+
+	if _, err := svc.Create(ctx, &session.CreateRequest{
+		AppName:   "app",
+		UserID:    "u",
+		SessionID: "dup",
+	}); err == nil {
+		t.Fatalf("expected duplicate create to fail")
+	}
+
+	// Append with nils or partial should be no-op or error.
+	ev := session.NewEvent("id")
+	ev.Partial = true
+	if err := svc.AppendEvent(ctx, nil, ev); err == nil {
+		t.Fatalf("AppendEvent nil session should error")
+	}
+
+	// partial true should no-op
+	if err := svc.AppendEvent(ctx, &dbSession{
+		s: &persistSession{
+			AppName:   "app",
+			UserID:    "u",
+			SessionID: "dup",
+		},
+	}, ev); err != nil {
+		t.Fatalf("AppendEvent partial should not error, got %v", err)
+	}
+
+	// load should error if fields missing
+	store := svc.(*store)
+	if _, err := store.load(ctx, "", "u", "dup"); err == nil {
+		t.Fatalf("load missing app should error")
+	}
+
+	if _, err := store.load(ctx, "app", "", "dup"); err == nil {
+		t.Fatalf("load missing user should error")
+	}
+
+	if _, err := store.load(ctx, "app", "u", ""); err == nil {
+		t.Fatalf("load missing session should error")
+	}
+}
+
+func TestSessionfsStateReuseInSessiondb(t *testing.T) {
+	t.Parallel()
+
+	st := sessionfsState{
+		state: map[string]any{
+			"a": 1,
+		},
+	}
+	if err := st.Set("b", 2); err != nil {
+		t.Fatalf("Set error = %v", err)
+	}
+
+	got, err := st.Get("a")
+	if err != nil || got != 1 {
+		t.Fatalf("Get a = %v err %v", got, err)
+	}
+
+	want := map[string]any{
+		"a": 1,
+		"b": 2,
+	}
+	collected := maps.Collect(st.All())
+	if diff := cmp.Diff(want, collected); diff != "" {
+		t.Fatalf("state iteration diff (-want +got): %s", diff)
 	}
 }
