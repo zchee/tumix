@@ -16,7 +16,9 @@
 
 package agent
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestComputeStats(t *testing.T) {
 	answers := []candidateAnswer{
