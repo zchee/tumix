@@ -21,6 +21,7 @@ import (
 	"iter"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -28,6 +29,8 @@ import (
 	"google.golang.org/adk/session"
 	"google.golang.org/adk/tool"
 	"google.golang.org/genai"
+
+	"github.com/zchee/tumix/agent/agenttest"
 )
 
 func TestSetStateAndGetState(t *testing.T) {
@@ -39,12 +42,12 @@ func TestSetStateAndGetState(t *testing.T) {
 		state          session.State
 		op             func(ctx adkagent.InvocationContext) (any, error)
 		wantValue      any
-		wantErrSubstr  string
-		wantErrIs      error
+		wantErrMsg     string
+		wantErr        error
 		wantMissingKey string
 	}{
 		"success: setState then getState": {
-			state: newMapState(map[string]any{}),
+			state: agenttest.NewInMemoryState(map[string]any{}),
 			op: func(ctx adkagent.InvocationContext) (any, error) {
 				if err := setState(ctx, "k", "v"); err != nil {
 					return nil, err
@@ -54,70 +57,62 @@ func TestSetStateAndGetState(t *testing.T) {
 			wantValue: "v",
 		},
 		"error: getState missing key wraps ErrStateKeyNotExist": {
-			state: newMapState(map[string]any{}),
+			state: agenttest.NewInMemoryState(map[string]any{}),
 			op: func(ctx adkagent.InvocationContext) (any, error) {
 				return getState(ctx, "missing")
 			},
-			wantErrSubstr:  "state missing not found",
-			wantErrIs:      session.ErrStateKeyNotExist,
+			wantErrMsg:     "state missing not found",
+			wantErr:        session.ErrStateKeyNotExist,
 			wantMissingKey: "missing",
 		},
 		"error: getState wraps non-ErrStateKeyNotExist": {
-			state: func() *mapState {
-				s := newMapState(map[string]any{})
-				s.getErr = sentinelErr
+			state: func() *agenttest.InMemoryState {
+				s := agenttest.NewInMemoryState(map[string]any{})
+				s.GetErr = sentinelErr
 				return s
 			}(),
 			op: func(ctx adkagent.InvocationContext) (any, error) {
 				return getState(ctx, "k")
 			},
-			wantErrSubstr: "get state k",
-			wantErrIs:     sentinelErr,
+			wantErrMsg: "get state k",
+			wantErr:    sentinelErr,
 		},
 		"error: setState wraps Set failure": {
-			state: func() *mapState {
-				s := newMapState(map[string]any{})
-				s.setErr = sentinelErr
+			state: func() *agenttest.InMemoryState {
+				s := agenttest.NewInMemoryState(map[string]any{})
+				s.SetErr = sentinelErr
 				return s
 			}(),
 			op: func(ctx adkagent.InvocationContext) (any, error) {
 				return nil, setState(ctx, "k", "v")
 			},
-			wantErrSubstr: "set state k",
-			wantErrIs:     sentinelErr,
+			wantErrMsg: "set state k",
+			wantErr:    sentinelErr,
 		},
 	}
 
-	for name, test := range tests {
+	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx := &stubInvocationContext{
-				Context: t.Context(),
-				session: &stubSession{
-					id:      "s",
-					appName: "app",
-					userID:  "u",
-					state:   test.state,
-					events:  &sliceEvents{},
-				},
-			}
+			sess := agenttest.NewInMemorySession("s", "app", "u", tt.state, &agenttest.InMemoryEvents{}, time.Time{})
+			ctx := agenttest.NewSessionInvocationContext(t.Context(), sess)
 
-			got, err := test.op(ctx)
-			if test.wantErrSubstr != "" { //nolint:nestif // TODO(zchee): fix nolint
+			got, err := tt.op(ctx)
+			if tt.wantErrMsg != "" {
 				if err == nil {
-					t.Fatalf("op err = nil, want substring %q", test.wantErrSubstr)
+					t.Fatalf("op err = nil, want substring %q", tt.wantErrMsg)
 				}
-				if !strings.Contains(err.Error(), test.wantErrSubstr) {
-					t.Fatalf("op err = %q, want substring %q", err.Error(), test.wantErrSubstr)
+				if !strings.Contains(err.Error(), tt.wantErrMsg) {
+					t.Fatalf("op err = %q, want substring %q", err.Error(), tt.wantErrMsg)
 				}
-				if test.wantErrIs != nil && !errors.Is(err, test.wantErrIs) {
-					t.Fatalf("errors.Is(err, %v) = false, err=%v", test.wantErrIs, err)
+				if tt.wantErr != nil && !errors.Is(err, tt.wantErr) {
+					t.Fatalf("errors.Is(err, %v) = false, err=%v", tt.wantErr, err)
 				}
-				if test.wantMissingKey != "" {
-					_, getErr := test.state.Get(test.wantMissingKey)
+				if tt.wantMissingKey != "" {
+					_, getErr := tt.state.Get(tt.wantMissingKey)
 					if !errors.Is(getErr, session.ErrStateKeyNotExist) {
-						t.Fatalf("state unexpectedly contains %q after failing op: %v", test.wantMissingKey, getErr)
+						t.Fatalf("state unexpectedly contains %q after failing op: %v", tt.wantMissingKey, getErr)
 					}
 				}
 				return
@@ -126,7 +121,7 @@ func TestSetStateAndGetState(t *testing.T) {
 			if err != nil {
 				t.Fatalf("op err = %v, want nil", err)
 			}
-			if diff := cmp.Diff(test.wantValue, got); diff != "" {
+			if diff := cmp.Diff(tt.wantValue, got); diff != "" {
 				t.Fatalf("op value mismatch (-want +got):\n%s", diff)
 			}
 		})
@@ -141,12 +136,12 @@ func TestNewFinalizeToolRun(t *testing.T) {
 	}
 
 	tests := map[string]struct {
-		args          map[string]any
-		wantResult    map[string]any
-		wantAnswer    string
-		wantConf      float64
-		wantEscalate  bool
-		wantErrSubstr string
+		args         map[string]any
+		wantResult   map[string]any
+		wantAnswer   string
+		wantConf     float64
+		wantEscalate bool
+		wantErrMsg   string
 	}{
 		"success: stores trimmed answer and confidence and escalates": {
 			args: map[string]any{
@@ -181,7 +176,7 @@ func TestNewFinalizeToolRun(t *testing.T) {
 				"confidence": 0.9,
 				"stop":       true,
 			},
-			wantErrSubstr: "answer is required",
+			wantErrMsg: "answer is required",
 		},
 		"error: confidence out of range": {
 			args: map[string]any{
@@ -189,41 +184,37 @@ func TestNewFinalizeToolRun(t *testing.T) {
 				"confidence": 1.1,
 				"stop":       true,
 			},
-			wantErrSubstr: "confidence must be between 0 and 1",
+			wantErrMsg: "confidence must be between 0 and 1",
 		},
 	}
 
-	for name, test := range tests {
+	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-
-			state := newMapState(map[string]any{})
-			actions := &session.EventActions{
-				StateDelta: make(map[string]any),
-			}
-			ctx := &stubToolContext{
-				Context:      t.Context(),
-				state:        state,
-				actions:      actions,
-				functionCall: "call-1",
-			}
 
 			toolDef, err := newFinalizeTool()
 			if err != nil {
 				t.Fatalf("newFinalizeTool() err = %v, want nil", err)
 			}
+
 			runner, ok := toolDef.(runnableTool)
 			if !ok {
 				t.Fatalf("newFinalizeTool() returned %T, missing Run(tool.Context, any) method", toolDef)
 			}
 
-			result, runErr := runner.Run(ctx, test.args)
-			if test.wantErrSubstr != "" {
+			state := agenttest.NewInMemoryState(map[string]any{})
+			actions := &session.EventActions{
+				StateDelta: make(map[string]any),
+			}
+			ctx := agenttest.NewToolContext(t.Context(), state, actions, "call-1", nil)
+
+			result, runErr := runner.Run(ctx, tt.args)
+			if tt.wantErrMsg != "" {
 				if runErr == nil {
-					t.Fatalf("Run err = nil, want substring %q", test.wantErrSubstr)
+					t.Fatalf("Run err = nil, want substring %q", tt.wantErrMsg)
 				}
-				if !strings.Contains(runErr.Error(), test.wantErrSubstr) {
-					t.Fatalf("Run err = %q, want substring %q", runErr.Error(), test.wantErrSubstr)
+				if !strings.Contains(runErr.Error(), tt.wantErrMsg) {
+					t.Fatalf("Run err = %q, want substring %q", runErr.Error(), tt.wantErrMsg)
 				}
 				if _, err := state.Get(stateKeyAnswer); !errors.Is(err, session.ErrStateKeyNotExist) {
 					t.Fatalf("unexpected answer state set on error: %v", err)
@@ -237,7 +228,7 @@ func TestNewFinalizeToolRun(t *testing.T) {
 			if runErr != nil {
 				t.Fatalf("Run err = %v, want nil", runErr)
 			}
-			if diff := cmp.Diff(test.wantResult, result); diff != "" {
+			if diff := cmp.Diff(tt.wantResult, result); diff != "" {
 				t.Fatalf("Run result mismatch (-want +got):\n%s", diff)
 			}
 
@@ -249,7 +240,7 @@ func TestNewFinalizeToolRun(t *testing.T) {
 			if !ok {
 				t.Fatalf("state.Get(%q) = %T, want string", stateKeyAnswer, gotAnswer)
 			}
-			if diff := cmp.Diff(test.wantAnswer, answer); diff != "" {
+			if diff := cmp.Diff(tt.wantAnswer, answer); diff != "" {
 				t.Fatalf("state answer mismatch (-want +got):\n%s", diff)
 			}
 
@@ -261,11 +252,11 @@ func TestNewFinalizeToolRun(t *testing.T) {
 			if !ok {
 				t.Fatalf("state.Get(%q) = %T, want float64", stateKeyConfidence, gotConf)
 			}
-			if diff := cmp.Diff(test.wantConf, confidence, cmpopts.EquateApprox(0, 1e-12)); diff != "" {
+			if diff := cmp.Diff(tt.wantConf, confidence, cmpopts.EquateApprox(0, 1e-12)); diff != "" {
 				t.Fatalf("state confidence mismatch (-want +got):\n%s", diff)
 			}
 
-			if diff := cmp.Diff(test.wantEscalate, ctx.actions.Escalate); diff != "" {
+			if diff := cmp.Diff(tt.wantEscalate, ctx.Actions().Escalate); diff != "" {
 				t.Fatalf("actions.Escalate mismatch (-want +got):\n%s", diff)
 			}
 		})
@@ -379,12 +370,20 @@ func TestNewRefinementAgent(t *testing.T) {
 	}{
 		"success: wraps subagents in parallel workflow": {
 			subAgents: []adkagent.Agent{
-				mustAgent(adkagent.New(adkagent.Config{Name: "a", Description: "a", Run: func(adkagent.InvocationContext) iter.Seq2[*session.Event, error] {
-					return func(func(*session.Event, error) bool) {}
-				}})),
-				mustAgent(adkagent.New(adkagent.Config{Name: "b", Description: "b", Run: func(adkagent.InvocationContext) iter.Seq2[*session.Event, error] {
-					return func(func(*session.Event, error) bool) {}
-				}})),
+				mustAgent(adkagent.New(adkagent.Config{
+					Name:        "a",
+					Description: "a",
+					Run: func(adkagent.InvocationContext) iter.Seq2[*session.Event, error] {
+						return func(func(*session.Event, error) bool) {}
+					},
+				})),
+				mustAgent(adkagent.New(adkagent.Config{
+					Name:        "b",
+					Description: "b",
+					Run: func(adkagent.InvocationContext) iter.Seq2[*session.Event, error] {
+						return func(func(*session.Event, error) bool) {}
+					},
+				})),
 			},
 			wantName: "Refinement",
 			wantSubs: []string{"candidates"},
@@ -402,6 +401,7 @@ func TestNewRefinementAgent(t *testing.T) {
 			if diff := cmp.Diff(tt.wantName, a.Name()); diff != "" {
 				t.Fatalf("agent.Name mismatch (-want +got):\n%s", diff)
 			}
+
 			gotSubs := make([]string, 0, len(a.SubAgents()))
 			for _, sub := range a.SubAgents() {
 				gotSubs = append(gotSubs, sub.Name())
@@ -431,22 +431,24 @@ func TestNewRoundAgent(t *testing.T) {
 		},
 	}
 
-	for name, test := range tests {
+	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			a, err := NewRoundAgent(test.subAgents...)
+			a, err := NewRoundAgent(tt.subAgents...)
 			if err != nil {
 				t.Fatalf("NewRoundAgent() err = %v, want nil", err)
 			}
-			if diff := cmp.Diff(test.wantName, a.Name()); diff != "" {
+
+			if diff := cmp.Diff(tt.wantName, a.Name()); diff != "" {
 				t.Fatalf("agent.Name mismatch (-want +got):\n%s", diff)
 			}
+
 			gotSubs := make([]string, 0, len(a.SubAgents()))
 			for _, sub := range a.SubAgents() {
 				gotSubs = append(gotSubs, sub.Name())
 			}
-			if diff := cmp.Diff(test.wantSubs, gotSubs); diff != "" {
+			if diff := cmp.Diff(tt.wantSubs, gotSubs); diff != "" {
 				t.Fatalf("agent.SubAgents mismatch (-want +got):\n%s", diff)
 			}
 		})
@@ -474,12 +476,18 @@ func TestNewTumixAgentWrappers(t *testing.T) {
 		},
 		"error: requires at least one candidate": {
 			build: func() (adkagent.Loader, error) {
-				return NewTumixAgentWithConfig(TumixConfig{Candidates: nil, Judge: noOpJudge()})
+				return NewTumixAgentWithConfig(TumixConfig{
+					Candidates: nil,
+					Judge:      noOpJudge(),
+				})
 			},
 		},
 		"error: requires judge": {
 			build: func() (adkagent.Loader, error) {
-				return NewTumixAgentWithConfig(TumixConfig{Candidates: []adkagent.Agent{stubCandidate("A")}, Judge: nil})
+				return NewTumixAgentWithConfig(TumixConfig{
+					Candidates: []adkagent.Agent{stubCandidate("A")},
+					Judge:      nil,
+				})
 			},
 		},
 		"success: MinRounds clamps to MaxRounds": {
@@ -495,12 +503,12 @@ func TestNewTumixAgentWrappers(t *testing.T) {
 		},
 	}
 
-	for name, test := range tests {
+	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			loader, err := test.build()
-			if test.wantAgents == nil {
+			loader, err := tt.build()
+			if tt.wantAgents == nil {
 				if err == nil {
 					t.Fatalf("build err = nil, want error")
 				}
@@ -517,11 +525,12 @@ func TestNewTumixAgentWrappers(t *testing.T) {
 			if root == nil {
 				t.Fatalf("loader.RootAgent() = nil")
 			}
+
 			gotAgents := []string{root.Name()}
 			for _, sub := range root.SubAgents() {
 				gotAgents = append(gotAgents, sub.Name())
 			}
-			if diff := cmp.Diff(test.wantAgents, gotAgents); diff != "" {
+			if diff := cmp.Diff(tt.wantAgents, gotAgents); diff != "" {
 				t.Fatalf("agent tree mismatch (-want +got):\n%s", diff)
 			}
 		})
@@ -579,14 +588,14 @@ func TestHelpersEdgeCases(t *testing.T) {
 		},
 	}
 
-	for name, test := range tests {
+	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			if diff := cmp.Diff(test.wantFirstText, firstTextFromContent(test.content)); diff != "" {
+			if diff := cmp.Diff(tt.wantFirstText, firstTextFromContent(tt.content)); diff != "" {
 				t.Fatalf("firstTextFromContent mismatch (-want +got):\n%s", diff)
 			}
-			if diff := cmp.Diff(test.wantContentText, firstContentText(test.content)); diff != "" {
+			if diff := cmp.Diff(tt.wantContentText, firstContentText(tt.content)); diff != "" {
 				t.Fatalf("firstContentText mismatch (-want +got):\n%s", diff)
 			}
 		})
@@ -622,15 +631,17 @@ func TestMajorityVoteTieBreak(t *testing.T) {
 		},
 	}
 
-	for name, test := range tests {
+	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			gotAnswer, gotConfidence := majorityVote(test.answers)
-			if diff := cmp.Diff(test.wantAnswer, gotAnswer); diff != "" {
+			gotAnswer, gotConfidence := majorityVote(tt.answers)
+			if diff := cmp.Diff(tt.wantAnswer, gotAnswer); diff != "" {
 				t.Fatalf("majorityVote answer mismatch (-want +got):\n%s", diff)
 			}
-			if diff := cmp.Diff(test.wantConfidence, gotConfidence, cmpopts.EquateApprox(0, 1e-12)); diff != "" {
+			if diff := cmp.Diff(tt.wantConfidence, gotConfidence,
+				cmpopts.EquateApprox(0, 1e-12),
+			); diff != "" {
 				t.Fatalf("majorityVote confidence mismatch (-want +got):\n%s", diff)
 			}
 		})
@@ -662,12 +673,15 @@ func TestComputeStatsEmptyInputs(t *testing.T) {
 		},
 	}
 
-	for name, test := range tests {
+	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			got := computeStats(test.answers, test.candidateCount)
-			if diff := cmp.Diff(test.want, got, cmp.AllowUnexported(roundStats{}), cmpopts.EquateApprox(0, 1e-12)); diff != "" {
+			got := computeStats(tt.answers, tt.candidateCount)
+			if diff := cmp.Diff(tt.want, got,
+				cmp.AllowUnexported(roundStats{}),
+				cmpopts.EquateApprox(0, 1e-12),
+			); diff != "" {
 				t.Fatalf("computeStats mismatch (-want +got):\n%s", diff)
 			}
 		})
@@ -749,29 +763,21 @@ func TestRunCandidates(t *testing.T) {
 		},
 	}
 
-	for name, test := range tests {
+	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
 			orchestrator := &tumixOrchestrator{
-				candidateAgent: test.candidateAgent,
+				candidateAgent: tt.candidateAgent,
 			}
-			ctx := &stubInvocationContext{
-				Context: t.Context(),
-				session: &stubSession{
-					id:      "s",
-					appName: "app",
-					userID:  "u",
-					state:   newMapState(map[string]any{}),
-					events:  &sliceEvents{},
-				},
-			}
+			sess := agenttest.NewInMemorySession("s", "app", "u", agenttest.NewInMemoryState(map[string]any{}), &agenttest.InMemoryEvents{}, time.Time{})
+			ctx := agenttest.NewSessionInvocationContext(t.Context(), sess)
 
-			answers, stop := orchestrator.runCandidates(ctx, test.yield)
-			if diff := cmp.Diff(test.wantStop, stop); diff != "" {
+			answers, stop := orchestrator.runCandidates(ctx, tt.yield)
+			if diff := cmp.Diff(tt.wantStop, stop); diff != "" {
 				t.Fatalf("stop mismatch (-want +got):\n%s", diff)
 			}
-			if diff := cmp.Diff(test.wantAnswers, answers, cmp.AllowUnexported(candidateAnswer{})); diff != "" {
+			if diff := cmp.Diff(tt.wantAnswers, answers, cmp.AllowUnexported(candidateAnswer{})); diff != "" {
 				t.Fatalf("answers mismatch (-want +got):\n%s", diff)
 			}
 		})
@@ -792,13 +798,13 @@ func TestRunJudge(t *testing.T) {
 		wantYieldErr string
 	}{
 		"stop: yield aborts iteration": {
-			state:    newMapState(map[string]any{}),
+			state:    agenttest.NewInMemoryState(map[string]any{}),
 			judge:    noOpJudge(),
 			yield:    func(*session.Event, error) bool { return false },
 			wantStop: true,
 		},
 		"stop: escalated event stores normalized judge answer": {
-			state: newMapState(map[string]any{}),
+			state: agenttest.NewInMemoryState(map[string]any{}),
 			judge: mustAgent(adkagent.New(adkagent.Config{
 				Name:        "judge",
 				Description: "judge agent",
@@ -817,7 +823,7 @@ func TestRunJudge(t *testing.T) {
 			wantJudgeAns: "ok",
 		},
 		"stop: escalated event without text does not set judge answer": {
-			state: newMapState(map[string]any{}),
+			state: agenttest.NewInMemoryState(map[string]any{}),
 			judge: mustAgent(adkagent.New(adkagent.Config{
 				Name:        "judge",
 				Description: "judge agent",
@@ -834,9 +840,9 @@ func TestRunJudge(t *testing.T) {
 			wantStop: true,
 		},
 		"stop: setState failure yields error": {
-			state: func() *mapState {
-				s := newMapState(map[string]any{})
-				s.setErr = sentinelErr
+			state: func() *agenttest.InMemoryState {
+				s := agenttest.NewInMemoryState(map[string]any{})
+				s.SetErr = sentinelErr
 				return s
 			}(),
 			judge: mustAgent(adkagent.New(adkagent.Config{
@@ -858,25 +864,17 @@ func TestRunJudge(t *testing.T) {
 		},
 	}
 
-	for name, test := range tests {
+	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			orchestrator := &tumixOrchestrator{judge: test.judge}
-			ctx := &stubInvocationContext{
-				Context: t.Context(),
-				session: &stubSession{
-					id:      "s",
-					appName: "app",
-					userID:  "u",
-					state:   test.state,
-					events:  &sliceEvents{},
-				},
-			}
+			orchestrator := &tumixOrchestrator{judge: tt.judge}
+			sess := agenttest.NewInMemorySession("s", "app", "u", tt.state, &agenttest.InMemoryEvents{}, time.Time{})
+			ctx := agenttest.NewSessionInvocationContext(t.Context(), sess)
 
 			var yieldedErr error
 			yield := func(event *session.Event, err error) bool {
-				if test.yield != nil && !test.yield(event, err) {
+				if tt.yield != nil && !tt.yield(event, err) {
 					return false
 				}
 				if err != nil {
@@ -886,28 +884,28 @@ func TestRunJudge(t *testing.T) {
 			}
 
 			stop := orchestrator.runJudge(ctx, yield)
-			if diff := cmp.Diff(test.wantStop, stop); diff != "" {
+			if diff := cmp.Diff(tt.wantStop, stop); diff != "" {
 				t.Fatalf("stop mismatch (-want +got):\n%s", diff)
 			}
 
-			if test.wantYieldErr != "" {
+			if tt.wantYieldErr != "" {
 				if yieldedErr == nil {
-					t.Fatalf("yieldedErr = nil, want substring %q", test.wantYieldErr)
+					t.Fatalf("yieldedErr = nil, want substring %q", tt.wantYieldErr)
 				}
-				if !strings.Contains(yieldedErr.Error(), test.wantYieldErr) {
-					t.Fatalf("yieldedErr = %q, want substring %q", yieldedErr.Error(), test.wantYieldErr)
+				if !strings.Contains(yieldedErr.Error(), tt.wantYieldErr) {
+					t.Fatalf("yieldedErr = %q, want substring %q", yieldedErr.Error(), tt.wantYieldErr)
 				}
 				return
 			}
 
-			if test.wantJudgeAns == "" {
-				if _, err := test.state.Get(stateKeyJudgeAnswer); !errors.Is(err, session.ErrStateKeyNotExist) {
+			if tt.wantJudgeAns == "" {
+				if _, err := tt.state.Get(stateKeyJudgeAnswer); !errors.Is(err, session.ErrStateKeyNotExist) {
 					t.Fatalf("unexpected judge answer state set: %v", err)
 				}
 				return
 			}
 
-			gotJudgeAns, err := test.state.Get(stateKeyJudgeAnswer)
+			gotJudgeAns, err := tt.state.Get(stateKeyJudgeAnswer)
 			if err != nil {
 				t.Fatalf("state.Get(%q) err = %v, want nil", stateKeyJudgeAnswer, err)
 			}
@@ -915,7 +913,7 @@ func TestRunJudge(t *testing.T) {
 			if !ok {
 				t.Fatalf("state.Get(%q) = %T, want string", stateKeyJudgeAnswer, gotJudgeAns)
 			}
-			if diff := cmp.Diff(test.wantJudgeAns, judgeAnswer); diff != "" {
+			if diff := cmp.Diff(tt.wantJudgeAns, judgeAnswer); diff != "" {
 				t.Fatalf("judge answer mismatch (-want +got):\n%s", diff)
 			}
 		})
@@ -932,10 +930,10 @@ func TestEmitFinalFromState(t *testing.T) {
 		wantText   string
 		wantDelta  map[string]any
 		wantYield  bool
-		wantErrSub string
+		wantErrMsg string
 	}{
 		"success: emits final answer event with state deltas": {
-			state: newMapState(map[string]any{
+			state: agenttest.NewInMemoryState(map[string]any{
 				stateKeyAnswer:     "foo",
 				stateKeyConfidence: float64(0.7),
 				stateKeyJoined:     "- a: foo",
@@ -949,7 +947,7 @@ func TestEmitFinalFromState(t *testing.T) {
 			wantYield: true,
 		},
 		"success: falls back to judge answer when answer missing": {
-			state: newMapState(map[string]any{
+			state: agenttest.NewInMemoryState(map[string]any{
 				stateKeyJudgeAnswer: "bar",
 				stateKeyConfidence:  float64(0.95),
 			}),
@@ -961,31 +959,23 @@ func TestEmitFinalFromState(t *testing.T) {
 			wantYield: true,
 		},
 		"error: getState failure yields error": {
-			state: func() *mapState {
-				s := newMapState(map[string]any{})
-				s.getErr = sentinelErr
+			state: func() *agenttest.InMemoryState {
+				s := agenttest.NewInMemoryState(map[string]any{})
+				s.GetErr = sentinelErr
 				return s
 			}(),
 			wantYield:  false,
-			wantErrSub: "get state tumix_final_answer",
+			wantErrMsg: "get state tumix_final_answer",
 		},
 	}
 
-	for name, test := range tests {
+	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
 			orchestrator := &tumixOrchestrator{}
-			ctx := &stubInvocationContext{
-				Context: t.Context(),
-				session: &stubSession{
-					id:      "s",
-					appName: "app",
-					userID:  "u",
-					state:   test.state,
-					events:  &sliceEvents{},
-				},
-			}
+			sess := agenttest.NewInMemorySession("s", "app", "u", tt.state, &agenttest.InMemoryEvents{}, time.Time{})
+			ctx := agenttest.NewSessionInvocationContext(t.Context(), sess)
 
 			var gotEvent *session.Event
 			var gotErr error
@@ -1001,20 +991,20 @@ func TestEmitFinalFromState(t *testing.T) {
 
 			orchestrator.emitFinalFromState(ctx, yield)
 
-			if test.wantErrSub != "" {
+			if tt.wantErrMsg != "" {
 				if gotErr == nil {
-					t.Fatalf("gotErr = nil, want substring %q", test.wantErrSub)
+					t.Fatalf("gotErr = nil, want substring %q", tt.wantErrMsg)
 				}
-				if !strings.Contains(gotErr.Error(), test.wantErrSub) {
-					t.Fatalf("gotErr = %q, want substring %q", gotErr.Error(), test.wantErrSub)
+				if !strings.Contains(gotErr.Error(), tt.wantErrMsg) {
+					t.Fatalf("gotErr = %q, want substring %q", gotErr.Error(), tt.wantErrMsg)
 				}
 				return
 			}
 
-			if test.wantYield && gotEvent == nil {
+			if tt.wantYield && gotEvent == nil {
 				t.Fatalf("gotEvent = nil, want event")
 			}
-			if !test.wantYield && gotEvent != nil {
+			if !tt.wantYield && gotEvent != nil {
 				t.Fatalf("gotEvent != nil, want none")
 			}
 			if gotEvent == nil {
@@ -1022,13 +1012,15 @@ func TestEmitFinalFromState(t *testing.T) {
 			}
 
 			gotText := firstTextFromContent(gotEvent.Content)
-			if diff := cmp.Diff(test.wantText, gotText); diff != "" {
+			if diff := cmp.Diff(tt.wantText, gotText); diff != "" {
 				t.Fatalf("event text mismatch (-want +got):\n%s", diff)
 			}
+
 			if diff := cmp.Diff("tumix", gotEvent.Author); diff != "" {
 				t.Fatalf("event author mismatch (-want +got):\n%s", diff)
 			}
-			if diff := cmp.Diff(test.wantDelta, gotEvent.Actions.StateDelta); diff != "" {
+
+			if diff := cmp.Diff(tt.wantDelta, gotEvent.Actions.StateDelta); diff != "" {
 				t.Fatalf("state delta mismatch (-want +got):\n%s", diff)
 			}
 		})
@@ -1051,13 +1043,13 @@ func TestOrchestratorRunBranches(t *testing.T) {
 	tests := map[string]struct {
 		state        session.State
 		orchestrator *tumixOrchestrator
-		wantErrSub   string
+		wantErrMsg   string
 		wantFinal    string
 	}{
 		"error: setState(question) failure yields error": {
-			state: func() *mapState {
-				s := newMapState(map[string]any{})
-				s.setErr = sentinelErr
+			state: func() *agenttest.InMemoryState {
+				s := agenttest.NewInMemoryState(map[string]any{})
+				s.SetErr = sentinelErr
 				return s
 			}(),
 			orchestrator: &tumixOrchestrator{
@@ -1066,10 +1058,10 @@ func TestOrchestratorRunBranches(t *testing.T) {
 				maxRounds:      1,
 				minRounds:      1,
 			},
-			wantErrSub: "set state question",
+			wantErrMsg: "set state question",
 		},
 		"success: no candidates triggers judge and emits final": {
-			state: newMapState(map[string]any{}),
+			state: agenttest.NewInMemoryState(map[string]any{}),
 			orchestrator: &tumixOrchestrator{
 				candidateAgent: emptyCandidateAgent,
 				judge:          stubJudge("done"),
@@ -1080,24 +1072,16 @@ func TestOrchestratorRunBranches(t *testing.T) {
 		},
 	}
 
-	for name, test := range tests {
+	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx := &stubInvocationContext{
-				Context: t.Context(),
-				session: &stubSession{
-					id:      "s",
-					appName: "app",
-					userID:  "u",
-					state:   test.state,
-					events:  &sliceEvents{},
-				},
-			}
+			sess := agenttest.NewInMemorySession("s", "app", "u", tt.state, &agenttest.InMemoryEvents{}, time.Time{})
+			ctx := agenttest.NewSessionInvocationContext(t.Context(), sess)
 
 			var gotErr error
 			var finalText string
-			for event, err := range test.orchestrator.run(ctx) {
+			for event, err := range tt.orchestrator.run(ctx) {
 				if err != nil {
 					gotErr = err
 					continue
@@ -1108,19 +1092,20 @@ func TestOrchestratorRunBranches(t *testing.T) {
 				finalText = firstTextFromContent(event.Content)
 			}
 
-			if test.wantErrSub != "" {
+			if tt.wantErrMsg != "" {
 				if gotErr == nil {
-					t.Fatalf("gotErr = nil, want substring %q", test.wantErrSub)
+					t.Fatalf("gotErr = nil, want substring %q", tt.wantErrMsg)
 				}
-				if !strings.Contains(gotErr.Error(), test.wantErrSub) {
-					t.Fatalf("gotErr = %q, want substring %q", gotErr.Error(), test.wantErrSub)
+				if !strings.Contains(gotErr.Error(), tt.wantErrMsg) {
+					t.Fatalf("gotErr = %q, want substring %q", gotErr.Error(), tt.wantErrMsg)
 				}
 				return
 			}
+
 			if gotErr != nil {
 				t.Fatalf("gotErr = %v, want nil", gotErr)
 			}
-			if diff := cmp.Diff(test.wantFinal, finalText); diff != "" {
+			if diff := cmp.Diff(tt.wantFinal, finalText); diff != "" {
 				t.Fatalf("final text mismatch (-want +got):\n%s", diff)
 			}
 		})
