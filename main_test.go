@@ -18,8 +18,14 @@ package main
 
 import (
 	"context"
+	json "encoding/json/v2"
+	"flag"
+	"os"
+	"path/filepath"
 	"testing"
 
+	"google.golang.org/adk/model"
+	"google.golang.org/adk/session"
 	"google.golang.org/genai"
 )
 
@@ -173,5 +179,212 @@ func TestCapRoundsByBudget(t *testing.T) {
 	}
 	if roundCap > cfg.MaxRounds {
 		t.Fatalf("cap should not exceed max_rounds: %d > %d", roundCap, cfg.MaxRounds)
+	}
+}
+
+func TestBuildGenConfig(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		cfg      config
+		wantNil  bool
+		wantTopK float32
+	}{
+		"nil_when_all_defaults": {
+			cfg: config{
+				Temperature: -1,
+				TopP:        -1,
+				TopK:        0,
+				MaxTokens:   0,
+				Seed:        0,
+			},
+			wantNil: true,
+		},
+		"populated": {
+			cfg: config{
+				Temperature: 0.7,
+				TopP:        0.9,
+				TopK:        12,
+				MaxTokens:   128,
+				Seed:        42,
+			},
+			wantNil:  false,
+			wantTopK: 12,
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			got := buildGenConfig(&tt.cfg)
+			if tt.wantNil && got != nil {
+				t.Fatalf("expected nil config")
+			}
+			if !tt.wantNil {
+				if got == nil {
+					t.Fatalf("expected config, got nil")
+				}
+				if got.TopK == nil || *got.TopK != tt.wantTopK {
+					t.Fatalf("TopK = %v, want %v", got.TopK, tt.wantTopK)
+				}
+			}
+		})
+	}
+}
+
+func TestParseConfigSuccessAndEnvFallback(t *testing.T) {
+	resetFlags := func(args []string) func() {
+		origArgs := os.Args
+		origFlag := flag.CommandLine
+		flag.CommandLine = flag.NewFlagSet(args[0], flag.ContinueOnError)
+		flag.CommandLine.SetOutput(os.Stdout)
+		os.Args = args
+		return func() {
+			os.Args = origArgs
+			flag.CommandLine = origFlag
+		}
+	}
+
+	t.Run("success_with_flags", func(t *testing.T) {
+		restore := resetFlags([]string{"cmd", "-api_key=key", "-backend=gemini", "-model=gemini-2.5-flash", "hello world"})
+		defer restore()
+
+		t.Setenv("TUMIX_MAX_COST_USD", "0.02")
+		cfg, err := parseConfig()
+		if err != nil {
+			t.Fatalf("parseConfig error = %v", err)
+		}
+		if cfg.Prompt != "hello world" {
+			t.Fatalf("Prompt = %q", cfg.Prompt)
+		}
+		if cfg.APIKey != "key" {
+			t.Fatalf("APIKey = %q, want key", cfg.APIKey)
+		}
+		if cfg.MaxCostUSD != 0.02 {
+			t.Fatalf("MaxCostUSD = %f, want 0.02", cfg.MaxCostUSD)
+		}
+	})
+
+	t.Run("env_api_key_used_when_flag_missing", func(t *testing.T) {
+		restore := resetFlags([]string{"cmd", "-backend=gemini", "hi"})
+		defer restore()
+
+		t.Setenv("GOOGLE_API_KEY", "env-key")
+		cfg, err := parseConfig()
+		if err != nil {
+			t.Fatalf("parseConfig error = %v", err)
+		}
+		if cfg.APIKey != "env-key" {
+			t.Fatalf("APIKey = %q, want env-key", cfg.APIKey)
+		}
+	})
+}
+
+func TestParseConfigErrors(t *testing.T) {
+	resetFlags := func(args []string) func() {
+		origArgs := os.Args
+		origFlag := flag.CommandLine
+		flag.CommandLine = flag.NewFlagSet(args[0], flag.ContinueOnError)
+		flag.CommandLine.SetOutput(os.Stdout)
+		os.Args = args
+		return func() {
+			os.Args = origArgs
+			flag.CommandLine = origFlag
+		}
+	}
+
+	tests := map[string]struct {
+		args []string
+		env  map[string]string
+	}{
+		"missing_prompt": {
+			args: []string{"cmd", "-api_key=k"},
+		},
+		"invalid_backend": {
+			args: []string{"cmd", "-api_key=k", "-backend=bad", "hello"},
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			restore := resetFlags(tt.args)
+			defer restore()
+			for k, v := range tt.env {
+				t.Setenv(k, v)
+			}
+			if _, err := parseConfig(); err == nil {
+				t.Fatalf("expected error for case %s", name)
+			}
+		})
+	}
+}
+
+func TestLoadPricingOverride(t *testing.T) {
+	tmp := t.TempDir()
+	file := filepath.Join(tmp, "pricing.json")
+	custom := map[string]any{
+		"custom-model": map[string]any{
+			"in_per_kt":  0.123,
+			"out_per_kt": 0.321,
+		},
+	}
+	data, err := json.Marshal(custom)
+	if err != nil {
+		t.Fatalf("marshal pricing: %v", err)
+	}
+
+	if err := os.WriteFile(file, data, 0o600); err != nil {
+		t.Fatalf("write pricing: %v", err)
+	}
+
+	t.Setenv("TUMIX_PRICING_FILE", file)
+	loadPricing(t.Context())
+
+	p, ok := prices["custom-model"]
+	if !ok {
+		t.Fatalf("custom pricing not loaded")
+	}
+	if p.inUSDPerKT != 0.123 || p.outUSDPerKT != 0.321 {
+		t.Fatalf("pricing = %+v", p)
+	}
+}
+
+func TestEnforcePromptTokensWithCounterNilResponse(t *testing.T) {
+	t.Parallel()
+
+	cfg := config{Prompt: "hello world", MaxPromptTokens: 5, ModelName: "m"}
+	counter := func(ctx context.Context, model string, contents []*genai.Content, config *genai.CountTokensConfig) (*genai.CountTokensResponse, error) {
+		return nil, nil
+	}
+	if err := enforcePromptTokensWithCounter(t.Context(), &cfg, counter); err == nil {
+		t.Fatalf("expected error on nil response")
+	}
+}
+
+func TestRecordUsageUpdatesCounters(t *testing.T) {
+	t.Parallel()
+
+	// Reset expvar counters to zero for deterministic assertions.
+	expRequests.Set(0)
+	expInputTokens.Set(0)
+	expOutputTokens.Set(0)
+	expCostUSD.Set(0)
+	if err := initMetrics(); err != nil {
+		t.Fatalf("initMetrics: %v", err)
+	}
+
+	event := &session.Event{}
+	event.LLMResponse = model.LLMResponse{
+		UsageMetadata: &genai.GenerateContentResponseUsageMetadata{
+			PromptTokenCount:     10,
+			CandidatesTokenCount: 5,
+		},
+	}
+	in, out := recordUsage(t.Context(), event)
+	if in != 10 || out != 5 {
+		t.Fatalf("recordUsage returned %d,%d want 10,5", in, out)
+	}
+	if expRequests.Value() != 1 || expInputTokens.Value() != 10 || expOutputTokens.Value() != 5 {
+		t.Fatalf("expvars not updated: req=%d in=%d out=%d", expRequests.Value(), expInputTokens.Value(), expOutputTokens.Value())
 	}
 }
