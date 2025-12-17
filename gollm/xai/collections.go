@@ -287,9 +287,7 @@ func (c *CollectionsClient) Search(ctx context.Context, query string, collection
 	if params.limit != nil {
 		req.Limit = params.limit
 	}
-	if params.rankingMetric != nil {
-		req.RankingMetric = params.rankingMetric
-	}
+
 	resp, err := c.documents.Search(ctx, req)
 	return resp, WrapError(err)
 }
