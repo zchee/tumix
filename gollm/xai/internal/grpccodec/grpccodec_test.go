@@ -24,9 +24,7 @@ import (
 	"unsafe"
 
 	"google.golang.org/grpc/encoding"
-	grpcmem "google.golang.org/grpc/mem"
-
-	"github.com/zchee/tumix/gollm/xai/internal/grpccodec/mem"
+	"google.golang.org/grpc/mem"
 )
 
 func TestCodecName(t *testing.T) {
@@ -90,7 +88,7 @@ func TestCodecMarshalVTProtoPooledBuffer(t *testing.T) {
 		t.Fatalf("Marshal() data mismatch")
 	}
 
-	if _, ok := got[0].(grpcmem.SliceBuffer); ok {
+	if _, ok := got[0].(mem.SliceBuffer); ok {
 		t.Fatalf("Marshal() returned mem.SliceBuffer; want pooled buffer")
 	}
 
@@ -129,8 +127,8 @@ func TestCodecUnmarshalVTProto(t *testing.T) {
 	}
 
 	buffer := mem.SliceBuffer(payload)
-	gbuffer := (*grpcmem.SliceBuffer)(unsafe.Pointer(&buffer))
-	data := grpcmem.BufferSlice{gbuffer}
+	gbuffer := (*mem.SliceBuffer)(unsafe.Pointer(&buffer))
+	data := mem.BufferSlice{gbuffer}
 
 	if err := codec.Unmarshal(data, msg); err != nil {
 		t.Fatalf("Unmarshal() error = %v", err)
@@ -147,8 +145,8 @@ func TestCodecUnmarshalVTProto(t *testing.T) {
 
 func TestCodecMarshalFallback(t *testing.T) {
 	buffer := mem.SliceBuffer([]byte("fallback data"))
-	gbuffer := (*grpcmem.SliceBuffer)(unsafe.Pointer(&buffer))
-	want := grpcmem.BufferSlice{gbuffer}
+	gbuffer := (*mem.SliceBuffer)(unsafe.Pointer(&buffer))
+	want := mem.BufferSlice{gbuffer}
 	fallback := &stubCodec{
 		returned: want,
 	}
@@ -179,8 +177,8 @@ func TestCodecUnmarshalFallback(t *testing.T) {
 	codec := Codec{fallback: fallback}
 
 	buffer := mem.SliceBuffer([]byte("fallback unmarshal payload"))
-	gbuffer := (*grpcmem.SliceBuffer)(unsafe.Pointer(&buffer))
-	data := grpcmem.BufferSlice{gbuffer}
+	gbuffer := (*mem.SliceBuffer)(unsafe.Pointer(&buffer))
+	data := mem.BufferSlice{gbuffer}
 	target := &struct{ A int }{}
 
 	if err := codec.Unmarshal(data, target); err != nil {
@@ -252,9 +250,9 @@ type stubCodec struct {
 	unmarshalCalls     int
 	marshalErr         error
 	unmarshalErr       error
-	returned           grpcmem.BufferSlice
+	returned           mem.BufferSlice
 	lastMarshalValue   any
-	lastUnmarshalData  grpcmem.BufferSlice
+	lastUnmarshalData  mem.BufferSlice
 	lastUnmarshalValue any
 }
 
@@ -262,7 +260,7 @@ var _ encoding.CodecV2 = (*stubCodec)(nil)
 
 func (c *stubCodec) Name() string { return "stub" }
 
-func (c *stubCodec) Marshal(v any) (grpcmem.BufferSlice, error) {
+func (c *stubCodec) Marshal(v any) (mem.BufferSlice, error) {
 	c.marshalCalls++
 	c.lastMarshalValue = v
 
@@ -273,7 +271,7 @@ func (c *stubCodec) Marshal(v any) (grpcmem.BufferSlice, error) {
 	return c.returned, nil
 }
 
-func (c *stubCodec) Unmarshal(data grpcmem.BufferSlice, v any) error {
+func (c *stubCodec) Unmarshal(data mem.BufferSlice, v any) error {
 	c.unmarshalCalls++
 	c.lastUnmarshalData = data
 	c.lastUnmarshalValue = v

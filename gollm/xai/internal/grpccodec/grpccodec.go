@@ -21,11 +21,9 @@ import (
 	"unsafe"
 
 	"google.golang.org/grpc/encoding"
-	grpcmem "google.golang.org/grpc/mem"
+	"google.golang.org/grpc/mem"
 
 	_ "google.golang.org/grpc/encoding/proto"
-
-	"github.com/zchee/tumix/gollm/xai/internal/grpccodec/mem"
 )
 
 func init() {
@@ -55,7 +53,7 @@ var _ encoding.CodecV2 = (*Codec)(nil)
 func (*Codec) Name() string { return Name }
 
 // Marshal implements [encoding.CodecV2].
-func (c *Codec) Marshal(v any) (grpcmem.BufferSlice, error) {
+func (c *Codec) Marshal(v any) (mem.BufferSlice, error) {
 	if m, ok := v.(vtprotoMessage); ok {
 		size := m.SizeVT()
 		if mem.IsBelowBufferPoolingThreshold(size) {
@@ -64,8 +62,8 @@ func (c *Codec) Marshal(v any) (grpcmem.BufferSlice, error) {
 				return nil, err
 			}
 			buffer := mem.SliceBuffer(buf)
-			gbuffer := (*grpcmem.SliceBuffer)(unsafe.Pointer(&buffer))
-			return grpcmem.BufferSlice{gbuffer}, nil
+			gbuffer := (*mem.SliceBuffer)(unsafe.Pointer(&buffer))
+			return mem.BufferSlice{gbuffer}, nil
 		}
 
 		pool := mem.DefaultBufferPool()
@@ -76,15 +74,15 @@ func (c *Codec) Marshal(v any) (grpcmem.BufferSlice, error) {
 		}
 
 		buffer := mem.NewBuffer(buf, pool)
-		gbuffer := *(*grpcmem.Buffer)(unsafe.Pointer(&buffer))
-		return grpcmem.BufferSlice{gbuffer}, nil
+		gbuffer := *(*mem.Buffer)(unsafe.Pointer(&buffer))
+		return mem.BufferSlice{gbuffer}, nil
 	}
 
 	return c.fallback.Marshal(v)
 }
 
 // Unmarshal implements [encoding.CodecV2].
-func (c *Codec) Unmarshal(data grpcmem.BufferSlice, v any) error {
+func (c *Codec) Unmarshal(data mem.BufferSlice, v any) error {
 	data2 := *(*mem.BufferSlice)(unsafe.Pointer(&data))
 
 	if m, ok := v.(vtprotoMessage); ok {
