@@ -3,7 +3,8 @@
 ## Important
 
 - This codebase is in early development. So you can plan for large-scale refactoring.
-- MUST READ the following files in the context of the ADK (Agent Development Kit):
+- MUST READ the following files in the context of the A2A(Agent2Agent), ADK (Agent Development Kit), and AI SaaS:
+  - .agent/llms/a2a-go.xml
   - .agent/llms/adk-go.xml
   - .agent/llms/adk-docs.xml
   - .agent/llms/go-genai.xml
