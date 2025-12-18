@@ -39,7 +39,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.39.0
 	go.opentelemetry.io/otel/trace v1.39.0
 	golang.org/x/sys v0.39.0
-	google.golang.org/adk v0.2.1-0.20251215152237-9b193f6426b3 // @main
+	google.golang.org/adk v0.3.0 // @main
 	google.golang.org/genai v1.40.0
 	google.golang.org/grpc v1.77.0
 	google.golang.org/protobuf v1.36.11
