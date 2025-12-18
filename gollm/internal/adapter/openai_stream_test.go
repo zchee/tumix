@@ -47,10 +47,26 @@ func BenchmarkOpenAIStreamAggregatorToolCalls(b *testing.B) {
 		toolCalls     int
 		deltasPerCall int
 	}{
-		{name: "calls=4", toolCalls: 4, deltasPerCall: 4},
-		{name: "calls=16", toolCalls: 16, deltasPerCall: 4},
-		{name: "calls=64", toolCalls: 64, deltasPerCall: 4},
-		{name: "calls=256", toolCalls: 256, deltasPerCall: 4},
+		{
+			name:          "calls=4",
+			toolCalls:     4,
+			deltasPerCall: 4,
+		},
+		{
+			name:          "calls=16",
+			toolCalls:     16,
+			deltasPerCall: 4,
+		},
+		{
+			name:          "calls=64",
+			toolCalls:     64,
+			deltasPerCall: 4,
+		},
+		{
+			name:          "calls=256",
+			toolCalls:     256,
+			deltasPerCall: 4,
+		},
 	}
 
 	for _, tt := range tests {
