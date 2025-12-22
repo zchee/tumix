@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/adk/model"
 	"google.golang.org/adk/session"
 	"google.golang.org/genai"
@@ -386,5 +387,102 @@ func TestRecordUsageUpdatesCounters(t *testing.T) {
 	}
 	if expRequests.Value() != 1 || expInputTokens.Value() != 10 || expOutputTokens.Value() != 5 {
 		t.Fatalf("expvars not updated: req=%d in=%d out=%d", expRequests.Value(), expInputTokens.Value(), expOutputTokens.Value())
+	}
+}
+
+func TestBuildRunOutput(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		cfg          config
+		author       string
+		text         string
+		inputTokens  int64
+		outputTokens int64
+		want         runOutput
+	}{
+		"success: fields copied": {
+			cfg: config{
+				SessionID:   "session-1",
+				ModelName:   "gemini-2.5-flash",
+				MaxRounds:   3,
+				Temperature: 0.7,
+				TopP:        0.9,
+				TopK:        4,
+				MaxTokens:   256,
+				Seed:        42,
+			},
+			author:       "agent",
+			text:         "answer",
+			inputTokens:  12,
+			outputTokens: 34,
+			want: runOutput{
+				SessionID:    "session-1",
+				Author:       "agent",
+				Text:         "answer",
+				InputTokens:  12,
+				OutputTokens: 34,
+				Config: runOutputConfig{
+					Model:       "gemini-2.5-flash",
+					MaxRounds:   3,
+					Temperature: 0.7,
+					TopP:        0.9,
+					TopK:        4,
+					MaxTokens:   256,
+					Seed:        42,
+				},
+			},
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			got := buildRunOutput(&tc.cfg, tc.author, tc.text, tc.inputTokens, tc.outputTokens)
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Fatalf("run output mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestParseConfigAllowsNoPromptInBatchOrA2A(t *testing.T) {
+	resetFlags := func(args []string) func() {
+		origArgs := os.Args
+		origFlag := flag.CommandLine
+		flag.CommandLine = flag.NewFlagSet(args[0], flag.ContinueOnError)
+		flag.CommandLine.SetOutput(os.Stdout)
+		os.Args = args
+		return func() {
+			os.Args = origArgs
+			flag.CommandLine = origFlag
+		}
+	}
+
+	tests := map[string]struct {
+		args []string
+		env  map[string]string
+	}{
+		"batch: no prompt required": {
+			args: []string{"cmd", "-api_key=key", "-batch_file=/tmp/prompts.txt"},
+		},
+		"bench: no prompt required": {
+			args: []string{"cmd", "-api_key=key", "-bench_local=2"},
+		},
+		"a2a: no prompt required": {
+			args: []string{"cmd", "-api_key=key", "-a2a_addr=:8081"},
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			restore := resetFlags(tc.args)
+			defer restore()
+			for k, v := range tc.env {
+				t.Setenv(k, v)
+			}
+			if _, err := parseConfig(); err != nil {
+				t.Fatalf("parseConfig error = %v", err)
+			}
+		})
 	}
 }
