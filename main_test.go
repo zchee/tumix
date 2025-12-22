@@ -435,10 +435,12 @@ func TestBuildRunOutput(t *testing.T) {
 		},
 	}
 
-	for name, tc := range tests {
+	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			got := buildRunOutput(&tc.cfg, tc.author, tc.text, tc.inputTokens, tc.outputTokens)
-			if diff := cmp.Diff(tc.want, got); diff != "" {
+			t.Parallel()
+
+			got := buildRunOutput(&tt.cfg, tt.author, tt.text, tt.inputTokens, tt.outputTokens)
+			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Fatalf("run output mismatch (-want +got):\n%s", diff)
 			}
 		})
@@ -473,11 +475,11 @@ func TestParseConfigAllowsNoPromptInBatchOrA2A(t *testing.T) {
 		},
 	}
 
-	for name, tc := range tests {
+	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			restore := resetFlags(tc.args)
+			restore := resetFlags(tt.args)
 			defer restore()
-			for k, v := range tc.env {
+			for k, v := range tt.env {
 				t.Setenv(k, v)
 			}
 			if _, err := parseConfig(); err != nil {

@@ -91,7 +91,7 @@ func (e *a2aExecutor) Execute(ctx context.Context, reqCtx *a2asrv.RequestContext
 	}
 
 	var parts []a2a.Part
-	if isBatch {
+	if isBatch { //nolint:nestif
 		outputs, err := runBatchPrompts(ctx, &local, e.loader, prompts, runner)
 		if err != nil {
 			return emitFailure(err)
@@ -132,7 +132,7 @@ func (e *a2aExecutor) Cancel(ctx context.Context, reqCtx *a2asrv.RequestContext,
 	return nil
 }
 
-func extractA2APrompts(msg *a2a.Message) ([]string, bool, error) {
+func extractA2APrompts(msg *a2a.Message) (texts []string, isBatch bool, err error) {
 	if msg == nil {
 		return nil, false, errors.New("message is required")
 	}
@@ -219,7 +219,7 @@ func extractA2APrompts(msg *a2a.Message) ([]string, bool, error) {
 		}
 	}
 
-	if !batchSeen && msg.Metadata != nil {
+	if !batchSeen && msg.Metadata != nil { //nolint:nestif
 		for _, key := range []string{"prompts", "batch_prompts", "batchPrompts"} {
 			if value, ok := msg.Metadata[key]; ok {
 				prompts, found, err := coerceStringSlice(value)
@@ -265,7 +265,7 @@ func buildA2AResponseParts(meta map[string]any, output *runOutput, batch []batch
 
 	includeText := true
 	includeJSON := true
-	if meta != nil {
+	if meta != nil { //nolint:nestif
 		modes, ok := meta["accepted_output_modes"]
 		if !ok {
 			modes = meta["acceptedOutputModes"]
@@ -304,13 +304,14 @@ func buildA2AResponseParts(meta map[string]any, output *runOutput, batch []batch
 	}
 
 	parts := make([]a2a.Part, 0, 2)
-	if includeText {
-		text := ""
+	if includeText { //nolint:nestif
+		var text string
 		if output != nil {
 			text = output.Text
 		} else {
 			var sb strings.Builder
-			for i, item := range batch {
+			for i := range batch {
+				item := batch[i]
 				if i > 0 {
 					sb.WriteString("\n")
 				}

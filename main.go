@@ -661,12 +661,12 @@ func readBatchPrompts(path string) ([]string, error) {
 	return prompts, nil
 }
 
-func runBatchPrompts(ctx context.Context, cfg *config, loader adkagent.Loader, prompts []string, runner runOnceFunc) ([]batchOutput, error) {
+func runBatchPrompts(ctx context.Context, cfg *config, loader adkagent.Loader, prompts []string, runFunc runOnceFunc) ([]batchOutput, error) {
 	if len(prompts) == 0 {
 		return nil, nil
 	}
-	if runner == nil {
-		runner = runOnce
+	if runFunc == nil {
+		runFunc = runOnce
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -705,7 +705,7 @@ func runBatchPrompts(ctx context.Context, cfg *config, loader adkagent.Loader, p
 				if local.SessionID == "" {
 					local.SessionID = fmt.Sprintf("session-%d-%d", time.Now().UnixNano(), worker)
 				}
-				output, err := runner(ctx, &local, loader)
+				output, err := runFunc(ctx, &local, loader)
 				if err != nil {
 					errCh <- fmt.Errorf("prompt %q: %w", job.prompt, err)
 					cancel()

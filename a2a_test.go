@@ -90,19 +90,21 @@ func TestA2AURLFromAddr(t *testing.T) {
 		},
 	}
 
-	for name, tc := range tests {
+	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			got, err := a2aURLFromAddr(tc.addr)
-			if tc.wantErr {
+			t.Parallel()
+
+			got, err := a2aURLFromAddr(tt.addr)
+			if tt.wantErr {
 				if err == nil {
-					t.Fatalf("expected error for addr %q", tc.addr)
+					t.Fatalf("expected error for addr %q", tt.addr)
 				}
 				return
 			}
 			if err != nil {
 				t.Fatalf("a2aURLFromAddr error = %v", err)
 			}
-			if diff := cmp.Diff(tc.want, got); diff != "" {
+			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Fatalf("url mismatch (-want +got):\n%s", diff)
 			}
 		})
@@ -161,25 +163,27 @@ func TestExtractA2APrompts(t *testing.T) {
 		},
 	}
 
-	for name, tc := range tests {
+	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			got, batch, err := extractA2APrompts(tc.msg)
-			if tc.wantErr {
+			t.Parallel()
+
+			got, batch, err := extractA2APrompts(tt.msg)
+			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("expected error")
 				}
-				if tc.wantErrMsg != "" && !strings.Contains(err.Error(), tc.wantErrMsg) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tc.wantErrMsg)
+				if tt.wantErrMsg != "" && !strings.Contains(err.Error(), tt.wantErrMsg) {
+					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErrMsg)
 				}
 				return
 			}
 			if err != nil {
 				t.Fatalf("extractA2APrompts error = %v", err)
 			}
-			if batch != tc.wantBatch {
-				t.Fatalf("batch = %v, want %v", batch, tc.wantBatch)
+			if batch != tt.wantBatch {
+				t.Fatalf("batch = %v, want %v", batch, tt.wantBatch)
 			}
-			if diff := cmp.Diff(tc.want, got); diff != "" {
+			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Fatalf("prompts mismatch (-want +got):\n%s", diff)
 			}
 		})
@@ -232,10 +236,12 @@ func TestBuildA2AResponseParts(t *testing.T) {
 		},
 	}
 
-	for name, tc := range tests {
+	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			parts, err := buildA2AResponseParts(tc.meta, tc.output, tc.batch)
-			if tc.wantErr {
+			t.Parallel()
+
+			parts, err := buildA2AResponseParts(tt.meta, tt.output, tt.batch)
+			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("expected error")
 				}
@@ -272,22 +278,22 @@ func TestBuildA2AResponseParts(t *testing.T) {
 				}
 			}
 
-			if diff := cmp.Diff(tc.wantText, gotTexts); diff != "" {
+			if diff := cmp.Diff(tt.wantText, gotTexts); diff != "" {
 				t.Fatalf("text parts mismatch (-want +got):\n%s", diff)
 			}
-			if tc.wantResult != nil {
+			if tt.wantResult != nil {
 				if gotRun == nil {
 					t.Fatalf("expected result data")
 				}
-				if diff := cmp.Diff(*tc.wantResult, *gotRun); diff != "" {
+				if diff := cmp.Diff(*tt.wantResult, *gotRun); diff != "" {
 					t.Fatalf("result mismatch (-want +got):\n%s", diff)
 				}
 			} else if gotRun != nil {
 				t.Fatalf("unexpected result data")
 			}
-			if tc.wantBatch > 0 {
-				if len(gotBatch) != tc.wantBatch {
-					t.Fatalf("batch size = %d, want %d", len(gotBatch), tc.wantBatch)
+			if tt.wantBatch > 0 {
+				if len(gotBatch) != tt.wantBatch {
+					t.Fatalf("batch size = %d, want %d", len(gotBatch), tt.wantBatch)
 				}
 			} else if len(gotBatch) > 0 {
 				t.Fatalf("unexpected batch results")
@@ -309,18 +315,20 @@ func TestReadBatchPrompts(t *testing.T) {
 		},
 	}
 
-	for name, tc := range tests {
+	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
 			dir := t.TempDir()
 			path := filepath.Join(dir, "batch.txt")
-			if err := os.WriteFile(path, []byte(strings.Join(tc.lines, "\n")), 0o600); err != nil {
+			if err := os.WriteFile(path, []byte(strings.Join(tt.lines, "\n")), 0o600); err != nil {
 				t.Fatalf("write batch file: %v", err)
 			}
 			got, err := readBatchPrompts(path)
 			if err != nil {
 				t.Fatalf("readBatchPrompts error = %v", err)
 			}
-			if diff := cmp.Diff(tc.want, got); diff != "" {
+			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Fatalf("prompts mismatch (-want +got):\n%s", diff)
 			}
 		})
@@ -355,28 +363,30 @@ func TestRunBatchPrompts(t *testing.T) {
 		},
 	}
 
-	for name, tc := range tests {
+	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
 			cfg := config{Concurrency: 2, ModelName: "model"}
-			got, err := runBatchPrompts(t.Context(), &cfg, nil, tc.prompts, runner)
+			got, err := runBatchPrompts(t.Context(), &cfg, nil, tt.prompts, runner)
 			if err != nil {
 				t.Fatalf("runBatchPrompts error = %v", err)
 			}
-			if len(tc.prompts) == 0 {
+			if len(tt.prompts) == 0 {
 				if got != nil {
 					t.Fatalf("expected nil results for empty prompts")
 				}
 				return
 			}
-			if len(got) != len(tc.want) {
-				t.Fatalf("result length = %d, want %d", len(got), len(tc.want))
+			if len(got) != len(tt.want) {
+				t.Fatalf("result length = %d, want %d", len(got), len(tt.want))
 			}
 			for i := range got {
-				if got[i].Prompt != tc.want[i].Prompt {
-					t.Fatalf("prompt[%d]=%q want %q", i, got[i].Prompt, tc.want[i].Prompt)
+				if got[i].Prompt != tt.want[i].Prompt {
+					t.Fatalf("prompt[%d]=%q want %q", i, got[i].Prompt, tt.want[i].Prompt)
 				}
-				if got[i].Output.Text != tc.want[i].Output.Text {
-					t.Fatalf("text[%d]=%q want %q", i, got[i].Output.Text, tc.want[i].Output.Text)
+				if got[i].Output.Text != tt.want[i].Output.Text {
+					t.Fatalf("text[%d]=%q want %q", i, got[i].Output.Text, tt.want[i].Output.Text)
 				}
 			}
 		})
