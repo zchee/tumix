@@ -7,10 +7,6 @@ on:
   pull_request:
   workflow_dispatch:
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name != 'push' }}
-
 env:
   GOEXPERIMENT: cgocheck2,loopvar,newinliner,jsonv2,greenteagc
 

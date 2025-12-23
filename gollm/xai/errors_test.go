@@ -47,9 +47,24 @@ func TestParseAndWrapError(t *testing.T) {
 			want *Error
 			ok   bool
 		}{
-			{name: "nil", err: nil, want: nil, ok: false},
-			{name: "non-status", err: errors.New("plain"), want: nil, ok: false},
-			{name: "status", err: statusErr, want: &Error{Code: codes.Unavailable, Message: "try again"}, ok: true},
+			{
+				name: "nil",
+				err:  nil,
+				want: nil,
+				ok:   false,
+			},
+			{
+				name: "non-status",
+				err:  errors.New("plain"),
+				want: nil,
+				ok:   false,
+			},
+			{
+				name: "status",
+				err:  statusErr,
+				want: &Error{Code: codes.Unavailable, Message: "try again"},
+				ok:   true,
+			},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {

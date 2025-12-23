@@ -24,6 +24,7 @@ require (
 	cloud.google.com/go/auth v0.18.0
 	cloud.google.com/go/auth/oauth2adapt v0.2.8
 	github.com/Marlliton/slogpretty v0.1.3
+	github.com/a2aproject/a2a-go v0.3.3
 	github.com/anthropics/anthropic-sdk-go v1.19.0
 	github.com/google/dotprompt/go v0.0.0-20251212201238-92f6ee4b208a
 	github.com/google/go-cmp v0.7.0
@@ -39,11 +40,11 @@ require (
 	go.opentelemetry.io/otel/sdk v1.39.0
 	go.opentelemetry.io/otel/trace v1.39.0
 	golang.org/x/sys v0.39.0
-	google.golang.org/adk v0.2.1-0.20251215152237-9b193f6426b3 // @main
+	google.golang.org/adk v0.3.0 // @main
 	google.golang.org/genai v1.40.0
 	google.golang.org/grpc v1.77.0
 	google.golang.org/protobuf v1.36.11
-	modernc.org/sqlite v1.40.1
+	modernc.org/sqlite v1.41.0
 )
 
 require (
