@@ -49,6 +49,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 	"google.golang.org/adk/agent"
+	adkagent "google.golang.org/adk/agent"
 	"google.golang.org/adk/model"
 	"google.golang.org/adk/model/gemini"
 	"google.golang.org/adk/runner"
@@ -96,6 +97,8 @@ type config struct {
 	BudgetTokens    int
 	BenchLocal      int
 	MetricsAddr     string
+	A2AAddr         string
+	A2AURL          string
 	Prompt          string
 }
 
@@ -133,7 +136,9 @@ func run() int {
 		return 2
 	}
 
-	logger := log.New(log.Options{JSON: cfg.LogJSON})
+	logger := log.New(log.Options{
+		JSON: cfg.LogJSON,
+	})
 	ctx, stop := signal.NotifyContext(log.WithLogger(context.Background(), logger), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -208,8 +213,16 @@ func run() int {
 		return 0
 	}
 
+	if cfg.A2AAddr != "" {
+		if err := serveA2A(ctx, &cfg, loader, logger); err != nil {
+			log.Error(ctx, "a2a server failed", err)
+			return 1
+		}
+		return 0
+	}
+
 	if cfg.BatchFile != "" {
-		if err := runBatch(ctx, &cfg, loader); err != nil {
+		if _, err := runBatch(ctx, &cfg, loader); err != nil {
 			log.Error(ctx, "batch run failed", err)
 			return 1
 		}
@@ -217,7 +230,7 @@ func run() int {
 	}
 
 	log.Info(ctx, "run tumix", slog.Any("cfg", &cfg), slog.Any("loader", &loader))
-	if err := runOnce(ctx, &cfg, loader); err != nil {
+	if _, err := runOnce(ctx, &cfg, loader); err != nil {
 		log.Error(ctx, "run failed", err)
 		return 1
 	}
@@ -247,6 +260,8 @@ func parseConfig() (config, error) {
 		MaxCostUSD:      parseEnv("TUMIX_MAX_COST_USD", float64(0.01)),
 		AutoAgents:      parseEnv("TUMIX_AUTO_AGENTS", int(0)),
 		BudgetTokens:    parseEnv("TUMIX_BUDGET_TOKENS", int(0)),
+		A2AAddr:         cmp.Or(os.Getenv("TUMIX_A2A_ADDR"), ""),
+		A2AURL:          cmp.Or(os.Getenv("TUMIX_A2A_URL"), ""),
 	}
 
 	flag.StringVar(&cfg.LLMBackend, "backend", cfg.LLMBackend, "LLM backend to use (gemini, openai, anthropic, xai)")
@@ -277,19 +292,23 @@ func parseConfig() (config, error) {
 	flag.IntVar(&cfg.BudgetTokens, "budget_tokens", cfg.BudgetTokens, "Optional per-round input token budget override (0 uses estimate)")
 	flag.IntVar(&cfg.BenchLocal, "bench_local", cfg.BenchLocal, "Run local synthetic benchmark for N iterations and exit")
 	flag.StringVar(&cfg.MetricsAddr, "metrics_addr", cmp.Or(os.Getenv("TUMIX_METRICS_ADDR"), cfg.MetricsAddr), "If set, serve /debug/vars and /healthz on this address (e.g. :9090)")
+	flag.StringVar(&cfg.A2AAddr, "a2a_addr", cfg.A2AAddr, "If set, serve A2A JSON-RPC on this address (e.g. :8081)")
+	flag.StringVar(&cfg.A2AURL, "a2a_url", cfg.A2AURL, "Public base URL for the A2A agent card (defaults to http://<addr>/invoke)")
 	flag.Parse()
 
 	cfg.Prompt = strings.Join(flag.Args(), "\n")
-	if cfg.Prompt == "" {
+	if cfg.Prompt == "" && cfg.BatchFile == "" && cfg.BenchLocal == 0 && cfg.A2AAddr == "" {
 		return cfg, errors.New("prompt is required; pass text after flags")
 	}
-	if cfg.MaxPromptChars > 0 && len(cfg.Prompt) > cfg.MaxPromptChars {
-		return cfg, fmt.Errorf("prompt length %d exceeds max_prompt_chars %d", len(cfg.Prompt), cfg.MaxPromptChars)
-	}
-	if cfg.MaxPromptTokens > 0 {
-		est := estimateTokensFromChars(len(cfg.Prompt))
-		if est > cfg.MaxPromptTokens {
-			return cfg, fmt.Errorf("prompt token estimate %d exceeds max_prompt_tokens %d", est, cfg.MaxPromptTokens)
+	if cfg.Prompt != "" {
+		if cfg.MaxPromptChars > 0 && len(cfg.Prompt) > cfg.MaxPromptChars {
+			return cfg, fmt.Errorf("prompt length %d exceeds max_prompt_chars %d", len(cfg.Prompt), cfg.MaxPromptChars)
+		}
+		if cfg.MaxPromptTokens > 0 {
+			est := estimateTokensFromChars(len(cfg.Prompt))
+			if est > cfg.MaxPromptTokens {
+				return cfg, fmt.Errorf("prompt token estimate %d exceeds max_prompt_tokens %d", est, cfg.MaxPromptTokens)
+			}
 		}
 	}
 
@@ -358,7 +377,7 @@ func parseConfig() (config, error) {
 type countTokensFunc func(ctx context.Context, model string, contents []*genai.Content, config *genai.CountTokensConfig) (*genai.CountTokensResponse, error)
 
 func enforcePromptTokens(ctx context.Context, cfg *config, httpClient *http.Client) error {
-	if cfg.MaxPromptTokens <= 0 {
+	if cfg.MaxPromptTokens <= 0 || cfg.Prompt == "" {
 		return nil
 	}
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
@@ -513,18 +532,56 @@ func buildTumixLoader(llm model.LLM, genCfg *genai.GenerateContentConfig, minRou
 	return loader, len(candidates), err
 }
 
-func runOnce(ctx context.Context, cfg *config, loader agent.Loader) error {
+type runOutputConfig struct {
+	Model       string  `json:"model"`
+	MaxRounds   uint    `json:"max_rounds"`
+	Temperature float64 `json:"temperature"`
+	TopP        float64 `json:"top_p"`
+	TopK        int     `json:"top_k"`
+	MaxTokens   int     `json:"max_tokens"`
+	Seed        int64   `json:"seed"`
+}
+
+type runOutput struct {
+	SessionID    string          `json:"session_id"`
+	Author       string          `json:"author"`
+	Text         string          `json:"text"`
+	InputTokens  int64           `json:"input_tokens"`
+	OutputTokens int64           `json:"output_tokens"`
+	Config       runOutputConfig `json:"config"`
+}
+
+func buildRunOutput(cfg *config, author, text string, inputTokens, outputTokens int64) runOutput {
+	return runOutput{
+		SessionID:    cfg.SessionID,
+		Author:       author,
+		Text:         text,
+		InputTokens:  inputTokens,
+		OutputTokens: outputTokens,
+		Config: runOutputConfig{
+			Model:       cfg.ModelName,
+			MaxRounds:   cfg.MaxRounds,
+			Temperature: cfg.Temperature,
+			TopP:        cfg.TopP,
+			TopK:        cfg.TopK,
+			MaxTokens:   cfg.MaxTokens,
+			Seed:        cfg.Seed,
+		},
+	}
+}
+
+func runOnce(ctx context.Context, cfg *config, loader agent.Loader) (runOutput, error) {
 	sessionService := session.InMemoryService()
 	if cfg.SessionDir != "" {
 		svc, err := sessionfs.Service(cfg.SessionDir)
 		if err != nil {
-			return fmt.Errorf("init session store: %w", err)
+			return runOutput{}, fmt.Errorf("init session store: %w", err)
 		}
 		sessionService = svc
 	} else if dbPath := os.Getenv("TUMIX_SESSION_SQLITE"); dbPath != "" {
 		svc, err := sessiondb.Service(ctx, dbPath)
 		if err != nil {
-			return fmt.Errorf("init sqlite store: %w", err)
+			return runOutput{}, fmt.Errorf("init sqlite store: %w", err)
 		}
 		sessionService = svc
 	}
@@ -533,7 +590,7 @@ func runOnce(ctx context.Context, cfg *config, loader agent.Loader) error {
 		UserID:    cfg.UserID,
 		SessionID: cfg.SessionID,
 	}); err != nil {
-		return fmt.Errorf("create session: %w", err)
+		return runOutput{}, fmt.Errorf("create session: %w", err)
 	}
 
 	r, err := runner.New(runner.Config{
@@ -542,7 +599,7 @@ func runOnce(ctx context.Context, cfg *config, loader agent.Loader) error {
 		SessionService: sessionService,
 	})
 	if err != nil {
-		return fmt.Errorf("runner init: %w", err)
+		return runOutput{}, fmt.Errorf("runner init: %w", err)
 	}
 
 	content := genai.NewContentFromText(cfg.Prompt, genai.RoleUser)
@@ -550,7 +607,7 @@ func runOnce(ctx context.Context, cfg *config, loader agent.Loader) error {
 	var totalIn, totalOut int64
 	for event, err := range r.Run(ctx, cfg.UserID, cfg.SessionID, content, agent.RunConfig{}) {
 		if err != nil {
-			return fmt.Errorf("agent run: %w", err)
+			return runOutput{}, fmt.Errorf("agent run: %w", err)
 		}
 		if !cfg.OutputJSON {
 			logEvent(ctx, event)
@@ -565,39 +622,28 @@ func runOnce(ctx context.Context, cfg *config, loader agent.Loader) error {
 	}
 	estimateAndWarn(ctx, cfg, int(totalIn), int(totalOut))
 
+	output := buildRunOutput(cfg, finalAuthor, finalText, totalIn, totalOut)
 	if cfg.OutputJSON {
-		out := map[string]any{
-			"session_id":    cfg.SessionID,
-			"author":        finalAuthor,
-			"text":          finalText,
-			"input_tokens":  totalIn,
-			"output_tokens": totalOut,
-			"config": map[string]any{
-				"model":       cfg.ModelName,
-				"max_rounds":  cfg.MaxRounds,
-				"temperature": cfg.Temperature,
-				"top_p":       cfg.TopP,
-				"top_k":       cfg.TopK,
-				"max_tokens":  cfg.MaxTokens,
-				"seed":        cfg.Seed,
-			},
-		}
 		enc := jsontext.NewEncoder(os.Stdout)
-		if err := json.MarshalEncode(enc, out); err != nil {
-			return fmt.Errorf("encode json: %w", err)
+		if err := json.MarshalEncode(enc, output); err != nil {
+			return output, fmt.Errorf("encode json: %w", err)
 		}
 	}
 
-	return nil
+	return output, nil
 }
 
-func runBatch(ctx context.Context, cfg *config, loader agent.Loader) error {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+type batchOutput struct {
+	Prompt string    `json:"prompt"`
+	Output runOutput `json:"output"`
+}
 
-	f, err := os.Open(filepath.Clean(cfg.BatchFile))
+type runOnceFunc func(ctx context.Context, cfg *config, loader adkagent.Loader) (runOutput, error)
+
+func readBatchPrompts(path string) ([]string, error) {
+	f, err := os.Open(filepath.Clean(path))
 	if err != nil {
-		return fmt.Errorf("open batch file: %w", err)
+		return nil, fmt.Errorf("open batch file: %w", err)
 	}
 	defer f.Close()
 
@@ -611,48 +657,91 @@ func runBatch(ctx context.Context, cfg *config, loader agent.Loader) error {
 		prompts = append(prompts, line)
 	}
 	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("read batch file: %w", err)
+		return nil, fmt.Errorf("read batch file: %w", err)
+	}
+	return prompts, nil
+}
+
+func runBatchPrompts(ctx context.Context, cfg *config, loader adkagent.Loader, prompts []string, runFunc runOnceFunc) ([]batchOutput, error) {
+	if len(prompts) == 0 {
+		return nil, nil
+	}
+	if runFunc == nil {
+		runFunc = runOnce
 	}
 
-	promptCh := make(chan string)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	type batchJob struct {
+		index  int
+		prompt string
+	}
+	type batchResult struct {
+		index  int
+		output batchOutput
+	}
+
+	promptCh := make(chan batchJob, len(prompts))
+	resultCh := make(chan batchResult, len(prompts))
 	errCh := make(chan error, cfg.Concurrency)
+
+	for promptIndex, prompt := range prompts {
+		promptCh <- batchJob{index: promptIndex, prompt: prompt}
+	}
+	close(promptCh)
+
 	var wg sync.WaitGroup
 	for i := range cfg.Concurrency {
-		wg.Add(1)
-		go func(worker int) {
-			defer wg.Done()
-			for p := range promptCh {
+		wg.Go(func() {
+			for job := range promptCh {
 				if ctx.Err() != nil {
 					return
 				}
 				local := *cfg
-				local.Prompt = p
+				local.Prompt = job.prompt
 				if local.SessionID == "" {
-					local.SessionID = fmt.Sprintf("session-%d-%d", time.Now().UnixNano(), worker)
+					local.SessionID = fmt.Sprintf("session-%d-%d", time.Now().UnixNano(), i)
 				}
-				if err := runOnce(ctx, &local, loader); err != nil {
-					errCh <- fmt.Errorf("prompt %q: %w", p, err)
+				output, err := runFunc(ctx, &local, loader)
+				if err != nil {
+					errCh <- fmt.Errorf("prompt %q: %w", job.prompt, err)
 					cancel()
 					return
 				}
+				resultCh <- batchResult{
+					index: job.index,
+					output: batchOutput{
+						Prompt: job.prompt,
+						Output: output,
+					},
+				}
 			}
-		}(i)
+		})
 	}
-
-	go func() {
-		for _, p := range prompts {
-			promptCh <- p
-		}
-		close(promptCh)
-	}()
 
 	wg.Wait()
+	close(resultCh)
+
 	select {
 	case err := <-errCh:
-		return err
+		return nil, err
 	default:
-		return nil
 	}
+
+	results := make([]batchOutput, len(prompts))
+	for res := range resultCh {
+		results[res.index] = res.output
+	}
+	return results, nil
+}
+
+func runBatch(ctx context.Context, cfg *config, loader adkagent.Loader) ([]batchOutput, error) {
+	prompts, err := readBatchPrompts(cfg.BatchFile)
+	if err != nil {
+		return nil, err
+	}
+	return runBatchPrompts(ctx, cfg, loader, prompts, nil)
 }
 
 func logEvent(ctx context.Context, event *session.Event) {
@@ -923,6 +1012,8 @@ func printConfig(cfg *config) error {
 		"budget_tokens":     cfg.BudgetTokens,
 		"metrics_addr":      cfg.MetricsAddr,
 		"max_prompt_tokens": cfg.MaxPromptTokens,
+		"a2a_addr":          cfg.A2AAddr,
+		"a2a_url":           cfg.A2AURL,
 	}
 	data, err := json.Marshal(out)
 	if err != nil {

@@ -41,7 +41,9 @@ type Options struct {
 // New returns a slog.Logger configured per options.
 func New(opts Options) *slog.Logger {
 	if opts.JSON {
-		handler := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})
+		handler := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
+			Level: slog.LevelDebug,
+		})
 		logger := slog.New(handler)
 		slog.SetDefault(logger)
 		return logger
