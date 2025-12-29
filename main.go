@@ -48,7 +48,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
-	adkagent "google.golang.org/adk/agent"
+	"google.golang.org/adk/agent"
 	"google.golang.org/adk/model"
 	"google.golang.org/adk/model/gemini"
 	"google.golang.org/adk/runner"
@@ -153,7 +153,9 @@ func run() int {
 		go serveMetrics(ctx, cfg.MetricsAddr)
 	}
 
-	httpClient := newHTTPClient(cfg.TraceHTTP)
+	httpClient := &http.Client{
+		Transport: httptelemetry.NewTransportWithTrace(nil, cfg.TraceHTTP),
+	}
 	if err := enforcePromptTokens(ctx, &cfg, httpClient); err != nil {
 		log.Error(ctx, "prompt too large", err)
 		return 1
@@ -277,7 +279,7 @@ func parseConfig() (config, error) {
 	flag.StringVar(&cfg.MetricsAddr, "metrics_addr", cmp.Or(os.Getenv("TUMIX_METRICS_ADDR"), cfg.MetricsAddr), "If set, serve /debug/vars and /healthz on this address (e.g. :9090)")
 	flag.Parse()
 
-	cfg.Prompt = strings.TrimSpace(strings.Join(flag.Args(), " "))
+	cfg.Prompt = strings.Join(flag.Args(), "\n")
 	if cfg.Prompt == "" {
 		return cfg, errors.New("prompt is required; pass text after flags")
 	}
@@ -351,12 +353,6 @@ func parseConfig() (config, error) {
 	}
 
 	return cfg, nil
-}
-
-func newHTTPClient(traceEnabled bool) *http.Client {
-	return &http.Client{
-		Transport: httptelemetry.NewTransportWithTrace(nil, traceEnabled),
-	}
 }
 
 type countTokensFunc func(ctx context.Context, model string, contents []*genai.Content, config *genai.CountTokensConfig) (*genai.CountTokensResponse, error)
@@ -467,8 +463,8 @@ func buildGenConfig(cfg *config) *genai.GenerateContentConfig {
 	return c
 }
 
-func buildTumixLoader(llm model.LLM, genCfg *genai.GenerateContentConfig, minRounds, maxRounds uint, autoAgents int) (adkagent.Loader, int, error) {
-	builders := []func(model.LLM, *genai.GenerateContentConfig) (adkagent.Agent, error){
+func buildTumixLoader(llm model.LLM, genCfg *genai.GenerateContentConfig, minRounds, maxRounds uint, autoAgents int) (agent.Loader, int, error) {
+	builders := []func(model.LLM, *genai.GenerateContentConfig) (agent.Agent, error){
 		tumixagent.NewBaseAgent,
 		tumixagent.NewCoTAgent,
 		tumixagent.NewCoTCodeAgent,
@@ -486,7 +482,7 @@ func buildTumixLoader(llm model.LLM, genCfg *genai.GenerateContentConfig, minRou
 		// tumixagent.NewGuidedPlusComAgent,
 	}
 
-	candidates := make([]adkagent.Agent, 0, len(builders)+autoAgents)
+	candidates := make([]agent.Agent, 0, len(builders)+autoAgents)
 	for i, builder := range builders {
 		a, err := builder(llm, genCfg)
 		if err != nil {
@@ -517,7 +513,7 @@ func buildTumixLoader(llm model.LLM, genCfg *genai.GenerateContentConfig, minRou
 	return loader, len(candidates), err
 }
 
-func runOnce(ctx context.Context, cfg *config, loader adkagent.Loader) error {
+func runOnce(ctx context.Context, cfg *config, loader agent.Loader) error {
 	sessionService := session.InMemoryService()
 	if cfg.SessionDir != "" {
 		svc, err := sessionfs.Service(cfg.SessionDir)
@@ -552,7 +548,7 @@ func runOnce(ctx context.Context, cfg *config, loader adkagent.Loader) error {
 	content := genai.NewContentFromText(cfg.Prompt, genai.RoleUser)
 	var finalAuthor, finalText string
 	var totalIn, totalOut int64
-	for event, err := range r.Run(ctx, cfg.UserID, cfg.SessionID, content, adkagent.RunConfig{}) {
+	for event, err := range r.Run(ctx, cfg.UserID, cfg.SessionID, content, agent.RunConfig{}) {
 		if err != nil {
 			return fmt.Errorf("agent run: %w", err)
 		}
@@ -595,7 +591,7 @@ func runOnce(ctx context.Context, cfg *config, loader adkagent.Loader) error {
 	return nil
 }
 
-func runBatch(ctx context.Context, cfg *config, loader adkagent.Loader) error {
+func runBatch(ctx context.Context, cfg *config, loader agent.Loader) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
