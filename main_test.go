@@ -38,6 +38,18 @@ func assertParseEnv[T comparable](t *testing.T, key, raw string, fallback, want 
 	}
 }
 
+func resetFlags(args []string) func() {
+	origArgs := os.Args
+	origFlag := flag.CommandLine
+	flag.CommandLine = flag.NewFlagSet(args[0], flag.ContinueOnError)
+	flag.CommandLine.SetOutput(os.Stdout)
+	os.Args = args
+	return func() {
+		os.Args = origArgs
+		flag.CommandLine = origFlag
+	}
+}
+
 func TestParseEnvSuccess(t *testing.T) {
 	t.Run("bool", func(t *testing.T) {
 		assertParseEnv(t, "TUMIX_TEST_PARSEENV_BOOL", "true", false, true)
@@ -233,18 +245,6 @@ func TestBuildGenConfig(t *testing.T) {
 }
 
 func TestParseConfigSuccessAndEnvFallback(t *testing.T) {
-	resetFlags := func(args []string) func() {
-		origArgs := os.Args
-		origFlag := flag.CommandLine
-		flag.CommandLine = flag.NewFlagSet(args[0], flag.ContinueOnError)
-		flag.CommandLine.SetOutput(os.Stdout)
-		os.Args = args
-		return func() {
-			os.Args = origArgs
-			flag.CommandLine = origFlag
-		}
-	}
-
 	t.Run("success_with_flags", func(t *testing.T) {
 		restore := resetFlags([]string{"cmd", "-api_key=key", "-backend=gemini", "-model=gemini-2.5-flash", "hello world"})
 		defer restore()
@@ -281,18 +281,6 @@ func TestParseConfigSuccessAndEnvFallback(t *testing.T) {
 }
 
 func TestParseConfigErrors(t *testing.T) {
-	resetFlags := func(args []string) func() {
-		origArgs := os.Args
-		origFlag := flag.CommandLine
-		flag.CommandLine = flag.NewFlagSet(args[0], flag.ContinueOnError)
-		flag.CommandLine.SetOutput(os.Stdout)
-		os.Args = args
-		return func() {
-			os.Args = origArgs
-			flag.CommandLine = origFlag
-		}
-	}
-
 	tests := map[string]struct {
 		args []string
 		env  map[string]string
@@ -314,6 +302,33 @@ func TestParseConfigErrors(t *testing.T) {
 			}
 			if _, err := parseConfig(); err == nil {
 				t.Fatalf("expected error for case %s", name)
+			}
+		})
+	}
+}
+
+func TestParseConfigAllowsA2AWithoutPrompt(t *testing.T) {
+	tests := map[string]struct {
+		args     []string
+		wantAddr string
+	}{
+		"a2a_without_prompt": {
+			args:     []string{"cmd", "-api_key=k", "-a2a_addr=:8081"},
+			wantAddr: ":8081",
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			restore := resetFlags(tt.args)
+			defer restore()
+
+			cfg, err := parseConfig()
+			if err != nil {
+				t.Fatalf("parseConfig error = %v", err)
+			}
+			if cfg.A2AAddr != tt.wantAddr {
+				t.Fatalf("A2AAddr = %q, want %q", cfg.A2AAddr, tt.wantAddr)
 			}
 		})
 	}
