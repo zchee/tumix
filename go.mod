@@ -1,6 +1,6 @@
 module github.com/zchee/tumix
 
-go 1.25
+go 1.25.0
 
 replace github.com/zchee/tumix/gollm/xai => ./gollm/xai
 
@@ -38,7 +38,7 @@ require (
 	go.opentelemetry.io/otel/metric v1.39.0
 	go.opentelemetry.io/otel/sdk v1.39.0
 	go.opentelemetry.io/otel/trace v1.39.0
-	golang.org/x/sys v0.39.0
+	golang.org/x/sys v0.42.0
 	google.golang.org/adk v0.2.1-0.20251215152237-9b193f6426b3 // @main
 	google.golang.org/genai v1.40.0
 	google.golang.org/grpc v1.77.0
